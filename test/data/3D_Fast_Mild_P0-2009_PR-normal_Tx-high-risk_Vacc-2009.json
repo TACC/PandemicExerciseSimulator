@@ -1,0 +1,213 @@
+{
+  "panflu": {
+    "output": "3D_Fast_Mild_P0-2009_PR-normal_Tx-high-risk_Vacc-2009.nc",
+    "number_of_realizations": "1",
+    "data": {
+      "population": "../data/texas/county_age_matrix.5",
+      "contact": "../data/texas/contact_matrix.5",
+      "flow": "../data/texas/work_matrix_rel.csv"
+    },
+    "params": {
+      "R0": "1.8",
+      "beta_scale": "65",
+      "tau": "0.83333333",
+      "kappa": "0.52631579",
+      "gamma": "0.24390244",
+      "vaccine_effectiveness_age_0": "0.8",
+      "vaccine_effectiveness_age_1": "0.8",
+      "vaccine_effectiveness_age_2": "0.8",
+      "vaccine_effectiveness_age_3": "0.8",
+      "vaccine_effectiveness_age_4": "0.8",
+      "vaccine_adherence_age_0": "0.4345",
+      "vaccine_adherence_age_1": "0.2983",
+      "vaccine_adherence_age_2": "0.3885",
+      "vaccine_adherence_age_3": "0.45",
+      "vaccine_adherence_age_4": "0.696",
+      "nu_high": "no"
+    },
+    "initial": {
+      "v": [
+        {
+          "county": "187",
+          "infected": "1"
+        },
+        {
+          "county": "479",
+          "infected": "1"
+        },
+        {
+          "county": "201",
+          "infected": "1"
+        },
+        {
+          "county": "61",
+          "infected": "3"
+        },
+        {
+          "county": "427",
+          "infected": "3"
+        },
+        {
+          "county": "215",
+          "infected": "1"
+        },
+        {
+          "county": "27",
+          "infected": "1"
+        },
+        {
+          "county": "453",
+          "infected": "1"
+        },
+        {
+          "county": "391",
+          "infected": "1"
+        }
+      ]
+    },
+    "public_health_announcements": null,
+    "antivirals": null,
+    "pro_rata": "normal",
+    "universal": "high_risk",
+    "vaccines": {
+      "v": [
+        {
+          "day": "203",
+          "amount": "178300"
+        },
+        {
+          "day": "210",
+          "amount": "653100"
+        },
+        {
+          "day": "217",
+          "amount": "339000"
+        },
+        {
+          "day": "224",
+          "amount": "922300"
+        },
+        {
+          "day": "231",
+          "amount": "483400"
+        },
+        {
+          "day": "238",
+          "amount": "932300"
+        },
+        {
+          "day": "240",
+          "amount": "98300"
+        },
+        {
+          "day": "244",
+          "amount": "267800"
+        },
+        {
+          "day": "248",
+          "amount": "44100"
+        },
+        {
+          "day": "249",
+          "amount": "11700"
+        },
+        {
+          "day": "250",
+          "amount": "746000"
+        },
+        {
+          "day": "251",
+          "amount": "24600"
+        },
+        {
+          "day": "252",
+          "amount": "197400"
+        },
+        {
+          "day": "255",
+          "amount": "14200"
+        },
+        {
+          "day": "256",
+          "amount": "221300"
+        },
+        {
+          "day": "257",
+          "amount": "615800"
+        },
+        {
+          "day": "258",
+          "amount": "255900"
+        },
+        {
+          "day": "262",
+          "amount": "1200"
+        },
+        {
+          "day": "263",
+          "amount": "91400"
+        },
+        {
+          "day": "264",
+          "amount": "148300"
+        },
+        {
+          "day": "265",
+          "amount": "182000"
+        },
+        {
+          "day": "269",
+          "amount": "160000"
+        },
+        {
+          "day": "270",
+          "amount": "2000"
+        },
+        {
+          "day": "273",
+          "amount": "469000"
+        },
+        {
+          "day": "278",
+          "amount": "139800"
+        },
+        {
+          "day": "280",
+          "amount": "190100"
+        },
+        {
+          "day": "285",
+          "amount": "410100"
+        },
+        {
+          "day": "286",
+          "amount": "216200"
+        },
+        {
+          "day": "287",
+          "amount": "925600"
+        },
+        {
+          "day": "288",
+          "amount": "69500"
+        },
+        {
+          "day": "292",
+          "amount": "252600"
+        },
+        {
+          "day": "293",
+          "amount": "123300"
+        },
+        {
+          "day": "294",
+          "amount": "49200"
+        },
+        {
+          "day": "295",
+          "amount": "18800"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "panflu": {
+    "output": "3D_Fast_Severe_P0-2009_PR-normal_Tx-uniform_Vacc-6wk.nc",
+    "number_of_realizations": "1",
+    "data": {
+      "population": "../data/texas/county_age_matrix.5",
+      "contact": "../data/texas/contact_matrix.5",
+      "flow": "../data/texas/work_matrix_rel.csv"
+    },
+    "params": {
+      "R0": "1.8",
+      "beta_scale": "65",
+      "tau": "0.83333333",
+      "kappa": "0.52631579",
+      "gamma": "0.24390244",
+      "vaccine_effectiveness_age_0": "0.8",
+      "vaccine_effectiveness_age_1": "0.8",
+      "vaccine_effectiveness_age_2": "0.8",
+      "vaccine_effectiveness_age_3": "0.8",
+      "vaccine_effectiveness_age_4": "0.8",
+      "vaccine_adherence_age_0": "0.4345",
+      "vaccine_adherence_age_1": "0.2983",
+      "vaccine_adherence_age_2": "0.3885",
+      "vaccine_adherence_age_3": "0.45",
+      "vaccine_adherence_age_4": "0.696",
+      "nu_high": "yes"
+    },
+    "initial": {
+      "v": [
+        {
+          "county": "187",
+          "infected": "1"
+        },
+        {
+          "county": "479",
+          "infected": "1"
+        },
+        {
+          "county": "201",
+          "infected": "1"
+        },
+        {
+          "county": "61",
+          "infected": "3"
+        },
+        {
+          "county": "427",
+          "infected": "3"
+        },
+        {
+          "county": "215",
+          "infected": "1"
+        },
+        {
+          "county": "27",
+          "infected": "1"
+        },
+        {
+          "county": "453",
+          "infected": "1"
+        },
+        {
+          "county": "391",
+          "infected": "1"
+        }
+      ]
+    },
+    "public_health_announcements": null,
+    "antivirals": null,
+    "pro_rata": "normal",
+    "universal": "yes",
+    "vaccines": {
+      "v": {
+        "day": "42",
+        "amount": "10028035"
+      }
+    }
+  }
+}
