@@ -15,7 +15,7 @@ class InputSimulationProperties:
         self.gamma      = float(data['panflu']['params']['gamma'])
         self.nu_high    = data['panflu']['params']['nu_high']
 
-        self.number_of_realizations = float(data['panflu']['number_of_realizations'])
+        self.number_of_realizations = int(data['panflu']['number_of_realizations'])
 
         self.vaccine_effectiveness_age_0 = float(data['panflu']['params']['vaccine_effectiveness_age_0'])
         self.vaccine_effectiveness_age_1 = float(data['panflu']['params']['vaccine_effectiveness_age_1'])
@@ -43,8 +43,35 @@ class InputSimulationProperties:
 
 
     def __str__(self):
-        return(f'R0={self.R0}, beta_scale={self.beta_scale}, tau={self.tau}, '
-               f'kappa={self.kappa}, gamma={self.gamma}, nu_high={self.nu_high}')
+        return( f'\n'
+                f'R0={self.R0}\n'
+                f'beta_scale={self.beta_scale}\n'
+                f'tau={self.tau}\n'
+                f'kappa={self.kappa}\n'
+                f'gamma={self.gamma}\n'
+                f'nu_high={self.nu_high}\n'
+                f'number_of_realizations={self.number_of_realizations}\n'
+                f'vaccine_effectiveness_age_0={self.vaccine_effectiveness_age_0}\n'
+                f'vaccine_effectiveness_age_1={self.vaccine_effectiveness_age_1}\n'
+                f'vaccine_effectiveness_age_2={self.vaccine_effectiveness_age_2}\n'
+                f'vaccine_effectiveness_age_3={self.vaccine_effectiveness_age_3}\n'
+                f'vaccine_effectiveness_age_4={self.vaccine_effectiveness_age_4}\n'
+                f'vaccine_adherence_age_0={self.vaccine_adherence_age_0}\n'
+                f'vaccine_adherence_age_1={self.vaccine_adherence_age_1}\n'
+                f'vaccine_adherence_age_2={self.vaccine_adherence_age_2}\n'
+                f'vaccine_adherence_age_3={self.vaccine_adherence_age_3}\n'
+                f'vaccine_adherence_age_4={self.vaccine_adherence_age_4}\n'
+                f'population_data_file={self.population_data_file}\n'
+                f'contact_data_file={self.contact_data_file}\n'
+                f'flow_data_file={self.flow_data_file}\n'
+                f'output_data_file={self.output_data_file}\n'
+                f'public_health_announcements={self.public_health_announcements}\n'
+                f'vaccine_pro_rata={self.vaccine_pro_rata}\n'
+                f'vaccine_universal={self.vaccine_universal}\n'
+                f'initial={self.initial}\n'
+                f'vaccines={self.vaccines}\n'
+              )
+               
 
 
 

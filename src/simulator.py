@@ -46,33 +46,44 @@ def run():
 
 def main():
 
-    logging.debug('Entered main loop')
+    logging.info('Entered main loop')
 
-    # Read in files and initialize our base classes
-    number_of_days_to_simulate = Day(args.days)
-    number_of_realizations = Day(1)
-    logging.debug(f'number_of_days_to_simulate is {number_of_days_to_simulate}')
-
-    # assume one filename input until we figure out why people might want to do more than one
+    # Read input properties file
+    # Can be pre-generated as template, or generated in GUI
+    # (assume one filename input now, although C++ app supported multi file)
     simulation_properties = InputSimulationProperties(args.input_filename)
-    logging.debug(f'loaded in config file named {args.input_filename}')
+    logging.info(f'loaded in config file named {args.input_filename}')
     logging.debug(f'{simulation_properties}')
 
+    # Initialize Days class instances
+    # 365 hardcoded in C++ app, realizations taken from simulation properties
+    number_of_days_to_simulate = Day(args.days)
+    logging.info(f'number_of_days_to_simulate is {number_of_days_to_simulate.number_of_days}')
+    logging.debug(f'{number_of_days_to_simulate}')
 
-    # Based off what was read, set some defaults for other base classes
+    number_of_realizations = Day(simulation_properties.number_of_realizations)
+    logging.info(f'number of realizations is {number_of_realizations.number_of_days}')
+    logging.debug(f'{number_of_realizations}')
+
+    # Initialize Model Parameters class instance
+    # This is a subset of the simulation properties
     parameters = ModelParameters(simulation_properties)
-    logging.debug(f'model parameters loaded from simulation properties')
+    parameters.load_contact_matrix(simulation_properties.contact_data_file)
+    logging.info(f'model parameters loaded from simulation properties')
     logging.debug(f'{parameters}')
+    logging.info(f'model parameter-associated contact matrix:')
+    logging.debug(f'{parameters.np_contact_matrix}')
 
+    # Initialize Stochastic and Deterministic disease models
     stochastic_disease_model = DiseaseModel(parameters, is_stochastic=True)
-    logging.debug(f'instantiated disease model {stochastic_disease_model}')
+    logging.info(f'instantiated disease model {stochastic_disease_model}')
     logging.debug(f'{stochastic_disease_model.parameters}')
+#    setInitialConditions(simulation_properties, network, stochastic_disease_model)  # does not do this for deterministic
 
     deterministic_disease_model = DiseaseModel(parameters, is_stochastic=False)
-    logging.debug(f'instantiated disease model {deterministic_disease_model}')
+    logging.info(f'instantiated disease model {deterministic_disease_model}')
     logging.debug(f'{deterministic_disease_model.parameters}')
 
-#    setInitialConditions(simulation_properties, network, stochastic_disease_model)  # does not do this for deterministic?
 
 
 
@@ -80,12 +91,8 @@ def main():
     # Travel mode
     # Stockpile strategies
     # Treatment strategies
+    # Writer
 
-
-    # Create an output writer class and initialize here
-
-	# Set up a thing to write log files
-	# Call a simulator::run kind of function 
     run()
 #    run( number_of_days_to_simulate,
 #         ### network, 
@@ -97,9 +104,13 @@ def main():
 #         parameters,
 #         ### writer )
 
+
+
     # report summary statistics
 
+    return
 
 
 if __name__ == '__main__':
     main()
+
