@@ -7,6 +7,7 @@ from baseclasses.Day import Day
 from baseclasses.InputSimulationProperties import InputSimulationProperties
 from baseclasses.DiseaseModel import DiseaseModel
 from baseclasses.ModelParameters import ModelParameters
+from baseclasses.Network import Network
 
 
 parser = argparse.ArgumentParser()
@@ -78,16 +79,21 @@ def main():
     stochastic_disease_model = DiseaseModel(parameters, is_stochastic=True)
     logging.info(f'instantiated disease model {stochastic_disease_model}')
     logging.debug(f'{stochastic_disease_model.parameters}')
-#    setInitialConditions(simulation_properties, network, stochastic_disease_model)  # does not do this for deterministic
 
     deterministic_disease_model = DiseaseModel(parameters, is_stochastic=False)
     logging.info(f'instantiated disease model {deterministic_disease_model}')
     logging.debug(f'{deterministic_disease_model.parameters}')
 
+    # Initialize Network class which will contain a list of Nodes
+    network = Network()
+    network.load_population_file(simulation_properties.population_data_file)
+    logging.info(f'instantiated Network model {network}')
+    logging.debug(f'{network.df_county_age_matrix}')
+
+#    setInitialConditions(simulation_properties, network, stochastic_disease_model)
 
 
 
-    # Network
     # Travel mode
     # Stockpile strategies
     # Treatment strategies
