@@ -80,5 +80,22 @@ class Network:
             sys.exit(1)
 
             
+    def population_to_nodes(self):
+        """
+        Store population data as list of nodes
+        """
+
+        # create new PopulationCompartments object given groups and ratios
+        #    groups is a list of the values in a row, not counting the index
+        #    ratios is a HighRiskRatios object => a vector of doubles that comes from parameters
+        #      High_RISK_RATIOS was hardcoded
+        #       double HIGH_RISK_RATIOS[] = { 0.0803804, 0.146264700734, 0.21454520795, 0.337052864254, 0.529643792782 };
+        # Create new Node object given ID and PopComp object
+        self.add_node(node)
+
+
+
+
+
 
 
