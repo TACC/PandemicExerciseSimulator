@@ -9,7 +9,9 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 numpy = "^1.26.4"
+pandas = "^2.2.2."
 pytest = "^8.2.0"
+scipy = "^1.13.0"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
