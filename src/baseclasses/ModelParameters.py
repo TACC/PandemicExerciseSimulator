@@ -9,23 +9,24 @@ class ModelParameters:
         self.tau            = simulation_properties.tau
         self.kappa          = simulation_properties.kappa
         self.gamma          = simulation_properties.gamma
+        self.chi            = simulation_properties.chi
         self.low_death_rate = True if simulation_properties.nu_high == "yes" else False
 
-        self.vaccine_effectiveness = [ simulation_properties.vaccine_effectiveness_age_0,
-                                       simulation_properties.vaccine_effectiveness_age_1,
-                                       simulation_properties.vaccine_effectiveness_age_2,
-                                       simulation_properties.vaccine_effectiveness_age_3,
-                                       simulation_properties.vaccine_effectiveness_age_4, ]
+        self.vaccine_effectiveness = []
+        self.vaccine_adherence = []
 
-        self.vaccine_adherence = [ simulation_properties.vaccine_adherence_age_0,
-                                   simulation_properties.vaccine_adherence_age_1,
-                                   simulation_properties.vaccine_adherence_age_2,
-                                   simulation_properties.vaccine_adherence_age_3,
-                                   simulation_properties.vaccine_adherence_age_4, ]
+        with open(simulation_properties.vaccine_effectiveness_file, 'r') as f:
+            self.vaccine_effectiveness = [ line.rstrip() for line in f ]
+
+        with open(simulation_properties.vaccine_adherence_file, 'r') as f:
+            self.vaccine_adherence = [ line.rstrip() for line in f ]
+
+
 
     def __str__(self):
         return(f'R0={self.R0}, beta_scale={self.beta_scale}, tau={self.tau}, '
-               f'kappa={self.kappa}, gamma={self.gamma}, low_death_rate={self.low_death_rate}')
+               f'kappa={self.kappa}, gamma={self.gamma}, chi={self.chi}, low_death_rate={self.low_death_rate}, '
+               f'number_of_age_groups={self.number_of_age_groups}')
 
     def load_contact_matrix(self, filename):
         """
@@ -46,6 +47,10 @@ class ModelParameters:
             raise Exception(f'Could not open {filename}') from e
             sys.exit(1)
 
+        self.set_age_group_size()
+
+    def set_age_group_size(self):
+        self.number_of_age_groups = (np.shape(self.np_contact_matrix)[0])
             
 
 
