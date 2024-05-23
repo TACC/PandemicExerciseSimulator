@@ -5,7 +5,10 @@
     "data": {
       "population": "data/texas/county_age_matrix.5",
       "contact": "data/texas/contact_matrix.5",
-      "flow": "data/texas/work_matrix_rel.csv"
+      "flow": "data/texas/work_matrix_rel.csv",
+      "high_risk_ratios": "data/texas/high_risk_ratios.5",
+      "vaccine_effectiveness": "data/texas/vaccine_effectiveness.5",
+      "vaccine_adherence": "data/texas/vaccine_adherence.5"
     },
     "params": {
       "R0": "1.8",
@@ -13,16 +16,7 @@
       "tau": "0.83333333",
       "kappa": "0.52631579",
       "gamma": "0.24390244",
-      "vaccine_effectiveness_age_0": "0.8",
-      "vaccine_effectiveness_age_1": "0.8",
-      "vaccine_effectiveness_age_2": "0.8",
-      "vaccine_effectiveness_age_3": "0.8",
-      "vaccine_effectiveness_age_4": "0.8",
-      "vaccine_adherence_age_0": "0.4345",
-      "vaccine_adherence_age_1": "0.2983",
-      "vaccine_adherence_age_2": "0.3885",
-      "vaccine_adherence_age_3": "0.45",
-      "vaccine_adherence_age_4": "0.696",
+      "chi": "1.0",
       "nu_high": "no"
     },
     "initial": {
