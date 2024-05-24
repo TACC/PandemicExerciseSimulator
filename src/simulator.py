@@ -8,6 +8,7 @@ from baseclasses.InputSimulationProperties import InputSimulationProperties
 from baseclasses.DiseaseModel import DiseaseModel
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
+from baseclasses.TravelFlowData import TravelFlowData
 
 
 parser = argparse.ArgumentParser()
@@ -97,6 +98,10 @@ def main():
 #    setInitialConditions(simulation_properties, network, stochastic_disease_model)
 
 
+    # Initialize Travel model
+    travel = TravelFlowData(network.number_of_nodes())
+    logging.info(f'instantiated TravelFlowData class for {network.number_of_nodes()} nodes')
+    logging.info(f'{travel.flow_data.shape}')
 
     # Travel mode
     # Stockpile strategies
