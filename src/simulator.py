@@ -74,6 +74,9 @@ def main():
     logging.debug(f'{parameters}')
     logging.info(f'model parameter-associated contact matrix:')
     logging.debug(f'{parameters.np_contact_matrix}')
+    logging.debug(f'vaccine_effectiveness: {parameters.vaccine_effectiveness}')
+    logging.debug(f'vaccine_adherence: {parameters.vaccine_adherence}')
+    logging.debug(f'high_risk_ratios: {parameters.high_risk_ratios}')
 
     # Initialize Stochastic and Deterministic disease models
     stochastic_disease_model = DiseaseModel(parameters, is_stochastic=True)
@@ -87,6 +90,7 @@ def main():
     # Initialize Network class which will contain a list of Nodes
     network = Network()
     network.load_population_file(simulation_properties.population_data_file)
+    network.population_to_nodes(parameters.high_risk_ratios)
     logging.info(f'instantiated Network model {network}')
     logging.debug(f'{network.df_county_age_matrix}')
 

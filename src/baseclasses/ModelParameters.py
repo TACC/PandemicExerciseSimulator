@@ -21,6 +21,8 @@ class ModelParameters:
         with open(simulation_properties.vaccine_adherence_file, 'r') as f:
             self.vaccine_adherence = [ line.rstrip() for line in f ]
 
+        with open(simulation_properties.high_risk_ratios_file, 'r') as f:
+            self.high_risk_ratios = [ line.rstrip() for line in f ]
 
 
     def __str__(self):

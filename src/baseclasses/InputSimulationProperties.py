@@ -23,6 +23,7 @@ class InputSimulationProperties:
         self.flow_data_file             = data['panflu']['data']['flow']
         self.vaccine_effectiveness_file = data['panflu']['data']['vaccine_effectiveness']
         self.vaccine_adherence_file     = data['panflu']['data']['vaccine_adherence'] 
+        self.high_risk_ratios_file      = data['panflu']['data']['high_risk_ratios']
         self.output_data_file           = data['panflu']['output']
 
         self.public_health_announcements = data['panflu']['public_health_announcements']
