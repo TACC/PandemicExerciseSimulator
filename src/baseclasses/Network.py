@@ -46,8 +46,8 @@ class Network:
         for index, row in self.df_county_age_matrix.iterrows():
             this_group = list(row[1:])
             this_compartment = PopulationCompartments(this_group, high_risk_ratios)
-            #this_node = Node(row[0], this_compartment)
-            #self.add_node(this_node)
+            this_node = Node(index, this_compartment)
+            self.add_node(this_node)
 
 
 
@@ -56,6 +56,8 @@ class Network:
         pass
 
 
+    def number_of_nodes(self):
+        return(len(self.nodes))
 
 
 
@@ -79,9 +81,6 @@ class Network:
         """
         pass
 
-    def number_of_nodes(self):
-        return(len(self.nodes))
-        pass
 
     def total_population(self):
         """

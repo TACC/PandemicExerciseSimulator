@@ -28,6 +28,9 @@ class PopulationCompartments:
         self.groups = groups
         self.high_risk_ratios = high_risk_ratios
 
+        self.number_of_age_groups = len(groups)
+        self.total_population = sum(groups)
+
         #self.compartment_data = np.zeros((5,2,2,7))
         self.compartment_data = np.zeros(( len(groups),
                                            len(RiskGroup),
@@ -43,6 +46,7 @@ class PopulationCompartments:
             self.compartment_data[i][RiskGroup.L.value][VaccineGroup.V.value][Compartments.S.value] = 0
             self.compartment_data[i][RiskGroup.H.value][VaccineGroup.U.value][Compartments.S.value] = number_of_high_risk
             self.compartment_data[i][RiskGroup.H.value][VaccineGroup.V.value][Compartments.S.value] = 0
+
 
 
 # Compartment data object is a 4-dimensional array of floats. The four dimensions are:
