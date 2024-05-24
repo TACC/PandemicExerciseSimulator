@@ -10,6 +10,7 @@ class Network:
 
     def __init__(self):
         self.nodes = []
+        self.travel_flow_data = None
 
 
     def __str__(self):
@@ -28,7 +29,6 @@ class Network:
         7,1314,6019,6481,5964,5454               
 
         """
-        #filename = f'../../{filename}'
 
         try:
             #self.np_county_age_matrix = np.genfromtxt(filename, delimiter=',')
@@ -49,16 +49,20 @@ class Network:
             this_node = Node(index, this_compartment)
             self.add_node(this_node)
 
+        return
 
 
     def add_node(self, node:Type[Node]):
         self.nodes.append(node)
-        pass
+        return
 
 
     def number_of_nodes(self):
         return(len(self.nodes))
 
+    def add_travel_flow_data(self, travel_flow_data):
+        self.travel_flow_data = travel_flow_data
+        return
 
 
 
