@@ -4,11 +4,12 @@ import logging
 import numpy as np
 
 from baseclasses.Day import Day
-from baseclasses.InputSimulationProperties import InputSimulationProperties
 from baseclasses.DiseaseModel import DiseaseModel
+from baseclasses.InputSimulationProperties import InputSimulationProperties
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
+from baseclasses.Writer import Writer
 
 
 parser = argparse.ArgumentParser()
@@ -103,8 +104,14 @@ def main():
     travel.load_travel_flow_file(simulation_properties.flow_data_file)
     network.travel_flow_data = travel.flow_data
     logging.info(f'instantiated TravelFlowData class for {network.number_of_nodes()} nodes')
-    logging.info(f'{network.travel_flow_data.shape}')
-    logging.info(f'{network.travel_flow_data}')
+    logging.debug(f'{network.travel_flow_data.shape}')
+    logging.debug(f'{network.travel_flow_data}')
+
+
+    # Initialize output writer
+    writer = Writer(simulation_properties.output_data_file)
+    logging.info(f'instantiated Writer class - {writer}')
+    
 
     # Stockpile strategies
     # Treatment strategies

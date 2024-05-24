@@ -1,6 +1,6 @@
 {
   "panflu": {
-    "output": "3D_Fast_Mild_P0-2009_PR-children_Tx-high-risk_Vacc-2009.nc",
+    "output": "3D_Fast_Mild_P0-2009_PR-children_Tx-high-risk_Vacc-2009_output.json",
     "number_of_realizations": "1",
     "data": {
       "population": "data/texas/county_age_matrix.5",
