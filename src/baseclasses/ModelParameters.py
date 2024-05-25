@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
+import logging
 import numpy as np
+logger = logging.getLogger(__name__)
+
 
 class ModelParameters:
 
@@ -23,6 +26,13 @@ class ModelParameters:
 
         with open(simulation_properties.high_risk_ratios_file, 'r') as f:
             self.high_risk_ratios = [ line.rstrip() for line in f ]
+
+
+        logger.debug(f'R0={self.R0}, beta_scale={self.beta_scale}, tau={self.tau}, '
+                     f'kappa={self.kappa}, gamma={self.gamma}, chi={self.chi}, low_death_rate={self.low_death_rate}, '
+                     f'vaccine_effectiveness: {self.vaccine_effectiveness}, '
+                     f'vaccine_adherence: {self.vaccine_adherence}, high_risk_ratios: {self.high_risk_ratios}'
+                     )
 
 
     def __str__(self):
@@ -50,6 +60,11 @@ class ModelParameters:
             sys.exit(1)
 
         self.set_age_group_size()
+        logger.debug(f'number_of_age_groups = {self.number_of_age_groups}')
+        logger.debug(f'model parameter-associated contact matrix:')
+        logger.debug(f'{self.np_contact_matrix}')
+
+        return
 
     def set_age_group_size(self):
         self.number_of_age_groups = (np.shape(self.np_contact_matrix)[0])

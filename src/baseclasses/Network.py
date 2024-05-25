@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 from typing import Type
-from .Node import Node
 import json
 import pandas as pd
+import logging
+from .Node import Node
 from .PopulationCompartments import PopulationCompartments
+
+logger = logging.getLogger(__name__)
+
 
 
 class Network:
@@ -36,6 +40,7 @@ class Network:
         except FileNotFoundError as e:
             raise Exception(f'Could not open {filename}') from e
             sys.exit(1)
+        logger.debug(f'{self.df_county_age_matrix}')
 
             
     def population_to_nodes(self, high_risk_ratios):
