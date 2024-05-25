@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import numpy as np
 from enum import Enum
+import numpy as np
 
 class RiskGroup(Enum):
     L=0 #LOW=0
@@ -19,10 +19,10 @@ class Compartments(Enum):
     R=5 #RECOVERED=5
     D=6 #DECEASED=6
 
+
 class PopulationCompartments:
 
-
-    def __init__(self, groups, high_risk_ratios):
+    def __init__(self, groups:list, high_risk_ratios:list):
 
         # groups and high_risk_ratios should be two lists of the same length
         self.groups = groups
@@ -47,6 +47,7 @@ class PopulationCompartments:
             self.compartment_data[i][RiskGroup.H.value][VaccineGroup.U.value][Compartments.S.value] = number_of_high_risk
             self.compartment_data[i][RiskGroup.H.value][VaccineGroup.V.value][Compartments.S.value] = 0
 
+        return
 
 
 # Compartment data object is a 4-dimensional array of floats. The four dimensions are:

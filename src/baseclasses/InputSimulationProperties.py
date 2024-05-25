@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 import json
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class InputSimulationProperties:
 
-    def __init__(self, input_filename):
+    def __init__(self, input_filename:str):
         
+        logger.info(f'loaded in config file named {input_filename}')
         with open(input_filename, 'r') as f:
             data = json.load(f)
 
@@ -32,9 +37,12 @@ class InputSimulationProperties:
 
         self.initial = data['panflu']['initial']
         self.vaccines = data['panflu']['vaccines']
+        logger.info(f'instantiated InputSimulationProperties object')
+        logger.debug(f'{self}')
+        return
 
 
-    def __str__(self):
+    def __str__(self) -> str:
         return( f'\n'
                 f'R0={self.R0}\n'
                 f'beta_scale={self.beta_scale}\n'

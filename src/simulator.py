@@ -50,53 +50,45 @@ def run():
 
 
 def main():
-
-    logger.info('Entered main loop')
-
+    """
+    Main entry point to PandemicExerciseSimulator
+    """
+    logger.info(f'Entered main loop')
     # Read input properties file
     # Can be pre-generated as template, or generated in GUI
     # (assume one filename input now, although C++ app supported multi file)
     simulation_properties = InputSimulationProperties(args.input_filename)
-    logger.info(f'loaded in config file named {args.input_filename}')
 
     # Initialize Days class instances
     # 365 hardcoded in C++ app, realizations taken from simulation properties
     number_of_days_to_simulate = Day(args.days)
-    logger.info(f'number_of_days_to_simulate is {number_of_days_to_simulate.number_of_days}')
-
     number_of_realizations = Day(simulation_properties.number_of_realizations)
-    logger.info(f'number of realizations is {number_of_realizations.number_of_days}')
 
     # Initialize Model Parameters class instance
-    # This is a subset of the simulation properties
+    # This is a subset of the simulation properties, and contains data from a
+    # few of the input files
     parameters = ModelParameters(simulation_properties)
     parameters.load_contact_matrix(simulation_properties.contact_data_file)
-    logger.info(f'model parameters loaded from simulation properties')
 
     # Initialize Stochastic and Deterministic disease models
     stochastic_disease_model = DiseaseModel(parameters, is_stochastic=True)
-    logger.info(f'instantiated disease model {stochastic_disease_model}')
-
     deterministic_disease_model = DiseaseModel(parameters, is_stochastic=False)
-    logger.info(f'instantiated disease model {deterministic_disease_model}')
 
     # Initialize Network class which will contain a list of Nodes
+    # There is one Node for each row in the population data (e.g. one Node
+    # per county), and each Node contains Compartment data
     network = Network()
     network.load_population_file(simulation_properties.population_data_file)
     network.population_to_nodes(parameters.high_risk_ratios)
-    logger.info(f'instantiated Network model {network}')
 
-    # Initialize Travel model
+    # Initialize Travel model - an NxN matrix where N is the number of
+    # Nodes in the Network
     travel = TravelFlow(network.number_of_nodes())
     travel.load_travel_flow_file(simulation_properties.flow_data_file)
-    network.travel_flow_data = travel.flow_data
-    logger.info(f'instantiated TravelFlowData class for {network.number_of_nodes()} nodes')
-    logger.debug(f'{network.travel_flow_data.shape}')
-    logger.debug(f'{network.travel_flow_data}')
+    network.add_travel_flow_data(travel.flow_data)
 
     # Initialize output writer
     writer = Writer(simulation_properties.output_data_file)
-    logger.info(f'instantiated Writer class - {writer}')
     
     # Set some initial conditions including number of initial infected from
     # properties input file

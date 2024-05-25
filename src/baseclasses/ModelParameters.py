@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 import logging
 import numpy as np
+from typing import Type
+from .InputSimulationProperties import InputSimulationProperties
+
 logger = logging.getLogger(__name__)
 
 
 class ModelParameters:
 
-    def __init__(self, simulation_properties):
+    def __init__(self, simulation_properties:Type[InputSimulationProperties]):
         self.R0             = simulation_properties.R0 
         self.beta_scale     = simulation_properties.beta_scale 
         self.tau            = simulation_properties.tau
@@ -27,20 +30,26 @@ class ModelParameters:
         with open(simulation_properties.high_risk_ratios_file, 'r') as f:
             self.high_risk_ratios = [ line.rstrip() for line in f ]
 
+        logger.info(f'instantiated ModelParameters object')
+        logger.debug( f'opening files: {simulation_properties.vaccine_effectiveness_file}, '
+                      f'{simulation_properties.vaccine_adherence_file}, '
+                      f'{simulation_properties.high_risk_ratios_file} '
+                    )
+        logger.debug(f'{self}')
+        return
 
-        logger.debug(f'R0={self.R0}, beta_scale={self.beta_scale}, tau={self.tau}, '
-                     f'kappa={self.kappa}, gamma={self.gamma}, chi={self.chi}, low_death_rate={self.low_death_rate}, '
-                     f'vaccine_effectiveness: {self.vaccine_effectiveness}, '
-                     f'vaccine_adherence: {self.vaccine_adherence}, high_risk_ratios: {self.high_risk_ratios}'
-                     )
 
+    def __str__(self) -> str:
+        return( f'R0={self.R0}, '
+                f'beta_scale={self.beta_scale}, '
+                f'tau={self.tau}, '
+                f'kappa={self.kappa}, '
+                f'gamma={self.gamma}, '
+                f'chi={self.chi}, '
+                f'low_death_rate={self.low_death_rate} '
+              )
 
-    def __str__(self):
-        return(f'R0={self.R0}, beta_scale={self.beta_scale}, tau={self.tau}, '
-               f'kappa={self.kappa}, gamma={self.gamma}, chi={self.chi}, low_death_rate={self.low_death_rate}, '
-               f'number_of_age_groups={self.number_of_age_groups}')
-
-    def load_contact_matrix(self, filename):
+    def load_contact_matrix(self, filename:str):
         """
         The file contact_matrix.5 contains 5 rows and 5 columns
 
@@ -68,6 +77,7 @@ class ModelParameters:
 
     def set_age_group_size(self):
         self.number_of_age_groups = (np.shape(self.np_contact_matrix)[0])
+        return
             
 
 

@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-from typing import Type
 import json
-import pandas as pd
 import logging
+import pandas as pd
+from typing import Type
 from .Node import Node
 from .PopulationCompartments import PopulationCompartments
 
 logger = logging.getLogger(__name__)
-
 
 
 class Network:
@@ -15,13 +14,15 @@ class Network:
     def __init__(self):
         self.nodes = []
         self.travel_flow_data = None
+        logger.info('instantiated Network object with {len(self.nodes)} nodes')
+        return
 
 
-    def __str__(self):
+    def __str__(self) -> str:
         return(f'Network:Nodes={len(self.nodes)}')
 
 
-    def load_population_file(self, filename):
+    def load_population_file(self, filename:str):
         """
         The file county_age_matrix.5 contains 6 columns and a row for each county
         The first field is the fips county identifier from federal government 
@@ -35,15 +36,16 @@ class Network:
         """
 
         try:
-            #self.np_county_age_matrix = np.genfromtxt(filename, delimiter=',')
             self.df_county_age_matrix = pd.read_csv(filename)
         except FileNotFoundError as e:
             raise Exception(f'Could not open {filename}') from e
             sys.exit(1)
+        logger.info(f'loaded population data from {filename} into Network')
         logger.debug(f'{self.df_county_age_matrix}')
+        return
 
             
-    def population_to_nodes(self, high_risk_ratios):
+    def population_to_nodes(self, high_risk_ratios: list):
         """
         Store population data as list of nodes
         """
@@ -54,6 +56,8 @@ class Network:
             this_node = Node(index, this_compartment)
             self.add_node(this_node)
 
+        logger.info(f'converted population data into {len(self.nodes)} nodes')
+
         return
 
 
@@ -62,11 +66,15 @@ class Network:
         return
 
 
-    def number_of_nodes(self):
+    def number_of_nodes(self) -> int:
         return(len(self.nodes))
 
     def add_travel_flow_data(self, travel_flow_data):
         self.travel_flow_data = travel_flow_data
+        logger.info(f'added travel flow data to Network object')
+        logger.debug(f'{self.travel_flow_data.shape}')
+        logger.debug(f'{self.travel_flow_data}')
+        
         return
 
 

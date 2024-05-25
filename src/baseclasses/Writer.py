@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
+import logging
 from .Network import Network
+
+logger = logging.getLogger(__name__)
 
 class Writer:
 
@@ -16,6 +19,7 @@ class Writer:
             raise Exception(f'Error opening {self.output_filename}') from e
             sys.exit(1)
 
+        logger.info(f'instantiated Writer object with output file {self.output_filename}')
         return
 
     def __str__(self):
