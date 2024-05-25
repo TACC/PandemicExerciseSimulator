@@ -3,6 +3,7 @@ import json
 import logging
 import pandas as pd
 from typing import Type
+
 from .Node import Node
 from .PopulationCompartments import PopulationCompartments
 

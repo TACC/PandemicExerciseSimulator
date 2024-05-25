@@ -54,6 +54,7 @@ def main():
     Main entry point to PandemicExerciseSimulator
     """
     logger.info(f'Entered main loop')
+
     # Read input properties file
     # Can be pre-generated as template, or generated in GUI
     # (assume one filename input now, although C++ app supported multi file)

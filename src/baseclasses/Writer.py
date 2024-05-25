@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import logging
+
 from .Network import Network
 
 logger = logging.getLogger(__name__)
+
 
 class Writer:
 

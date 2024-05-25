@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import numpy as np
+
 from .PopulationCompartments import PopulationCompartments
 from .PopulationCompartments import RiskGroup, VaccineGroup, Compartments
 

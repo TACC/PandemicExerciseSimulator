@@ -2,6 +2,7 @@
 import logging
 import numpy as np
 from typing import Type
+
 from .InputSimulationProperties import InputSimulationProperties
 
 logger = logging.getLogger(__name__)
