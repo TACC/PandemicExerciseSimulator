@@ -17,7 +17,7 @@ parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNI
 parser.add_argument('-d', '--days', type=int, required=False, default=365,
                     help='set number of days to simulate')
 parser.add_argument('-i', '--input_filename', type=str, required=True,
-                    help='path and name of json file to read in')
+                    help='path and name of input simulation properties json file')
 args = parser.parse_args()
 
 format_str=f'[%(asctime)s] %(filename)s:%(funcName)s:%(lineno)s - %(levelname)s: %(message)s'
