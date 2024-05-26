@@ -11,7 +11,6 @@ from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNING',
                     help='set log level to DEBUG, INFO, WARNING, ERROR, or CRITICAL')
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 def run():
 
-    logger.debug('Entered the run function')
+    logger.info('Entered the run function')
     # for each day of iteration...
     
     # handle distributions
