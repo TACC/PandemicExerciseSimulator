@@ -25,8 +25,10 @@ logging.basicConfig(level=args.loglevel, format=format_str)
 logger = logging.getLogger(__name__)
 
 
-
 def run():
+    """
+    Run function for simulating each day
+    """
 
     logger.info('Entered the run function')
     # for each day of iteration...
@@ -44,8 +46,6 @@ def run():
     # Write results
 
     return
-
-
 
 
 def main():
