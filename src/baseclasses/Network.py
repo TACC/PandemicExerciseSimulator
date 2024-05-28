@@ -15,12 +15,13 @@ class Network:
     def __init__(self):
         self.nodes = []
         self.travel_flow_data = None
-        logger.info('instantiated Network object with {len(self.nodes)} nodes')
+        self.total_population = 0
+        logger.info(f'instantiated Network object with {self.number_of_nodes()} nodes')
         return
 
 
     def __str__(self) -> str:
-        return(f'Network:Nodes={len(self.nodes)}')
+        return(f'Network:Nodes={self.number_of_nodes()}')
 
 
     def load_population_file(self, filename:str):
@@ -57,7 +58,7 @@ class Network:
             this_node = Node(index, this_compartment)
             self.add_node(this_node)
 
-        logger.info(f'converted population data into {len(self.nodes)} nodes')
+        logger.info(f'converted population data into {self.number_of_nodes()} nodes')
 
         return
 
@@ -70,6 +71,7 @@ class Network:
     def number_of_nodes(self) -> int:
         return(len(self.nodes))
 
+
     def add_travel_flow_data(self, travel_flow_data):
         self.travel_flow_data = travel_flow_data
         logger.info(f'added travel flow data to Network object')
@@ -77,6 +79,15 @@ class Network:
         logger.debug(f'{self.travel_flow_data}')
         
         return
+
+
+    def get_total_population(self) -> int:
+        total_population = 0
+        for item in self.nodes:
+            total_population += item.compartments.total_population
+            #logger.debug(f'population in this node is {item.compartments.total_population}')
+        self.total_population = total_population
+        return self.total_population
 
 
 
@@ -100,17 +111,3 @@ class Network:
         pass
 
 
-    def total_population(self):
-        """
-        double totalPopulation ( 0.0 );
-    
-        for ( Nodes::const_iterator iter = _nodes.begin(); iter != _nodes.end(); ++iter ) {
-            Node::RefPtr node ( *iter );
-    
-            if ( node ) {
-                const double population ( node->totalPopulation() );
-                totalPopulation += population;
-            }
-        }
-        """
-        pass
