@@ -21,6 +21,7 @@ class ModelParameters:
 
         self.vaccine_effectiveness = []
         self.vaccine_adherence = []
+        self.high_risk_ratios = []
 
         with open(simulation_properties.vaccine_effectiveness_file, 'r') as f:
             self.vaccine_effectiveness = [ line.rstrip() for line in f ]
@@ -37,6 +38,10 @@ class ModelParameters:
                       f'{simulation_properties.high_risk_ratios_file} '
                     )
         logger.debug(f'{self}')
+        logger.debug( f'vaccine_effectiveness = {self.vaccine_effectiveness}, '
+                      f'vaccine_adherence = {self.vaccine_adherence}, '
+                      f'high_risk_ratios = {self.high_risk_ratios}, '
+                    )
         return
 
 

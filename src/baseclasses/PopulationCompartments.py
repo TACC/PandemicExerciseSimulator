@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 from enum import Enum
+import logging
 import numpy as np
+
+logger = logging.getLogger(__name__)
+
 
 class RiskGroup(Enum):
     L=0 #LOW=0
@@ -30,6 +34,7 @@ class PopulationCompartments:
 
         self.number_of_age_groups = len(groups)
         self.total_population = sum(groups)
+        #logger.debug(f'total_population = {self.total_population} and groups = {self.groups}')
 
         #self.compartment_data = np.zeros((5,2,2,7))
         self.compartment_data = np.zeros(( len(groups),
@@ -43,9 +48,7 @@ class PopulationCompartments:
             number_of_high_risk = (self.groups[i] - number_of_low_risk)
 
             self.compartment_data[i][RiskGroup.L.value][VaccineGroup.U.value][Compartments.S.value] = number_of_low_risk
-            self.compartment_data[i][RiskGroup.L.value][VaccineGroup.V.value][Compartments.S.value] = 0
             self.compartment_data[i][RiskGroup.H.value][VaccineGroup.U.value][Compartments.S.value] = number_of_high_risk
-            self.compartment_data[i][RiskGroup.H.value][VaccineGroup.V.value][Compartments.S.value] = 0
 
         return
 
@@ -59,7 +62,7 @@ class PopulationCompartments:
 # Compartments are Susceptible, Exposed, Asymptomatic, Treatable, Infectious, Recovered, Deceased
 #
 #
-#                                       [][j][][]
+#                                       [][b][][]
 #
 #                         0 (low risk)             1 (high risk)
 #
@@ -70,12 +73,12 @@ class PopulationCompartments:
 #           1 (5-24)                                                 |
 #                                                                    V
 #
-# [i][][][] 2 (25-49)                                            [][][][l]
+# [a][][][] 2 (25-49)                                            [][][][d]
 #
 #                                                0 (S)  1 (E)  2 (A)  3 (T)  4 (I)  5 (R)  6 (D)
 #           3 (50-64)
 #                                   0 (unvac)    float  float  float  float  float  float  float
-#                       [][][k][]   
+#                       [][][c][]   
 #           4 (65+)                 1 (vac)      float  float  float  float  float  float  float
 #
 #
