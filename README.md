@@ -68,16 +68,16 @@ part of that file and the input data:
 * high_risk_ratios.5: was hardcoded in `ModelParameters.cpp`, but pulled it out and made it
   its own file
 
-* Params (chi): Chi was originally hardcoded in `ModelParameters.cpp`, took this out and made
+* Params (chi=1.0): Chi was originally hardcoded in `ModelParameters.cpp`, took this out and made
   it a param.
 
-* Params (vaccine_wastage_factor): was orginally hardcoded in `ModelParameters.cpp`, took this
+* Params (vaccine_wastage_factor=60): was orginally hardcoded in `ModelParameters.cpp`, took this
   out and made it a param. "Every N days half the stock pile is wasted"
 
-* Params (antiviral_wastage_factor): was orginally hardcoded in `ModelParameters.cpp`, took this
+* Params (antiviral_wastage_factor=60): was orginally hardcoded in `ModelParameters.cpp`, took this
   out and made it a param. "Every N days half the stock pile is wasted"
 
-* Params (antiviral_effectievness): was orginally hardcoded in `ModelParameters.cpp`, took this
+* Params (antiviral_effectievness=0.8): was orginally hardcoded in `ModelParameters.cpp`, took this
   out and made it a param. 
 
 * Params (nu): This is still hard coded, not sure what to do with this:
