@@ -100,6 +100,9 @@ def main():
     #      create a GROUP struct (see DemographicGroup.h)
     #      one iteration of stochastic_disease_model.exposeNumberofPeople (node, group, initial_num_infected)
 
+
+    total_population = network.get_total_population()
+    logger.debug(f'total population is {total_population}')
     # Stockpile strategies
     # Treatment strategies
 
