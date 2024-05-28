@@ -17,11 +17,17 @@ class ModelParameters:
         self.kappa          = simulation_properties.kappa
         self.gamma          = simulation_properties.gamma
         self.chi            = simulation_properties.chi
+
+        self.vaccine_wastage_factor   = simulation_properties.vaccine_wastage_factor
+        self.antiviral_effectiveness  = simulation_properties.antiviral_effectiveness
+        self.antiviral_wastage_factor = simulation_properties.antiviral_wastage_factor
+
         self.low_death_rate = True if simulation_properties.nu_high == "yes" else False
 
-        self.vaccine_effectiveness = []
-        self.vaccine_adherence = []
-        self.high_risk_ratios = []
+        self.vaccine_effectiveness   = []
+        self.vaccine_adherence       = []
+        self.high_risk_ratios        = []
+        self.relative_susceptibility = []
 
         with open(simulation_properties.vaccine_effectiveness_file, 'r') as f:
             self.vaccine_effectiveness = [ line.rstrip() for line in f ]
@@ -32,15 +38,20 @@ class ModelParameters:
         with open(simulation_properties.high_risk_ratios_file, 'r') as f:
             self.high_risk_ratios = [ line.rstrip() for line in f ]
 
+        with open(simulation_properties.relative_susceptibility_file, 'r') as f:
+            self.relative_susceptibility = [ line.rstrip() for line in f ]
+
         logger.info(f'instantiated ModelParameters object')
         logger.debug( f'opening files: {simulation_properties.vaccine_effectiveness_file}, '
                       f'{simulation_properties.vaccine_adherence_file}, '
                       f'{simulation_properties.high_risk_ratios_file} '
+                      f'{simulation_properties.relative_susceptibility_file} '
                     )
         logger.debug(f'{self}')
         logger.debug( f'vaccine_effectiveness = {self.vaccine_effectiveness}, '
                       f'vaccine_adherence = {self.vaccine_adherence}, '
                       f'high_risk_ratios = {self.high_risk_ratios}, '
+                      f'relative_susceptibility = {self.relative_susceptibility}, '
                     )
         return
 

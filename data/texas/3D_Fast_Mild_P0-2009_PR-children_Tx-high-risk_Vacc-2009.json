@@ -8,7 +8,8 @@
       "flow": "data/texas/work_matrix_rel.csv",
       "high_risk_ratios": "data/texas/high_risk_ratios.5",
       "vaccine_effectiveness": "data/texas/vaccine_effectiveness.5",
-      "vaccine_adherence": "data/texas/vaccine_adherence.5"
+      "vaccine_adherence": "data/texas/vaccine_adherence.5",
+      "relative_susceptibility": "data/texas/relative_susceptibility.5"
     },
     "params": {
       "R0": "1.8",
@@ -17,7 +18,10 @@
       "kappa": "0.52631579",
       "gamma": "0.24390244",
       "chi": "1.0",
-      "nu_high": "no"
+      "nu_high": "no",
+      "vaccine_wastage_factor": "60",
+      "antiviral_effectiveness": "0.8",
+      "antiviral_wastage_factor": "60"
     },
     "initial": {
       "v": [

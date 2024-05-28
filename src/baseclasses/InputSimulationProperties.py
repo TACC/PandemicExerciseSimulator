@@ -21,15 +21,20 @@ class InputSimulationProperties:
         self.chi        = float(data['panflu']['params']['chi'])
         self.nu_high    = data['panflu']['params']['nu_high']
 
+        self.vaccine_wastage_factor   = float(data['panflu']['params']['vaccine_wastage_factor'])
+        self.antiviral_effectiveness  = float(data['panflu']['params']['antiviral_effectiveness'])
+        self.antiviral_wastage_factor = float(data['panflu']['params']['antiviral_wastage_factor'])
+
         self.number_of_realizations = int(data['panflu']['number_of_realizations'])
 
-        self.population_data_file       = data['panflu']['data']['population']
-        self.contact_data_file          = data['panflu']['data']['contact']
-        self.flow_data_file             = data['panflu']['data']['flow']
-        self.vaccine_effectiveness_file = data['panflu']['data']['vaccine_effectiveness']
-        self.vaccine_adherence_file     = data['panflu']['data']['vaccine_adherence'] 
-        self.high_risk_ratios_file      = data['panflu']['data']['high_risk_ratios']
-        self.output_data_file           = data['panflu']['output']
+        self.population_data_file         = data['panflu']['data']['population']
+        self.contact_data_file            = data['panflu']['data']['contact']
+        self.flow_data_file               = data['panflu']['data']['flow']
+        self.vaccine_effectiveness_file   = data['panflu']['data']['vaccine_effectiveness']
+        self.vaccine_adherence_file       = data['panflu']['data']['vaccine_adherence'] 
+        self.high_risk_ratios_file        = data['panflu']['data']['high_risk_ratios']
+        self.relative_susceptibility_file = data['panflu']['data']['relative_susceptibility']
+        self.output_data_file             = data['panflu']['output']
 
         self.public_health_announcements = data['panflu']['public_health_announcements']
         self.vaccine_pro_rata = data['panflu']['pro_rata']
@@ -51,12 +56,16 @@ class InputSimulationProperties:
                 f'gamma={self.gamma}\n'
                 f'chi={self.chi}\n'
                 f'nu_high={self.nu_high}\n'
+                f'vaccine_wastage_factor={self.vaccine_wastage_factor}\n'
+                f'antiviral_effectiveness={self.antiviral_effectiveness}\n'
+                f'antiviral_wastage_factor={self.antiviral_wastage_factor}\n'
                 f'number_of_realizations={self.number_of_realizations}\n'
                 f'population_data_file={self.population_data_file}\n'
                 f'contact_data_file={self.contact_data_file}\n'
                 f'flow_data_file={self.flow_data_file}\n'
                 f'vaccine_effectiveness_file={self.vaccine_effectiveness_file}\n'
                 f'vaccine_adherence_file={self.vaccine_adherence_file}\n'
+                f'relative_susceptibility_file={self.relative_susceptibility_file}\n'
                 f'output_data_file={self.output_data_file}\n'
                 f'public_health_announcements={self.public_health_announcements}\n'
                 f'vaccine_pro_rata={self.vaccine_pro_rata}\n'
