@@ -53,10 +53,13 @@ class PopulationCompartments:
         return
 
 
+    def __str__(self):
+        return(str((self.compartment_data).tolist()))
+
 # Compartment data object is a 4-dimensional array of floats. The four dimensions are:
 # [Group (N=5)] [Risk status (N=2)] [Vaccinated status (N=2)] [Compartment (N=7)]
 #
-# Groups for Texas data are 0-4, 5-24, 25-49, 50-64, 65+
+# Age groups for Texas data are 0-4, 5-24, 25-49, 50-64, 65+
 # Risk status is either low risk or high risk
 # Vaccination status is either unvaccinated or vaccinated
 # Compartments are Susceptible, Exposed, Asymptomatic, Treatable, Infectious, Recovered, Deceased

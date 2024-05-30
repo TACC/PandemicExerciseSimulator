@@ -53,9 +53,10 @@ class Network:
         """
 
         for index, row in self.df_county_age_matrix.iterrows():
+            this_id = row.iloc[0]
             this_group = list(row[1:])
             this_compartment = PopulationCompartments(this_group, high_risk_ratios)
-            this_node = Node(index, this_compartment)
+            this_node = Node(this_id, this_compartment)
             self.add_node(this_node)
 
         logger.info(f'converted population data into {self.number_of_nodes()} nodes')

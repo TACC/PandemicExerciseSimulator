@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import logging
 
 from .Network import Network
@@ -13,7 +14,7 @@ class Writer:
         try:
             with open(self.output_filename, 'w') as o:
                 try:
-                    o.write('output')
+                    o.write('')
                 except (IOError, OSError) as e:
                     raise Exception(f'Error writing to {self.output_filename}') from e
                     sys.exit(1)
@@ -24,9 +25,17 @@ class Writer:
         logger.info(f'instantiated Writer object with output file {self.output_filename}')
         return
 
+
     def __str__(self):
         return(f'Writer class: Output file handle to {self.output_filename}')
 
-    def write(self, network):
-       with open(self.output_filename, 'w') as o:
-           o.write(network.nodes[0].compartment)
+
+    def write(self, day, network):
+       
+        data = {'day': day, 'data': []}
+        for each_node in network.nodes:
+            data['data'].append(each_node.return_dict())
+        with open(self.output_filename, 'a') as o:
+            o.write(json.dumps(data, indent=2))
+
+
