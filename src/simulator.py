@@ -48,6 +48,23 @@ def run():
     return
 
 
+def run_mock(number_of_days_to_simulate, network, parameters, writer):
+    
+    for day in range(number_of_days_to_simulate.number_of_days):
+        writer.write(day, network)
+
+        for node in network.nodes:
+            for i in range(5):
+                for j in range(2):
+                    for k in range(6):
+                        if node.compartments.compartment_data[i][j][0][k] > 1:
+                            diff = node.compartments.compartment_data[i][j][0][k] * 0.05
+                            node.compartments.compartment_data[i][j][0][k] -= diff
+                            node.compartments.compartment_data[i][j][0][k+1] += diff
+
+    return
+ 
+
 def main():
     """
     Main entry point to PandemicExerciseSimulator
@@ -71,8 +88,8 @@ def main():
     parameters.load_contact_matrix(simulation_properties.contact_data_file)
 
     # Initialize Stochastic and Deterministic disease models
+    #deterministic_disease_model = DiseaseModel(parameters, is_stochastic=False)
     stochastic_disease_model = DiseaseModel(parameters, is_stochastic=True)
-    deterministic_disease_model = DiseaseModel(parameters, is_stochastic=False)
 
     # Initialize Network class which will contain a list of Nodes
     # There is one Node for each row in the population data (e.g. one Node
@@ -106,7 +123,11 @@ def main():
     # Stockpile strategies
     # Treatment strategies
 
-    run()
+    run_mock( number_of_days_to_simulate,
+              network,
+              parameters,
+              writer
+            )
 #    run( number_of_days_to_simulate,
 #         network, 
 #         stochastic_disease_model,
