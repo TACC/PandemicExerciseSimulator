@@ -56,6 +56,18 @@ class PopulationCompartments:
     def __str__(self):
         return(str((self.compartment_data).tolist()))
 
+
+    def return_list_by_age_group(self, comp, vac, risk):
+        """
+        Given a compartment (e.g. S), vaccination status (e.g. U), and risk level
+        (e.g. L), return a list of values 0..N (N=number of age groups) where each
+        """
+        age_list = []
+        for i in range(len(self.groups)):
+            age_list.append(self.compartment_data[i][risk][vac][comp])
+        return age_list
+
+
 # Compartment data object is a 4-dimensional array of floats. The four dimensions are:
 # [Group (N=5)] [Risk status (N=2)] [Vaccinated status (N=2)] [Compartment (N=7)]
 #

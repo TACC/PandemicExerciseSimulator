@@ -41,5 +41,18 @@ class Node:
     def return_dict(self) -> dict:
         data={}
         data['node_id'] = str(self.node_id)
-        data['compartments'] = f'{self.compartments}'
+        data['compartments'] = {}
+
+        for comp in Compartments:
+            data['compartments'][comp.name] = { 'U':{}, 'V':{} }
+
+            for vac in VaccineGroup:
+                for risk in RiskGroup:
+                    data['compartments'][comp.name][vac.name][risk.name] = str(self.compartments.return_list_by_age_group( comp.value, vac.value, risk.value))
+
+        
         return(data)
+
+
+
+
