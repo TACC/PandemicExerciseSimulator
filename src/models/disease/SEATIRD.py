@@ -2,6 +2,14 @@ import numpy as np
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
 
+#S = Susceptible
+#E = Exposed
+#A = Asymptomatic infectious
+#T = Treated
+#I = Infectious symptomatic
+#R = Recovered
+#D = Deceased
+
 def SEATIRD_model(t, y, beta, nu, mu, tau, gamma, delta, rho):
     S, E, A, T, I, R, D = y
     
