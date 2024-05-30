@@ -48,7 +48,7 @@ class Node:
 
             for vac in VaccineGroup:
                 for risk in RiskGroup:
-                    data['compartments'][comp.name][vac.name][risk.name] = str(self.compartments.return_list_by_age_group( comp.value, vac.value, risk.value))
+                    data['compartments'][comp.name][vac.name][risk.name] = self.compartments.return_list_by_age_group( comp.value, vac.value, risk.value)
 
         
         return(data)

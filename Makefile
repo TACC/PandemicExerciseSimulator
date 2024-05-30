@@ -1,6 +1,6 @@
 
 run:
-	python3 src/simulator.py -d 365 -i data/texas/3D_Fast_Mild_P0-2009_PR-children_Tx-high-risk_Vacc-2009.json
+	python3 src/simulator.py -d 10 -i data/texas/3D_Fast_Mild_P0-2009_PR-children_Tx-high-risk_Vacc-2009.json
 
 info:
 	python3 src/simulator.py -l INFO -d 10 -i data/texas/3D_Fast_Mild_P0-2009_PR-children_Tx-high-risk_Vacc-2009.json

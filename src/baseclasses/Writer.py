@@ -36,6 +36,7 @@ class Writer:
         for each_node in network.nodes:
             data['data'].append(each_node.return_dict())
         with open(self.output_filename, 'a') as o:
+            #o.write(json.dumps(data))
             o.write(json.dumps(data, indent=2))
 
 
