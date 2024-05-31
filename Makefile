@@ -1,12 +1,12 @@
 
 run:
-	python3 src/simulator.py -d 10 -i data/texas/3D_Fast_Mild_P0-2009_PR-children_Tx-high-risk_Vacc-2009.json
+	python3 src/simulator.py -d 2 -i data/texas/INPUT.json
 
 info:
-	python3 src/simulator.py -l INFO -d 10 -i data/texas/3D_Fast_Mild_P0-2009_PR-children_Tx-high-risk_Vacc-2009.json
+	python3 src/simulator.py -l INFO -d 2 -i data/texas/INPUT.json
 
 debug:
-	python3 src/simulator.py -l DEBUG -d 1 -i data/texas/3D_Fast_Mild_P0-2009_PR-children_Tx-high-risk_Vacc-2009.json
+	python3 src/simulator.py -l DEBUG -d 2 -i data/texas/INPUT.json
 
 clean:
 	find . -type d -name __pycache__ -prune -exec rm -rf {} \;

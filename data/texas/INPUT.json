@@ -1,6 +1,6 @@
 {
   "panflu": {
-    "output": "3D_Fast_Mild_P0-2009_PR-children_Tx-high-risk_Vacc-2009_output.json",
+    "output": "OUTPUT.json",
     "number_of_realizations": "1",
     "data": {
       "population": "data/texas/county_age_matrix.5",
@@ -9,7 +9,8 @@
       "high_risk_ratios": "data/texas/high_risk_ratios.5",
       "vaccine_effectiveness": "data/texas/vaccine_effectiveness.5",
       "vaccine_adherence": "data/texas/vaccine_adherence.5",
-      "relative_susceptibility": "data/texas/relative_susceptibility.5"
+      "relative_susceptibility": "data/texas/relative_susceptibility.5",
+      "nu_value_matrix": "data/texas/nu_value_matrix.5"
     },
     "params": {
       "R0": "1.8",
@@ -63,7 +64,20 @@
         }
       ]
     },
-    "public_health_announcements": null,
+    "public_health_announcements": {
+      "v": [
+        {
+          "day": "50",
+          "effectiveness": "0.4",
+          "halflife": "10.0"
+        },
+        {
+          "day": "200",
+          "effectiveness": "0.6",
+          "halflife": "50.0"
+        }
+      ]
+    },
     "antivirals": null,
     "pro_rata": "children",
     "universal": "high_risk",

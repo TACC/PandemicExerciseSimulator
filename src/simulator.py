@@ -87,6 +87,7 @@ def main():
     # This is a subset of the simulation properties, and contains data from a
     # few of the input files
     parameters = ModelParameters(simulation_properties)
+    parameters.load_data_files(simulation_properties)
     parameters.load_contact_matrix(simulation_properties.contact_data_file)
 
     # Initialize Days class instances

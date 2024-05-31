@@ -16,7 +16,7 @@ class InputSimulationProperties:
 
         # parameters
         self.R0         = float(data['panflu']['params']['R0'])
-        self.beta_scale = float(data['panflu']['params']['beta_scale'])
+        self.beta_scale = float(data['panflu']['params']['beta_scale'])  # R0CorrectionFactor
         self.tau        = float(data['panflu']['params']['tau'])
         self.kappa      = float(data['panflu']['params']['kappa'])
         self.gamma      = float(data['panflu']['params']['gamma'])
@@ -34,6 +34,7 @@ class InputSimulationProperties:
         self.vaccine_adherence_file       = data['panflu']['data']['vaccine_adherence'] 
         self.high_risk_ratios_file        = data['panflu']['data']['high_risk_ratios']
         self.relative_susceptibility_file = data['panflu']['data']['relative_susceptibility']
+        self.nu_value_matrix_file         = data['panflu']['data']['nu_value_matrix']
 
         # simulation control
         self.number_of_realizations = int(data['panflu']['number_of_realizations'])
@@ -76,6 +77,7 @@ class InputSimulationProperties:
                 f'vaccine_adherence_file={self.vaccine_adherence_file}\n'
                 f'high_risk_ratios_file={self.high_risk_ratios_file}\n'
                 f'relative_susceptibility_file={self.relative_susceptibility_file}\n'
+                f'nu_value_matrix_file={self.nu_value_matrix_file}\n'
                 f'## SIMULATION CONTROL ##\n'
                 f'number_of_realizations={self.number_of_realizations}\n'
                 f'output_data_file={self.output_data_file}\n'
@@ -86,13 +88,11 @@ class InputSimulationProperties:
                 f'initial={self.initial}\n'
                 f'vaccines={self.vaccines}\n'
               )
-               
 
+
+    # TODO add some functions in here to verify that we got all the data
     def _verify_input(self) -> bool:
-        
         return True
 
 
-### TODO
-### Add some functions in here to verify that we got all the data
 
