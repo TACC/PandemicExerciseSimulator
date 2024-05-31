@@ -7,7 +7,7 @@ D=Day(NUM)
 
 
 def test_Day():
-    assert D.number_of_days == NUM
+    assert D.day == NUM
     assert (f'{D}') == f'Day:{NUM}'
 
 
@@ -25,11 +25,11 @@ def test_validate_input():
 
 
 def test_increment_day():
-    this_value = D.number_of_days
+    this_value = D.day
     D.increment_day(0)
-    assert D.number_of_days == (this_value + 0)
+    assert D.day == (this_value + 0)
     D.increment_day(1) 
-    assert D.number_of_days == (this_value + 1)
+    assert D.day == (this_value + 1)
 
 
 def test_increment_day_exceptions():

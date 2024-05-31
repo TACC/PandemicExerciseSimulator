@@ -13,13 +13,13 @@ class Day:
         except AssertionError as e:
             raise Exception('Day class must be initialized with positive integer') from e
             sys.exit(1)
-        self.number_of_days = int(num)
+        self.day = int(num)
         logger.info(f'instantiated Day object with seed {num}')
         logger.debug(f'{self}')
         return
 
     def __str__(self) -> str:
-        return(f'Day:{self.number_of_days}')
+        return(f'Day:{self.day}')
 
     def _validate_input(self, num:int) -> bool:
         return(str(num).isnumeric())
@@ -30,7 +30,7 @@ class Day:
         except AssertionError as e:
             raise Exception('Day class can only be incremented by a positive integer') from e
             sys.exit(1)
-        self.number_of_days += int(num)
+        self.day += int(num)
         return
 
 

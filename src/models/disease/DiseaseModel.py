@@ -2,7 +2,7 @@
 import logging
 from typing import Type
 
-from .ModelParameters import ModelParameters
+from baseclasses.ModelParameters import ModelParameters
 
 logger = logging.getLogger(__name__)
 

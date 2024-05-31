@@ -4,12 +4,13 @@ import logging
 import numpy as np
 
 from baseclasses.Day import Day
-from baseclasses.DiseaseModel import DiseaseModel
 from baseclasses.InputSimulationProperties import InputSimulationProperties
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
+from models.disease.DiseaseModel import DiseaseModel
+from models.disease.StochasticSEATIRD import StochasticSEATIRD
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNING',
@@ -25,21 +26,27 @@ logging.basicConfig(level=args.loglevel, format=format_str)
 logger = logging.getLogger(__name__)
 
 
-def run():
+def run(number_of_days_to_simulate, network, disease_model, parameters, writer):
     """
     Run function for simulating each day
     """
 
     logger.info('Entered the run function')
+
     # for each day of iteration...
-    
-    # handle distributions
-    
-    # apply treatments
-    
-    # modify stockpiles
-    
-    # simulate one step.  (what are node, time, parameters)
+    for day in range(number_of_days_to_simulate.day):
+        for node in network.nodes:
+
+            # implement these later
+            # handle distributions
+            # apply treatments
+            # modify stockpiles
+       
+            # simulate one step.  (what are node, time, parameters)
+            time=day+1
+            stochastic_seatird = StochasticSEATIRD(disease_model)
+            stochastic_seatird.reinitialize_events(node)
+            stochastic_seatird.simulate(node, time, parameters)
     
     # Travel
     
@@ -50,7 +57,7 @@ def run():
 
 def run_mock(number_of_days_to_simulate, network, parameters, writer):
     
-    for day in range(number_of_days_to_simulate.number_of_days):
+    for day in range(number_of_days_to_simulate.day):
         writer.write(day, network)
 
         for node in network.nodes:
@@ -76,20 +83,20 @@ def main():
     # (assume one filename input now, although C++ app supported multi file)
     simulation_properties = InputSimulationProperties(args.input_filename)
 
-    # Initialize Days class instances
-    # 365 hardcoded in C++ app, realizations taken from simulation properties
-    number_of_days_to_simulate = Day(args.days)
-    number_of_realizations = Day(simulation_properties.number_of_realizations)
-
     # Initialize Model Parameters class instance
     # This is a subset of the simulation properties, and contains data from a
     # few of the input files
     parameters = ModelParameters(simulation_properties)
     parameters.load_contact_matrix(simulation_properties.contact_data_file)
 
-    # Initialize Stochastic and Deterministic disease models
+    # Initialize Days class instances
+    # 365 hardcoded in C++ app, realizations taken from simulation properties
+    number_of_days_to_simulate = Day(args.days)
+    realization_number = Day(simulation_properties.number_of_realizations)
+
+    # Initialize base disease model with stochastic flag
     #deterministic_disease_model = DiseaseModel(parameters, is_stochastic=False)
-    stochastic_disease_model = DiseaseModel(parameters, is_stochastic=True)
+    disease_model = DiseaseModel(parameters, is_stochastic=True)
 
     # Initialize Network class which will contain a list of Nodes
     # There is one Node for each row in the population data (e.g. one Node
@@ -97,6 +104,7 @@ def main():
     network = Network()
     network.load_population_file(simulation_properties.population_data_file)
     network.population_to_nodes(parameters.high_risk_ratios)
+    logger.debug(f'total population is {network.get_total_population()}')
 
     # Initialize Travel model - an NxN matrix where N is the number of
     # Nodes in the Network
@@ -118,16 +126,22 @@ def main():
     #      one iteration of stochastic_disease_model.exposeNumberofPeople (node, group, initial_num_infected)
 
 
-    total_population = network.get_total_population()
-    logger.debug(f'total population is {total_population}')
     # Stockpile strategies
     # Treatment strategies
 
-    run_mock( number_of_days_to_simulate,
-              network,
-              parameters,
-              writer
-            )
+    #run_mock( number_of_days_to_simulate,
+    #          network,
+    #          parameters,
+    #          writer
+    #        )
+
+    run( number_of_days_to_simulate,
+         network,
+         disease_model,
+         parameters,
+         writer
+       )
+
 #    run( number_of_days_to_simulate,
 #         network, 
 #         stochastic_disease_model,
