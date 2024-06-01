@@ -9,10 +9,11 @@ logger = logging.getLogger(__name__)
 
 class DiseaseModel:
 
-    def __init__(self, parameters:Type[ModelParameters], is_stochastic:bool = False):
+    def __init__(self, parameters:Type[ModelParameters], is_stochastic:bool = False, now:float = 0.0):
         self.is_stochastic = is_stochastic
+        self.now = now
         self.parameters = parameters
-        logger.info(f'instantiated DiseaseModel object with stochastic={self.is_stochastic}')
+        logger.info(f'instantiated DiseaseModel object with stochastic={self.is_stochastic}, now={self.now}')
         logger.debug(f'{self.parameters}')
         return
 
