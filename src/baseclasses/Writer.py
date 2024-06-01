@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import logging
+from typing import Type
 
 from .Network import Network
 
@@ -26,17 +27,18 @@ class Writer:
         return
 
 
-    def __str__(self):
+    def __str__(self) -> str:
         return(f'Writer class: Output file handle to {self.output_filename}')
 
 
-    def write(self, day, network):
+    def write(self, day:int, network:Type[Network]):
        
         data = {'day': day, 'data': []}
         for each_node in network.nodes:
             data['data'].append(each_node.return_dict())
         with open(self.output_filename, 'a') as o:
-            #o.write(json.dumps(data))
             o.write(json.dumps(data, indent=2))
+
+        return
 
 

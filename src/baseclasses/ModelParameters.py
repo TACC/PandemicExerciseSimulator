@@ -31,7 +31,7 @@ class ModelParameters:
         self.vaccine_effectiveness   = []
         self.vaccine_adherence       = []
         self.high_risk_ratios        = []
-        self.relative_susceptibility = []
+        self.relative_susceptibility = []       # SIGMA
         self.nu_values               = [[],[]]
 
         # TODO some parameters still need to be set

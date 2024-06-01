@@ -33,7 +33,7 @@ class InputSimulationProperties:
         self.vaccine_effectiveness_file   = data['panflu']['data']['vaccine_effectiveness']
         self.vaccine_adherence_file       = data['panflu']['data']['vaccine_adherence'] 
         self.high_risk_ratios_file        = data['panflu']['data']['high_risk_ratios']
-        self.relative_susceptibility_file = data['panflu']['data']['relative_susceptibility']
+        self.relative_susceptibility_file = data['panflu']['data']['relative_susceptibility'] # SIGMA
         self.nu_value_matrix_file         = data['panflu']['data']['nu_value_matrix']
 
         # simulation control
