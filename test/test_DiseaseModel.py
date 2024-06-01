@@ -1,6 +1,6 @@
 import pytest
 
-from src.baseclasses.DiseaseModel import DiseaseModel
+from src.models.disease.DiseaseModel import DiseaseModel
 
 
 def test_DiseaseModel():

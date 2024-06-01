@@ -3,7 +3,7 @@ import pytest
 
 from src.baseclasses.InputSimulationProperties import InputSimulationProperties
 
-FILENAME = './test/data/texas/3D_Fast_Mild_P0-2009_PR-children_Tx-high-risk_Vacc-2009.json'
+FILENAME = './test/data/texas/INPUT.json'
 ISP = InputSimulationProperties(FILENAME)
 
 with open(FILENAME, 'r') as f:
