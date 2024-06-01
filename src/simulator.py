@@ -97,7 +97,7 @@ def main():
 
     # Initialize base disease model with stochastic flag
     #deterministic_disease_model = DiseaseModel(parameters, is_stochastic=False)
-    disease_model = DiseaseModel(parameters, is_stochastic=True)
+    disease_model = DiseaseModel(parameters, is_stochastic=True, now=0.0)
 
     # Initialize Network class which will contain a list of Nodes
     # There is one Node for each row in the population data (e.g. one Node
@@ -109,6 +109,7 @@ def main():
 
     # Initialize Travel model - an NxN matrix where N is the number of
     # Nodes in the Network
+    # TODO think about combining the travelflow and travel model into the same thing?
     travel = TravelFlow(network.number_of_nodes())
     travel.load_travel_flow_file(simulation_properties.flow_data_file)
     network.add_travel_flow_data(travel.flow_data)
