@@ -28,39 +28,48 @@
       "v": [
         {
           "county": "187",
-          "infected": "1"
+          "infected": "1",
+          "age_group": "1"
         },
         {
           "county": "479",
-          "infected": "1"
+          "infected": "1",
+          "age_group": "1"
         },
         {
           "county": "201",
-          "infected": "1"
+          "infected": "1",
+          "age_group": "1"
         },
         {
           "county": "61",
-          "infected": "3"
+          "infected": "3",
+          "age_group": "1"
         },
         {
           "county": "427",
-          "infected": "3"
+          "infected": "3",
+          "age_group": "1"
         },
         {
           "county": "215",
-          "infected": "1"
+          "infected": "1",
+          "age_group": "1"
         },
         {
           "county": "27",
-          "infected": "1"
+          "infected": "1",
+          "age_group": "1"
         },
         {
           "county": "453",
-          "infected": "1"
+          "infected": "1",
+          "age_group": "1"
         },
         {
           "county": "391",
-          "infected": "1"
+          "infected": "1",
+          "age_group": "1"
         }
       ]
     },
