@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import logging
 import numpy as np
+from typing import Type
 
 from .Group import RiskGroup, VaccineGroup, Compartments, Group
 
@@ -40,7 +41,7 @@ class PopulationCompartments:
         return(str((self.compartment_data).tolist()))
 
 
-    def return_list_by_age_group(self, comp, vac, risk):
+    def return_list_by_age_group(self, comp:int, vac:int, risk:int) -> list:
         """
         Given a compartment (e.g. S), vaccination status (e.g. U), and risk level
         (e.g. L), return a list of values 0..N (N=number of age groups) where each
@@ -51,7 +52,7 @@ class PopulationCompartments:
         return age_list
 
 
-    def expose_number_of_people(self, group, infected):
+    def expose_number_of_people(self, group:Type[Group], infected:int):
         self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] -= infected
         self.compartment_data[group.age][group.risk][group.vaccine][Compartments.I.value] += infected
         return

@@ -50,7 +50,7 @@ class InputSimulationProperties:
         logger.info(f'instantiated InputSimulationProperties object')
         logger.debug(f'{self}')
 
-        if (self._verify_input()):
+        if (self._validate_input()):
             logger.info(f'InputSimulationProperties input was verified')
 
         return
@@ -91,7 +91,7 @@ class InputSimulationProperties:
 
 
     # TODO add some functions in here to verify that we got all the data
-    def _verify_input(self) -> bool:
+    def _validate_input(self) -> bool:
         return True
 
 

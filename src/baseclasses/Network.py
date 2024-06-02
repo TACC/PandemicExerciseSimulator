@@ -7,6 +7,7 @@ from typing import Type
 from .Group import RiskGroup, VaccineGroup
 from .Node import Node
 from .PopulationCompartments import PopulationCompartments
+from .TravelFlow import TravelFlow
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class Network:
         return(len(self.nodes))
 
 
-    def add_travel_flow_data(self, travel_flow_data):
+    def add_travel_flow_data(self, travel_flow_data:Type[TravelFlow]):
         self.travel_flow_data = travel_flow_data
         logger.info(f'added travel flow data to Network object')
         logger.debug(f'{self.travel_flow_data.shape}')
