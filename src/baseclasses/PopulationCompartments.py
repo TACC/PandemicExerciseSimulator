@@ -1,27 +1,10 @@
 #!/usr/bin/env python3
-from enum import Enum
 import logging
 import numpy as np
 
+from .Group import RiskGroup, VaccineGroup, Compartments, Group
+
 logger = logging.getLogger(__name__)
-
-
-class RiskGroup(Enum):
-    L=0 #LOW=0
-    H=1 #HIGH=1
-
-class VaccineGroup(Enum):
-    U=0 #UNVACCINATED=0
-    V=1 #VACCINATED=1
-
-class Compartments(Enum):
-    S=0 #SUSCEPTIBLE=0
-    E=1 #EXPOSED=1
-    A=2 #ASYMPTOMATIC=2
-    T=3 #TREATABLE=3
-    I=4 #INFECTIOUS=4
-    R=5 #RECOVERED=5
-    D=6 #DECEASED=6
 
 
 class PopulationCompartments:
@@ -66,6 +49,13 @@ class PopulationCompartments:
         for i in range(len(self.groups)):
             age_list.append(self.compartment_data[i][risk][vac][comp])
         return age_list
+
+
+
+    def expose_number_of_people(self, group, infected):
+        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] -= infected
+        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.I.value] += infected
+        return
 
 
 # Compartment data object is a 4-dimensional array of floats. The four dimensions are:
