@@ -22,11 +22,26 @@ class Compartments(Enum):
 class Group:
 
     def __init__(self, age:int, risk_group:int, vaccine_group:int):
-        self.age = age
-        self.risk = risk_group
-        self.risk_group_name = RiskGroup(risk_group).name
-        self.vaccine = vaccine_group
-        self.vaccine_group_name = VaccineGroup(vaccine_group).name
+        try:
+            assert self._validate_input(age) == True
+            self.age = age
+        except AssertionError as e:
+            raise Exception('Group class must be instantiated with a positive integer for age group') from e
+
+        try:
+            assert self._validate_input(risk_group) == True
+            self.risk = risk_group
+            self.risk_group_name = RiskGroup(risk_group).name
+        except AssertionError as e:
+            raise Exception('Group class must be instantiated with a positive integer for risk group') from e
+
+        try:
+            assert self._validate_input(vaccine_group) == True
+            self.vaccine = vaccine_group
+            self.vaccine_group_name = VaccineGroup(vaccine_group).name
+        except AssertionError as e:
+            raise Exception('Group class must be instantiated with a positive integer for vaccine group') from e
+
         return
 
     def __str__(self) -> str:
@@ -39,3 +54,5 @@ class Group:
                  self.vaccine_group == other.vaccine_group
                )
 
+    def _validate_input(self, num:int) -> bool:
+        return(str(num).isnumeric())

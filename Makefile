@@ -10,4 +10,5 @@ debug:
 
 clean:
 	find . -type d -name __pycache__ -prune -exec rm -rf {} \;
+	find . -type d -name .pytest_cache -prune -exec rm -rf {} \;
 	find . -type f -name 'OUTPUT.json' -exec rm {} \;

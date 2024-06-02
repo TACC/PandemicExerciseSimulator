@@ -51,7 +51,6 @@ class PopulationCompartments:
         return age_list
 
 
-
     def expose_number_of_people(self, group, infected):
         self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] -= infected
         self.compartment_data[group.age][group.risk][group.vaccine][Compartments.I.value] += infected
