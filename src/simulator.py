@@ -4,6 +4,7 @@ import logging
 import numpy as np
 
 from baseclasses.Day import Day
+from baseclasses.Group import Compartments, RiskGroup
 from baseclasses.InputSimulationProperties import InputSimulationProperties
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
@@ -67,9 +68,9 @@ def run_mock(number_of_days_to_simulate, network, parameters, writer):
         writer.write(day, network)
 
         for node in network.nodes:
-            for i in range(5):
-                for j in range(2):
-                    for k in range(6):
+            for i in range(parameters.number_of_age_groups):
+                for j in range(len(RiskGroup)):
+                    for k in range(len(Compartments)-1):
                         if node.compartments.compartment_data[i][j][0][k] > 1:
                             diff = node.compartments.compartment_data[i][j][0][k] * 0.05
                             node.compartments.compartment_data[i][j][0][k] -= diff
@@ -136,21 +137,24 @@ def main():
 
     for _ in range(realization_number):
 
-        #run_mock( number_of_days_to_simulate,
-        #          network,
-        #          parameters,
-        #          writer
-        #        )
+        run_mock( number_of_days_to_simulate,
+                  network,
+                  parameters,
+                  writer
+                )
 
-        run( number_of_days_to_simulate,
-             network,
-             disease_model,
-             travel_model,
-             parameters,
-             writer
-           )
+        #run( number_of_days_to_simulate,
+        #     network,
+        #     disease_model,
+        #     travel_model,
+        #     parameters,
+        #     writer
+        #   )
 
-    # report summary statistics
+    # Write final state of compartments on the final day
+    writer.write(number_of_days_to_simulate.day, network)
+
+    # report other summary statistics
 
     return
 

@@ -1,6 +1,6 @@
 
 run:
-	python3 src/simulator.py -d 2 -i data/texas/INPUT.json
+	python3 src/simulator.py -d 10 -i data/texas/INPUT.json
 
 info:
 	python3 src/simulator.py -l INFO -d 2 -i data/texas/INPUT.json
