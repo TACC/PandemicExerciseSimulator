@@ -4,9 +4,9 @@ import logging
 import pandas as pd
 from typing import Type
 
+from .Group import RiskGroup, VaccineGroup
 from .Node import Node
 from .PopulationCompartments import PopulationCompartments
-from .PopulationCompartments import RiskGroup, VaccineGroup
 
 logger = logging.getLogger(__name__)
 

@@ -2,8 +2,8 @@
 import json
 import numpy as np
 
-#from .PopulationCompartments import PopulationCompartments
-from .PopulationCompartments import RiskGroup, VaccineGroup, Compartments
+from .Group import RiskGroup, VaccineGroup, Compartments
+
 
 class Node:
 
