@@ -112,3 +112,17 @@ part of that file and the input data:
 ```
 
 
+
+## Notes
+
+* Needs functionality to scroll to a certain date in time, change parameters, then
+  continue run from there.
+
+* Model should be checkpointable and show provenance of how it arrived there
+
+* Should be able to compare counties easily
+
+* Implement proper schema for inputs and outputs https://github.com/python-jsonschema/jsonschema
+
+* Support graphing simulations with this tool (in absence of GUI)
+
