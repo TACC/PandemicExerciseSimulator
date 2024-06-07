@@ -52,9 +52,11 @@ class PopulationCompartments:
         return age_list
 
 
-    def expose_number_of_people(self, group:Type[Group], infected:int):
-        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] -= infected
-        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.I.value] += infected
+    def expose_number_of_people(self, group:Type[Group], num_to_expose:int):
+        # TODO confirm with Lauren that we want to move from S=>E here even though the 
+        # input is called "infected". It seems they are doing S=>E in the cpp
+        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] -= num_to_expose
+        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.E.value] += num_to_expose
         return
 
 

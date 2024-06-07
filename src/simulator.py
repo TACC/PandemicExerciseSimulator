@@ -2,6 +2,7 @@
 import argparse
 import logging
 import numpy as np
+from typing import Type
 
 from baseclasses.Day import Day
 from baseclasses.Group import Compartments, RiskGroup
@@ -28,12 +29,12 @@ logging.basicConfig(level=args.loglevel, format=format_str)
 logger = logging.getLogger(__name__)
 
 
-def run( number_of_days_to_simulate, 
-         network,
-         disease_model,
-         travel_model,
-         parameters,
-         writer
+def run( number_of_days_to_simulate:Type[Day], 
+         network:Type[Network],
+         disease_model:Type[DiseaseModel],
+         travel_model:Type[TravelModel],
+         parameters:Type[ModelParameters],
+         writer:Type[Writer]
        ):
     """
     Run function for simulating each day
@@ -62,7 +63,14 @@ def run( number_of_days_to_simulate,
     return
 
 
-def run_mock(number_of_days_to_simulate, network, parameters, writer):
+def run_mock( number_of_days_to_simulate:Type[Day],
+              network:Type[Network],
+              parameters:Type[ModelParameters],
+              writer:Type[Writer]
+            ):
+    """
+    Mock run function for testing
+    """
     
     for day in range(number_of_days_to_simulate.day):
         writer.write(day, network)

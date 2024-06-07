@@ -32,12 +32,6 @@ class Network:
         The population file should contain a header row followed by a row for
         each node (e.g. county, city, zip code, etc.). The first column should
         be the fips ID, and the rest of the columns should be age groups.
-
-        "fips","0-4","5-24","25-49","50-64","65+"
-        1,3292,13222,23406,9535,6898             
-        3,1134,4152,3997,2234,1803               
-        5,6223,23990,27426,14327,10768           
-        7,1314,6019,6481,5964,5454               
         """
 
         try:
