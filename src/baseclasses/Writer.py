@@ -32,7 +32,6 @@ class Writer:
 
 
     def write(self, day:int, network:Type[Network]):
-        # TODO have it output FIPS in addition to node_id
        
         data = {'day': day, 'data': []}
         #for each_node in network.nodes:
