@@ -60,6 +60,18 @@ class PopulationCompartments:
         return
 
 
+    def decrement(self, group, compartment):
+        self.compartment_data[group.age][group.risk][group.vaccine][compartment] -=1
+        return
+
+    def increment():
+        self.compartment_data[group.age][group.risk][group.vaccine][compartment] +=1
+        return
+
+    def demographic_population(self, group:Type[Group]) -> float:
+        return sum(self.compartment_data[group.age][group.risk][group.vaccine])
+
+
 # Compartment data object is a 4-dimensional array of floats. The four dimensions are:
 # [Group (N=5)] [Risk status (N=2)] [Vaccinated status (N=2)] [Compartment (N=7)]
 #

@@ -42,11 +42,11 @@ def run( number_of_days_to_simulate:Type[Day],
 
     logger.info('Entered the run function')
 
-    # for each day of iteration...
+    # Iterate over each day, each node...
     for day in range(number_of_days_to_simulate.day):
         for node in network.nodes:
 
-            # implement these later
+            # Run these for each node
             # handle distributions
             # apply treatments
             # modify stockpiles
@@ -54,11 +54,14 @@ def run( number_of_days_to_simulate:Type[Day],
             # simulate one step.  (what are node, time, parameters)
             time=day+1
             stochastic_seatird = StochasticSEATIRD(disease_model)
-            stochastic_seatird.reinitialize_events(node)
+            #stochastic_seatird.reinitialize_events(node) # only for node->totalTransmitting() < 450
             stochastic_seatird.simulate(node, time, parameters)
-    
-            # Travel
-            # Write output
+
+        # Handel travel / output for each day
+        # Travel
+        # Write output
+
+    logger.info('Completed processes in the run function')
 
     return
 
@@ -121,7 +124,7 @@ def main():
 
     # Load in travel flow data - an NxN matrix where N is the number of Nodes
     # in the Network
-    travel_flow = TravelFlow(network.number_of_nodes())
+    travel_flow = TravelFlow(network.get_number_of_nodes())
     travel_flow.load_travel_flow_file(simulation_properties.flow_data_file)
     network.add_travel_flow_data(travel_flow.flow_data)
 
@@ -145,19 +148,19 @@ def main():
 
     for _ in range(realization_number):
 
-        run_mock( number_of_days_to_simulate,
-                  network,
-                  parameters,
-                  writer
-                )
+        #run_mock( number_of_days_to_simulate,
+        #          network,
+        #          parameters,
+        #          writer
+        #        )
 
-        #run( number_of_days_to_simulate,
-        #     network,
-        #     disease_model,
-        #     travel_model,
-        #     parameters,
-        #     writer
-        #   )
+        run( number_of_days_to_simulate,
+             network,
+             disease_model,
+             travel_model,
+             parameters,
+             writer
+           )
 
     # Write final state of compartments on the final day
     writer.write(number_of_days_to_simulate.day, network)
