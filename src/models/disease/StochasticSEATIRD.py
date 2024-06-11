@@ -24,6 +24,8 @@ class StochasticSEATIRD(DiseaseModel):
         return
 
 
+
+
     def simulate(self, node, time, parameters):
         """
         Main simulation logic for stochastic SEATIRD model

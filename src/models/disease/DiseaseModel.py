@@ -5,7 +5,8 @@ from typing import Type
 from baseclasses.Group import Group
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
-from baseclasses.PopulationCompartments import RiskGroup, VaccineGroup
+from baseclasses.Node import Node
+from baseclasses.PopulationCompartments import RiskGroup, VaccineGroup, Compartments
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,16 @@ class DiseaseModel:
 
             for node in network.nodes:
                 if node.node_id == this_node_id:
-                    node.compartments.expose_number_of_people(group, this_infected)
+                    self._expose_number_of_people(node, group, this_infected)
+        return
+
+
+    def _expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int):
+        """
+        Initial infected should be moved into 'Exposed' compartment
+        """
+        node.compartments.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] -= num_to_expose
+        node.compartments.compartment_data[group.age][group.risk][group.vaccine][Compartments.E.value] += num_to_expose
         return
 
 

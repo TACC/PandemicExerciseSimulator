@@ -44,9 +44,10 @@ def run( number_of_days_to_simulate:Type[Day],
 
     # Iterate over each day, each node...
     for day in range(number_of_days_to_simulate.day):
+        writer.write(day, network)
         for node in network.nodes:
 
-            # Run these for each node
+            # Run distributions, treatments, stockpiles, and simulation for each node
             # handle distributions
             # apply treatments
             # modify stockpiles
@@ -57,9 +58,9 @@ def run( number_of_days_to_simulate:Type[Day],
             #stochastic_seatird.reinitialize_events(node) # only for node->totalTransmitting() < 450
             stochastic_seatird.simulate(node, time, parameters)
 
-        # Handel travel / output for each day
-        # Travel
-        # Write output
+        # Run travel and output for each day
+        # travel
+        # write output
 
     logger.info('Completed processes in the run function')
 
