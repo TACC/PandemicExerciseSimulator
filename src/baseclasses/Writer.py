@@ -34,10 +34,11 @@ class Writer:
     def write(self, day:int, network:Type[Network]):
        
         data = {'day': day, 'data': []}
-        #for each_node in network.nodes:
-        for each_node in network.nodes[:3]:    # Only writing three nodes for testing
+        for each_node in network.nodes:
+        #for each_node in network.nodes[:3]:    # Only writing three nodes for testing
             data['data'].append(each_node.return_dict())
-        with open(self.output_filename, 'a') as o:
+        #with open(self.output_filename, 'a') as o:
+        with open(f'{self.output_filename[:-5]}_{day}.json', 'w') as o:
             o.write(json.dumps(data, indent=2))
 
         return

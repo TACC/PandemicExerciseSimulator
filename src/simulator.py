@@ -42,9 +42,11 @@ def run( number_of_days_to_simulate:Type[Day],
 
     logger.info('Entered the run function')
 
+    # Write initial conditions
+    writer.write(0, network)
+
     # Iterate over each day, each node...
     for day in range(number_of_days_to_simulate.day):
-        writer.write(day, network)
         for node in network.nodes:
 
             # Run distributions, treatments, stockpiles, and simulation for each node
@@ -54,13 +56,15 @@ def run( number_of_days_to_simulate:Type[Day],
        
             # simulate one step.  (what are node, time, parameters)
             time=day+1
-            stochastic_seatird = StochasticSEATIRD(disease_model)
-            #stochastic_seatird.reinitialize_events(node) # only for node->totalTransmitting() < 450
-            stochastic_seatird.simulate(node, time, parameters)
+            #disease_model.reinitialize_events(node) # only for node->totalTransmitting() < 450
+            disease_model.simulate(node, time, parameters)
 
-        # Run travel and output for each day
-        # travel
+        # Run travel model
+        # travel_model.travel(network, disease_model, parameters, time)
+
         # write output
+        writer.write(day, network)
+
 
     logger.info('Completed processes in the run function')
 
@@ -130,9 +134,12 @@ def main():
     network.add_travel_flow_data(travel_flow.flow_data)
 
     # Initialize base disease model with stochastic flag and set number of initial
-    # infected people in each node
+    # infected people in each node. Use this flag in future iterations to select
+    # different disease model here.
     disease_model = DiseaseModel(parameters, is_stochastic=True, now=0.0)
-    disease_model.set_initial_conditions(simulation_properties.initial, network)
+    if disease_model.is_stochastic:
+        disease_model = StochasticSEATIRD(disease_model)
+        disease_model.set_initial_conditions(simulation_properties.initial, network)
 
     # Initialize a travel model - will default to Binomial travel
     travel_model = TravelModel()
@@ -149,22 +156,20 @@ def main():
 
     for _ in range(realization_number):
 
-        #run_mock( number_of_days_to_simulate,
-        #          network,
-        #          parameters,
-        #          writer
-        #        )
+        run_mock( number_of_days_to_simulate,
+                  network,
+                  parameters,
+                  writer
+                )
 
-        run( number_of_days_to_simulate,
-             network,
-             disease_model,
-             travel_model,
-             parameters,
-             writer
-           )
+        #run( number_of_days_to_simulate,
+        #     network,
+        #     disease_model,
+        #     travel_model,
+        #     parameters,
+        #     writer
+        #   )
 
-    # Write final state of compartments on the final day
-    writer.write(number_of_days_to_simulate.day, network)
 
     # report other summary statistics
 

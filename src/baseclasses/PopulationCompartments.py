@@ -61,11 +61,11 @@ class PopulationCompartments:
 
 
     def decrement(self, group, compartment):
-        self.compartment_data[group.age][group.risk][group.vaccine][compartment] -=1
+        self.compartment_data[group.age][group.risk][group.vaccine][compartment] -= 1
         return
 
-    def increment():
-        self.compartment_data[group.age][group.risk][group.vaccine][compartment] +=1
+    def increment(self, group, compartment):
+        self.compartment_data[group.age][group.risk][group.vaccine][compartment] += 1
         return
 
     def demographic_population(self, group:Type[Group]) -> float:

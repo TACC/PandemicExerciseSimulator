@@ -34,3 +34,5 @@ class Day:
         return
 
 
+# TODO put some functionality in here to store summary data for each day of simulation, then
+# also give the option to make a plot of that data

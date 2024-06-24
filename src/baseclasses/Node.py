@@ -4,7 +4,7 @@ import numpy as np
 from typing import Type
 
 from .Group import Group, RiskGroup, VaccineGroup, Compartments
-from models.disease.StochasticEvent import StochasticEvent
+from models.disease.StochasticSEATIRDUtils import StochasticEvent
 
 
 class Node:

@@ -50,8 +50,8 @@ class Group:
 
     def __eq__(self, other) -> bool:
         return ( self.age == other.age and 
-                 self.risk_group == other.risk_group and 
-                 self.vaccine_group == other.vaccine_group
+                 self.risk == other.risk and 
+                 self.vaccine == other.vaccine
                )
 
     def _validate_input(self, num:int) -> bool:
