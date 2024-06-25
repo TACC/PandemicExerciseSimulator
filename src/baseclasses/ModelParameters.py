@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import logging
 import numpy as np
+import sys
 from typing import Type
 
 from .InputSimulationProperties import InputSimulationProperties
@@ -26,6 +27,7 @@ class ModelParameters:
         self.antiviral_wastage_factor = simulation_properties.antiviral_wastage_factor
 
         # some things assigned later
+        self.number_of_age_groups = 0
 
         # data files
         self.vaccine_effectiveness   = []
@@ -35,14 +37,12 @@ class ModelParameters:
         self.nu_values               = [[],[]]
 
         # TODO some parameters still need to be set
-        ## self.number_of_age_groups = 0
         ## self.pha_day = 0
         ## self.max_child_age_group = 1
         ## self.children_range = [0, 1]
 
         logger.info(f'instantiated ModelParameters object')
         logger.debug(f'{self}')
-
         return
 
 
@@ -62,7 +62,9 @@ class ModelParameters:
 
 
     def load_data_files(self, simulation_properties:Type[InputSimulationProperties]):
-
+        """
+        Read in simulation properties from file and store
+        """
         with open(simulation_properties.vaccine_effectiveness_file, 'r') as f:
             self.vaccine_effectiveness = [ line.rstrip() for line in f ]
 
@@ -75,7 +77,6 @@ class ModelParameters:
         with open(simulation_properties.relative_susceptibility_file, 'r') as f:
             self.relative_susceptibility = [ line.rstrip() for line in f ]
 
-        # TODO confirm with Lauren that our understanding of these numbers is correct
         # This file is N rows X 4 columns. N=number of age groups
         # column 1 = low death rate, low risk group
         # column 2 = low death rate, high risk group
@@ -84,9 +85,9 @@ class ModelParameters:
         try:
             np_all_nu_values = np.genfromtxt(simulation_properties.nu_value_matrix_file, delimiter=',')
         except FileNotFoundError as e:
-            raise Exception(f'Could not open {filename}') from e
-            sys.exit(1)
-        
+            raise Exception(f'Could not open {simulation_properties.nu_value_matrix_file}') from e
+            sys.exit()
+
         if self.low_death_rate == True: # grab columns 1 and 2 from data
             self.nu_values[0] = list(np_all_nu_values.transpose()[0])
             self.nu_values[1] = list(np_all_nu_values.transpose()[1])
@@ -94,7 +95,6 @@ class ModelParameters:
         elif self.low_death_rate == False: # grab columns 3 and 4 from data
             self.nu_values[0] = list(np_all_nu_values.transpose()[2])
             self.nu_values[1] = list(np_all_nu_values.transpose()[3])
-
 
         logger.debug( f'opening files: {simulation_properties.vaccine_effectiveness_file}, '
                       f'{simulation_properties.vaccine_adherence_file}, '
@@ -108,7 +108,6 @@ class ModelParameters:
                       f'relative_susceptibility = {self.relative_susceptibility}, '
                       f'nu_values = {self.nu_values} '
                     )
-
         return
 
 
@@ -116,7 +115,6 @@ class ModelParameters:
         """
         Expecting an NxN matrix where N = number of age groups
         """
-
         try:
             self.np_contact_matrix = np.genfromtxt(filename, delimiter=',')
         except FileNotFoundError as e:
@@ -127,16 +125,20 @@ class ModelParameters:
         logger.debug(f'number_of_age_groups = {self.number_of_age_groups}')
         logger.debug(f'model parameter-associated contact matrix:')
         logger.debug(f'{self.np_contact_matrix}')
-
         return
+
+
+    def get_contact(self, i:int, j:int) -> float:
+        """
+        Return contact rate beteween nodes i and j
+        """
+        return(self.np_contact_matrix[i][j])
 
 
     def _set_age_group_size(self):
+        """
+        Set age group size after loading in contact matrix
+        """
         self.number_of_age_groups = (np.shape(self.np_contact_matrix)[0])
         return
-            
-
-    def get_contact(self, i:int, j:int) -> float:
-        return(self.np_contact_matrix[i][j])
-
 

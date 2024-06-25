@@ -65,7 +65,6 @@ def run( number_of_days_to_simulate:Type[Day],
         # write output
         writer.write(day, network)
 
-
     logger.info('Completed processes in the run function')
 
     return
@@ -91,7 +90,6 @@ def run_mock( number_of_days_to_simulate:Type[Day],
                             diff = node.compartments.compartment_data[i][j][0][k] * 0.05
                             node.compartments.compartment_data[i][j][0][k] -= diff
                             node.compartments.compartment_data[i][j][0][k+1] += diff
-
     return
  
 

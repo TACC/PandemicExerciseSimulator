@@ -11,16 +11,16 @@ logger = logging.getLogger(__name__)
 class PopulationCompartments:
 
     def __init__(self, groups:list, high_risk_ratios:list):
-
         # groups and high_risk_ratios should be two lists of the same length
-        self.groups = groups
+        self.groups = groups     # starting population from input file
         self.high_risk_ratios = high_risk_ratios
 
         self.number_of_age_groups = len(groups)
         self.total_population = sum(groups)
-        #logger.debug(f'total_population = {self.total_population} and groups = {self.groups}')
+        logger.debug(f'instantiated a new compartments object with total_population = ' \
+                     f'{self.total_population} and groups = {self.groups}')
 
-        #self.compartment_data = np.zeros((5,2,2,7))
+        # the compartment_data object is a 4-D array, see bottom of this file
         self.compartment_data = np.zeros(( len(groups),
                                            len(RiskGroup),
                                            len(VaccineGroup),
@@ -34,6 +34,7 @@ class PopulationCompartments:
             self.compartment_data[i][RiskGroup.L.value][VaccineGroup.U.value][Compartments.S.value] = number_of_low_risk
             self.compartment_data[i][RiskGroup.H.value][VaccineGroup.U.value][Compartments.S.value] = number_of_high_risk
 
+        logger.debug(f'compartment data for this compartment = {(self.compartment_data).tolist()}')
         return
 
 
@@ -45,6 +46,12 @@ class PopulationCompartments:
         """
         Given a compartment (e.g. S), vaccination status (e.g. U), and risk level
         (e.g. L), return a list of values 0..N (N=number of age groups) where each
+        value is the number of people in that compartment
+
+        Args:
+            comp (int): compartment key
+            vac (int): vacccine status key
+            risk (int): risk group key
         """
         age_list = []
         for i in range(len(self.groups)):
@@ -53,22 +60,49 @@ class PopulationCompartments:
 
 
     def expose_number_of_people(self, group:Type[Group], num_to_expose:int):
-        # TODO confirm with Lauren that we want to move from S=>E here even though the 
-        # input is called "infected". It seems they are doing S=>E in the cpp
+        """
+        When entering this function, move people from Susceptible => Exposed
+
+        Args:
+            group (Group): group where transition should happen
+            num_to_expose (int): number of people to move from S=>E
+
+        Note: Not currently used in StochasticSEATIRD; a similarly named method
+              exists in that class for this functionality
+        """
         self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] -= num_to_expose
         self.compartment_data[group.age][group.risk][group.vaccine][Compartments.E.value] += num_to_expose
         return
 
 
-    def decrement(self, group, compartment):
+    def decrement(self, group:Type[Group], compartment:int):
+        """
+        Decrement compartment by 1
+
+        Args:
+            group (Group): group where decrement should happen
+            compartment (int): compartment ID where decrement should happen
+        """
         self.compartment_data[group.age][group.risk][group.vaccine][compartment] -= 1
         return
 
-    def increment(self, group, compartment):
+
+    def increment(self, group:Type[Group], compartment:int):
+        """
+        Increment compartment by 1
+
+        Args:
+            group (Group): group where increment should happen
+            compartment (int): compartment ID where increment should happen
+        """
         self.compartment_data[group.age][group.risk][group.vaccine][compartment] += 1
         return
 
+
     def demographic_population(self, group:Type[Group]) -> float:
+        """
+        Return sum population of all compartments for a given Group
+        """
         return sum(self.compartment_data[group.age][group.risk][group.vaccine])
 
 
