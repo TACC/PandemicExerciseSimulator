@@ -6,7 +6,7 @@ from baseclasses.Group import Group
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.Node import Node
-from baseclasses.PopulationCompartments import RiskGroup, VaccineGroup, Compartments
+from baseclasses.Group import RiskGroup, VaccineGroup, Compartments
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class DiseaseModel:
         self.now = now
         self.parameters = parameters
         logger.info(f'instantiated DiseaseModel object with stochastic={self.is_stochastic}, now={self.now}')
-        logger.debug(f'{self.parameters}')
+        logger.debug(f'DiseaseModel.parameters = {self.parameters}')
         return
 
 

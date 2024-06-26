@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import logging
-import numpy as np
 from typing import Type
 
 from baseclasses.Day import Day
@@ -101,7 +100,6 @@ def main():
 
     # Read input properties file
     # Can be pre-generated as template, or generated in GUI
-    # (assume one filename input now, although C++ app supported multi file)
     simulation_properties = InputSimulationProperties(args.input_filename)
 
     # Initialize Model Parameters class instance
@@ -113,7 +111,6 @@ def main():
 
     # Initialize Days class instances
     # 365 hardcoded in C++ app, realizations taken from simulation properties
-    # Realization number is the number of times to perform the simulation
     number_of_days_to_simulate = Day(args.days)
     realization_number = int(simulation_properties.number_of_realizations)
 
@@ -154,20 +151,19 @@ def main():
 
     for _ in range(realization_number):
 
-        run_mock( number_of_days_to_simulate,
-                  network,
-                  parameters,
-                  writer
-                )
+        #run_mock( number_of_days_to_simulate,
+        #          network,
+        #          parameters,
+        #          writer
+        #        )
 
-        #run( number_of_days_to_simulate,
-        #     network,
-        #     disease_model,
-        #     travel_model,
-        #     parameters,
-        #     writer
-        #   )
-
+        run( number_of_days_to_simulate,
+            network,
+            disease_model,
+            travel_model,
+            parameters,
+            writer
+           )
 
     # report other summary statistics
 

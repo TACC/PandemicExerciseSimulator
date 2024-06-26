@@ -41,8 +41,8 @@ class Group:
             self.vaccine_group_name = VaccineGroup(vaccine_group).name
         except AssertionError as e:
             raise Exception('Group class must be instantiated with a positive integer for vaccine group') from e
-
         return
+
 
     def __str__(self) -> str:
         return(f'Group object: age={self.age}, risk={self.risk}, vaccine={self.vaccine}')
@@ -54,5 +54,9 @@ class Group:
                  self.vaccine == other.vaccine
                )
 
+
     def _validate_input(self, num:int) -> bool:
+        """
+        Helper function to check input values
+        """
         return(str(num).isnumeric())

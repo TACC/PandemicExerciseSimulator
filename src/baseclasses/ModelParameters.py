@@ -96,13 +96,20 @@ class ModelParameters:
             self.nu_values[0] = list(np_all_nu_values.transpose()[2])
             self.nu_values[1] = list(np_all_nu_values.transpose()[3])
 
-        logger.debug( f'opening files: {simulation_properties.vaccine_effectiveness_file}, '
+        # transpose once more so that we can access values in the order we are used to:
+        #   nu_values[age][risk]
+        self.nu_values = np.array(self.nu_values).transpose().tolist()
+        
+        logger.info(f'all nu values include = {np_all_nu_values}')
+        logger.info(f'nu valeus for low_death_rate = {self.low_death_rate} = {self.nu_values}')
+
+        logger.info( f'opening files: {simulation_properties.vaccine_effectiveness_file}, '
                       f'{simulation_properties.vaccine_adherence_file}, '
                       f'{simulation_properties.high_risk_ratios_file} '
                       f'{simulation_properties.relative_susceptibility_file} '
                       f'{simulation_properties.nu_value_matrix_file} '
                     )
-        logger.debug( f'vaccine_effectiveness = {self.vaccine_effectiveness}, '
+        logger.info( f'vaccine_effectiveness = {self.vaccine_effectiveness}, '
                       f'vaccine_adherence = {self.vaccine_adherence}, '
                       f'high_risk_ratios = {self.high_risk_ratios}, '
                       f'relative_susceptibility = {self.relative_susceptibility}, '

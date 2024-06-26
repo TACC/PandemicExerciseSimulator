@@ -2,6 +2,7 @@
 import json
 import logging
 from typing import Type
+import sys
 
 from .Network import Network
 
@@ -32,15 +33,19 @@ class Writer:
 
 
     def write(self, day:int, network:Type[Network]):
-       
+        """
+        Write output of network to JSON file
+
+        Args:
+            day (int): simulation day
+            network (Network): Network object with list of nodes
+        """
         data = {'day': day, 'data': []}
-        for each_node in network.nodes:
-        #for each_node in network.nodes[:3]:    # Only writing three nodes for testing
+        for each_node in network.nodes[:]:
             data['data'].append(each_node.return_dict())
         #with open(self.output_filename, 'a') as o:
         with open(f'{self.output_filename[:-5]}_{day}.json', 'w') as o:
             o.write(json.dumps(data, indent=2))
-
         return
 
 

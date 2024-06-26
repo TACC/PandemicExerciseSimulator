@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 from enum import Enum
+import logging
 import math
-from typing import Type
 from numpy.random import mtrand
+from typing import Type
 
 from baseclasses.Group import Group
 from baseclasses.ModelParameters import ModelParameters
 
+logger = logging.getLogger(__name__)
 
 
 def rand_exp(lambda_val:float, rand_val:float) -> float:
@@ -75,9 +77,8 @@ class Schedule:
         self._Ta    = rand_exp(parameters.tau, mtrand.rand()) + now
         self._Tt    = rand_exp(parameters.kappa, mtrand.rand()) + self._Ta
         self._Ti    = self._Tt + parameters.chi
-        # TODO transpose the indices in nu_values[][]
-        self._Td_a  = rand_exp(parameters.nu_values[group.risk][group.age], mtrand.rand()) + self._Ta
-        self._Td_ti = rand_exp(parameters.nu_values[group.risk][group.age], mtrand.rand()) + self._Tt
+        self._Td_a  = rand_exp(parameters.nu_values[group.age][group.risk], mtrand.rand()) + self._Ta
+        self._Td_ti = rand_exp(parameters.nu_values[group.age][group.risk], mtrand.rand()) + self._Tt
         self._Tr_a  = rand_exp(parameters.gamma, mtrand.rand()) + self._Ta
         self._Tr_ti = rand_exp(parameters.gamma, mtrand.rand()) + self._Tt
 
@@ -100,8 +101,8 @@ class Schedule:
         self._Ta    = (rand_exp(parameters.tau, mtrand.rand()) + now) if compartment_num < 2 else now
         self._Tt    = (rand_exp(parameters.kappa, mtrand.rand()) + self._Ta) if compartment_num < 3 else self._Ta
         self._Ti    = (self._Tt + parameters.chi) if compartment_num < 4 else self._Tt
-        self._Td_a  = (rand_exp(parameters.nu_values[group.risk][group.age], mtrand.rand())) + self._Ta if compartment_num < 3 else float('inf')
-        self._Td_ti = rand_exp(parameters.nu_values[group.risk][group.age], mtrand.rand()) + self._Tt
+        self._Td_a  = (rand_exp(parameters.nu_values[group.age][group.risk], mtrand.rand())) + self._Ta if compartment_num < 3 else float('inf')
+        self._Td_ti = rand_exp(parameters.nu_values[group.age][group.risk], mtrand.rand()) + self._Tt
         self._Tr_a  = (rand_exp(parameters.gamma, mtrand.rand())) if compartment_num < 3 else float('inf')
         self._Tr_ti = rand_exp(parameters.gamma, mtrand.rand()) + self._Tt
         
