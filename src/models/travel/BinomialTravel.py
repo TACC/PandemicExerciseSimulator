@@ -1,60 +1,125 @@
+#!/usr/bin/env python3
+from copy import deepcopy
+import logging
 import numpy as np
-from scipy.stats import binom
+from typing import Type
 
-def simulate_bidirectional_infections(R0, size_i, size_j, flux_ij, flux_ji, E_i, IA_i, E_j, IA_j, S_i, S_j):
-    """
-    Simulate the number of infections transmitted between nodes i and j.
-    
-    Parameters:
-    R0 (float): Basic reproduction number.
-    size_i (int): Population of node i.
-    size_j (int): Population of node j.
-    flux_ij (int): Daily travelers from node i to node j.
-    flux_ji (int): Daily travelers from node j to node i.
-    E_i (float): Proportion of latent individuals in node i.
-    IA_i (float): Proportion of asymptomatic individuals in node i.
-    E_j (float): Proportion of latent individuals in node j.
-    IA_j (float): Proportion of asymptomatic individuals in node j.
-    S_i (float): Susceptibility of node i.
-    S_j (float): Susceptibility of node j.
-    
-    Returns:
-    tuple: Number of infections transmitted from i to j and from j to i.
-    """
-    
-    # Calculate probability p that an individual sparks an epidemic in node j
-    p_ij = 1 - 1 / (R0 * S_j)
-    # Calculate the weekly probability of traveling from node i to node j
-    pij = 1 - (1 - flux_ij / size_i) ** 7
-    # Calculate the expected number of infected travelers from node i to node j
-    tau_ij = pij * size_i * (E_i + IA_i)
-    # Number of infections transmitted from i to j
-    infections_ij = binom.rvs(n=int(tau_ij), p=p_ij)
-    
-    # Calculate probability p that an individual sparks an epidemic in node i
-    p_ji = 1 - 1 / (R0 * S_i)
-    # Calculate the weekly probability of traveling from node j to node i
-    pji = 1 - (1 - flux_ji / size_j) ** 7
-    # Calculate the expected number of infected travelers from node j to node i
-    tau_ji = pji * size_j * (E_j + IA_j)
-    # Number of infections transmitted from j to i
-    infections_ji = binom.rvs(n=int(tau_ji), p=p_ji)
-    
-    return infections_ij, infections_ji
+from .TravelModel import TravelModel
+from models.disease.DiseaseModel import DiseaseModel
+from baseclasses.Group import RiskGroup, VaccineGroup, Compartments, Group
+from baseclasses.ModelParameters import ModelParameters
+from baseclasses.Network import Network
 
-# Example usage
-R0 = 2.5
-size_i = 1000
-size_j = 1200
-flux_ij = 50
-flux_ji = 40
-E_i = 0.1
-IA_i = 0.05
-E_j = 0.08
-IA_j = 0.04
-S_i = 0.75
-S_j = 0.8
+logger = logging.getLogger(__name__)
 
-infections_ij, infections_ji = simulate_bidirectional_infections(R0, size_i, size_j, flux_ij, flux_ji, E_i, IA_i, E_j, IA_j, S_i, S_j)
-print(f'Number of infections transmitted from node i to node j: {infections_ij}')
-print(f'Number of infections transmitted from node j to node i: {infections_ji}')
+
+# TODO take out this hardcoded value
+RHO = 0.39  # hardcoded in C++ - percentage of how many are travelling from group to group?
+
+class BinomialTravel(TravelModel):
+
+    def __init__(self):
+        self.rng = np.random.default_rng()
+        logger.info(f'instantiated a BinomialTravel object: {BinomialTravel}')
+        return
+
+
+    def __str__(self):
+        return(f'BinomialTravel')
+
+
+    def travel(self, network:Type[Network], disease_model:Type[DiseaseModel], parameters:Type[ModelParameters], time:int):
+        """
+        Simulate travel between nodes. "Sink" refers to the Node where people travel to; "Source"
+        refers to the Node where people travel from.
+
+        Args:
+            network (Network): Network object containing list of Nodes
+            disease_model (DiseaseModel): Model used for exposing new people following travel
+            parameters (ModelParameters): simulation parameters
+            time (int): the current day
+        """
+        logging.info('entered travel function')
+
+        network_copy = deepcopy(network)
+        logging.debug(f'network.nodes len = {len(network.nodes)} first_val = {network.nodes[0].node_id}')
+        logging.debug(f'network_copy.nodes len = {len(network_copy.nodes)} first_val = {network_copy.nodes[0].node_id}')
+
+        for node_sink_id, node_sink in enumerate(network.nodes):
+            unvaccinated_probabilities = [0.0] * parameters.number_of_age_groups
+            age_based_flow_reduction = [1.0] * parameters.number_of_age_groups
+            age_based_flow_reduction[0] = 10 # 0-4 year olds
+            age_based_flow_reduction[1] = 2  # 5-24 year olds
+            age_based_flow_reduction[4] = 2  # 65+ year olds
+
+            logging.debug(f'length of network = {len(network.nodes)}')
+            logging.debug(f'travel flow data size = {len(network.travel_flow_data)} x {len(network.travel_flow_data[0])}')
+
+            for node_source_id, node_source in enumerate(network_copy.nodes):
+                
+                if node_sink_id != node_source_id:
+                    flow_sink_to_source = network.travel_flow_data[node_sink_id][node_source_id]
+                    flow_source_to_sink = network.travel_flow_data[node_source_id][node_sink_id]
+
+                    if flow_sink_to_source > 0 or flow_source_to_sink > 0:
+
+                        logging.debug(f'flow happening; sink id = {node_sink_id}, source id = {node_source_id}')
+                        logging.debug(f'flow sink value = {flow_sink_to_source}, flow source value = {flow_source_to_sink}')
+                        for ag1 in range(parameters.number_of_age_groups):
+
+                            number_of_infectious_contacts_sink_to_source = 0
+                            number_of_infectious_contacts_source_to_sink = 0
+                            this_sigma = float(parameters.relative_susceptibility[ag1])
+                            this_beta_baseline = parameters.beta
+
+                            # TODO incorporate PHA bits to modify value of beta
+                            # pha_effectiveness = params.pha_effectiveness (list)
+                            # pha_halflife = params.pha_halflife (list)
+                            # pha_age = float('inf') if time < parameters.pha_day else time - parameters pha_day
+                            #if (PHA_effectiveness.size() > a && PHA_halflife.size() > a && PHA_halflife[a] > 0) {
+                            #     beta = BETA_BASELINE * (1.0 - PHA_effectiveness[a] * pow(2, -PHA_age/PHA_halflife[a]) );
+                            beta = this_beta_baseline
+                            #}
+
+                            for ag2 in range(parameters.number_of_age_groups):
+                                asymptomatic = node_source.asymptomatic_population(ag2)
+                                transmitting = node_source.transmitting_population(ag2) # asymptomatic, treatable, and infectious
+                                contact_rate = parameters.np_contact_matrix[ag1][ag2] # age group to age group contacts
+
+                                # TODO these don't make sense - why looking at transmitting for one direction and asymptomatic for the other?
+                                logging.debug(f'asymptomatic = {asymptomatic}, transmitting = {transmitting}, contact_rate = {contact_rate}')
+                                number_of_infectious_contacts_sink_to_source += transmitting * beta * RHO * contact_rate * this_sigma / age_based_flow_reduction[ag1]
+                                number_of_infectious_contacts_source_to_sink += asymptomatic * beta * RHO * contact_rate * this_sigma / age_based_flow_reduction[ag2]
+
+                            unvaccinated_probabilities[ag1] += flow_sink_to_source * number_of_infectious_contacts_sink_to_source / node_source.total_population()
+                            unvaccinated_probabilities[ag1] += flow_source_to_sink * number_of_infectious_contacts_source_to_sink / node_sink.total_population()
+
+                    logging.debug(f'unvaccinated_probabilities = {unvaccinated_probabilities}')
+
+            vaccine_effectiveness = parameters.vaccine_effectiveness
+            for ag in range(parameters.number_of_age_groups):
+                for rg in range(len(RiskGroup)):
+                    for vg in range(len(VaccineGroup)):
+
+                        prob = 0.0
+                        if vg == VaccineGroup.V.value:
+                            prob = (1-vaccine_effectiveness[ag]) * unvaccinated_probabilities[ag]
+                        else:
+                            prob = unvaccinated_probabilities[ag]
+
+                        # TODO what is this continuity correction?
+                        sink_S =int( node_sink.compartments.compartment_data[ag][rg][vg][Compartments.S.value] + 0.5 ) # continuity correction
+                        logging.debug(f'susceptible people in sink = {sink_S}')
+                        logging.debug(f'probability = {prob}')
+
+                        number_of_exposures = self.rng.binomial(sink_S, prob)
+                        logging.debug(f'number_of_exposures = {number_of_exposures}')
+                        group = Group(ag, rg, vg)
+                        disease_model.expose_number_of_people(node_sink, group, number_of_exposures)
+
+
+
+
+
+
+    

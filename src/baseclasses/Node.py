@@ -116,4 +116,19 @@ class Node:
         Return sum population of all compartments for one demographic group on Node
         """
         return self.compartments.demographic_population(group)
+    
+
+    def asymptomatic_population(self, age_group:int) -> float:
+        """
+        Return sum population of asymptomatic compartments across all demographic groups on Node
+        """
+        return self.compartments.asymptomatic_population(age_group)
+
+
+    def transmitting_population(self, age_group:int) -> float:
+        """
+        Return sum population of asymptomatic, treatable, and infections compartments across all
+        demographic groups on Node
+        """
+        return self.compartments.asymptomatic_population(age_group)
 

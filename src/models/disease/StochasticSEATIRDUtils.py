@@ -12,7 +12,11 @@ logger = logging.getLogger(__name__)
 
 
 def rand_exp(lambda_val:float, rand_val:float) -> float:
-    return -1*(math.log(rand_val)) / lambda_val
+    """
+    Return negative log of a random value divided by the provided lambda value
+    """
+    return (-math.log(rand_val)/lambda_val)
+
 
 def rand_int(lower:int, upper:int) -> int:
     """

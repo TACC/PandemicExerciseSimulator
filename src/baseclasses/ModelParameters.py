@@ -66,7 +66,7 @@ class ModelParameters:
         Read in simulation properties from file and store
         """
         with open(simulation_properties.vaccine_effectiveness_file, 'r') as f:
-            self.vaccine_effectiveness = [ line.rstrip() for line in f ]
+            self.vaccine_effectiveness = [ float(line.rstrip()) for line in f ]
 
         with open(simulation_properties.vaccine_adherence_file, 'r') as f:
             self.vaccine_adherence = [ line.rstrip() for line in f ]

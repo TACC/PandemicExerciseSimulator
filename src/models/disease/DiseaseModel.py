@@ -30,7 +30,7 @@ class DiseaseModel:
         pass
 
 
-    def _expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int):
+    def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int):
         pass
 
 

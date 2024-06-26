@@ -12,6 +12,7 @@ from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
 from models.disease.DiseaseModel import DiseaseModel
 from models.disease.StochasticSEATIRD import StochasticSEATIRD
+from models.travel.BinomialTravel import BinomialTravel
 from models.travel.TravelModel import TravelModel
 
 parser = argparse.ArgumentParser()
@@ -59,7 +60,7 @@ def run( number_of_days_to_simulate:Type[Day],
             disease_model.simulate(node, time, parameters)
 
         # Run travel model
-        # travel_model.travel(network, disease_model, parameters, time)
+        travel_model.travel(network, disease_model, parameters, time)
 
         # write output
         writer.write(day, network)
@@ -138,6 +139,8 @@ def main():
 
     # Initialize a travel model - will default to Binomial travel
     travel_model = TravelModel()
+    if True:
+        travel_model = BinomialTravel()
 
     # Initialize output writer
     writer = Writer(simulation_properties.output_data_file)

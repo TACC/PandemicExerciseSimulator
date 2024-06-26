@@ -42,7 +42,7 @@ class StochasticSEATIRD(DiseaseModel):
 
             for node in network.nodes:
                 if node.node_id == this_node_id:
-                    self._expose_number_of_people(node, group, this_infected)
+                    self.expose_number_of_people(node, group, this_infected)
         return
 
 
@@ -92,7 +92,7 @@ class StochasticSEATIRD(DiseaseModel):
 
 
 
-    def _expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int):
+    def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int):
         """
         Initial infected should be moved into 'Exposed' compartment
         """
