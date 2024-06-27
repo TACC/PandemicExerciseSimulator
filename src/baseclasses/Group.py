@@ -19,6 +19,7 @@ class Compartments(Enum):
     R=5 #RECOVERED=5
     D=6 #DECEASED=6
 
+
 class Group:
 
     def __init__(self, age:int, risk_group:int, vaccine_group:int):

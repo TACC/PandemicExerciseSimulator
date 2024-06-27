@@ -95,7 +95,7 @@ class Network:
         total_population = 0
         for item in self.nodes:
             total_population += item.compartments.total_population
-            #logger.debug(f'population in this node is {item.compartments.total_population}')
+            logger.debug(f'population in this node is {item.compartments.total_population}')
         self.total_population = total_population
         return self.total_population
 

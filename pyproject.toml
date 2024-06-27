@@ -13,6 +13,7 @@ pandas = "^2.2.2."
 scipy = "^1.13.0"
 xmltodict = "^0.13.0"
 pytest = "^8.2.0"
+matplotlib = "^3.9.0"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

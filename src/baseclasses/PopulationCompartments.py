@@ -128,7 +128,6 @@ class PopulationCompartments:
         Return sum population of asymptomatic compartments across all demographic groups
         """
         return self.compartment_data.sum(axis=(0,1,2))[Compartments.A.value]
-    
 
 
     def treatable_population(self) -> float:

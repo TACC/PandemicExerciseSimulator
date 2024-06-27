@@ -64,7 +64,7 @@ def run( simulation_days:Type[Day],
 
         # write output
         writer.write(day, network)
-        simulation_days.snapshot(day, network)
+        simulation_days.snapshot(network)
 
     simulation_days.plot()
     logger.info('Completed processes in the run function')
@@ -80,7 +80,6 @@ def run_mock( simulation_days:Type[Day],
     """
     Mock run function for testing
     """
-    
     for day in range(simulation_days.day):
         writer.write(day, network)
 

@@ -109,11 +109,9 @@ class BinomialTravel(TravelModel):
 
                         # TODO what is this continuity correction?
                         sink_S =int( node_sink.compartments.compartment_data[ag][rg][vg][Compartments.S.value] + 0.5 ) # continuity correction
-                        logging.debug(f'susceptible people in sink = {sink_S}')
-                        logging.debug(f'probability = {prob}')
-
                         number_of_exposures = self.rng.binomial(sink_S, prob)
-                        logging.debug(f'number_of_exposures = {number_of_exposures}')
+                        logging.debug(f'susceptible people in sink = {sink_S}, probability = {prob}, number_of_exposures = {number_of_exposures}')
+
                         group = Group(ag, rg, vg)
                         disease_model.expose_number_of_people(node_sink, group, number_of_exposures)
 
