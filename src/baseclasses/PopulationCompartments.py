@@ -106,28 +106,85 @@ class PopulationCompartments:
         return sum(self.compartment_data[group.age][group.risk][group.vaccine])
 
 
-    def asymptomatic_population(self, age_group:int) -> float:
+    def susceptible_population(self) -> float:
         """
-        Return sum population of asymptomatic compartments across all demographic groups
+        Return sum population of susceptible compartments across all demographic groups
 
         The np.sum() method, given a tuple of the first three axes (0,1,2), sums and flattens
         the 4-D matrix into a 1-D matrix with 7 elements (each compartment)
         """
-        # TODO this needs to be tested
-        return self.compartment_data.sum(axis=tuple(range(3)))[Compartments.A.value]
+        return self.compartment_data.sum(axis=(0,1,2))[Compartments.S.value]
 
 
-    def transmitting_population(self, age_group:int) -> float:
+    def exposed_population(self) -> float:
+        """
+        Return sum population of exposed compartments across all demographic groups
+        """
+        return self.compartment_data.sum(axis=(0,1,2))[Compartments.E.value]
+
+
+    def asymptomatic_population(self) -> float:
+        """
+        Return sum population of asymptomatic compartments across all demographic groups
+        """
+        return self.compartment_data.sum(axis=(0,1,2))[Compartments.A.value]
+    
+
+
+    def treatable_population(self) -> float:
+        """
+        Return sum population of treatable compartments across all demographic groups
+        """
+        return self.compartment_data.sum(axis=(0,1,2))[Compartments.T.value]
+    
+
+    def infectious_population(self) -> float:
+        """
+        Return sum population of infectious compartments across all demographic groups
+        """
+        return self.compartment_data.sum(axis=(0,1,2))[Compartments.I.value]
+    
+
+    def recovered_population(self) -> float:
+        """
+        Return sum population of recovered compartments across all demographic groups
+        """
+        return self.compartment_data.sum(axis=(0,1,2))[Compartments.R.value]
+    
+
+    def deceased_population(self) -> float:
+        """
+        Return sum population of deceased compartments across all demographic groups
+        """
+        return self.compartment_data.sum(axis=(0,1,2))[Compartments.D.value]
+    
+
+    def transmitting_population(self) -> float:
         """
         Return sum population of asymptomatic, treatable, and infections compartments across all
         demographic groups
+        """
+        flat = self.compartment_data.sum(axis=(0,1,2))
+        return flat[Compartments.A.value] + flat[Compartments.T.value] + flat[Compartments.I.value]
 
-        The np.sum() method, given a tuple of the first three axes (0,1,2), sums and flattens
-        the 4-D matrix into a 1-D matrix with 7 elements (each compartment)
+
+    def asymptomatic_population_by_age(self, age_group:int) -> float:
+        """
+        Return sum population of asymptomatic compartments across all demographic groups
         """
         # TODO this needs to be tested
-        flat = self.compartment_data.sum(axis=tuple(range(3)))
-        return flat[Compartments.A.value] + flat[Compartments.T.value] + flat[Compartments.I.value]
+        return self.compartment_data.sum(axis=(1,2))[age_group][Compartments.A.value]
+    
+
+    def transmitting_population_by_age(self, age_group:int) -> float:
+        """
+        Return sum population of asymptomatic, treatable, and infections compartments across all
+        demographic groups
+        """
+        flat = self.compartment_data.sum(axis=(1,2))
+        return flat[age_group][Compartments.A.value] + \
+               flat[age_group][Compartments.T.value] + \
+               flat[age_group][Compartments.I.value]
 
 
 # Compartment data object is a 4-dimensional array of floats. The four dimensions are:

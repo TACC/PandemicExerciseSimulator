@@ -127,43 +127,43 @@ class StochasticSEATIRD(DiseaseModel):
 
 
     def _initialize_exposed_transitions(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule]):
-        node.add_transition_event(self.now, schedule.Ta(), EventType.EtoA, group)
+        node.add_transition_event(self.now, schedule.Ta(), EventType.EtoA.name, group)
         self._initialize_asymptomatic_transitions(node, group, schedule)
         return
 
     def _initialize_asymptomatic_transitions(self, node, group, schedule):
         if (schedule.Tt() < schedule.Td_a() and schedule.Tt() < schedule.Tr_a()):
             # individual will progress from asymptomatic to treatable
-            node.add_transition_event(schedule.Ta(), schedule.Tt(), EventType.AtoT, group)
+            node.add_transition_event(schedule.Ta(), schedule.Tt(), EventType.AtoT.name, group)
             self._initialize_treatable_transitions(node, group, schedule)
         elif (schedule.Tr_a() < schedule.Td_a()):
             # individual will recover from asymptomatic
-            node.add_transition_event(schedule.Ta(), schedule.Tr_a(), EventType.AtoR, group)
+            node.add_transition_event(schedule.Ta(), schedule.Tr_a(), EventType.AtoR.name, group)
         else:
             # individual will die while asymptomatic
-            node.add_transition_event(schedule.Ta(), schedule.Td_a(), EventType.AtoD, group)
+            node.add_transition_event(schedule.Ta(), schedule.Td_a(), EventType.AtoD.name, group)
         return
 
     def _initialize_treatable_transitions(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule]):
         if (schedule.Ti() < schedule.Td_ti() and schedule.Ti() < schedule.Tr_ti()):
             # individual will progress from treatable to infectious
-            node.add_transition_event(schedule.Tt(), schedule.Ti(), EventType.TtoI, group)
+            node.add_transition_event(schedule.Tt(), schedule.Ti(), EventType.TtoI.name, group)
             self._initialize_infectious_transitions(node, group, schedule)
         elif (schedule.Tr_ti() < schedule.Td_ti()):
             # individual will recover while treatable
-            node.add_transition_event(schedule.Tt(), schedule.Tr_ti(), EventType.TtoR, group)
+            node.add_transition_event(schedule.Tt(), schedule.Tr_ti(), EventType.TtoR.name, group)
         else:
             # individual will die while treatable
-            node.add_transition_event(schedule.Tt(), schedule.Td_ti(), EventType.TtoD, group)
+            node.add_transition_event(schedule.Tt(), schedule.Td_ti(), EventType.TtoD.name, group)
         return
 
     def _initialize_infectious_transitions(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule]):
         if (schedule.Tr_ti() < schedule.Td_ti()):
             # individual will recover from infectious
-            node.add_transition_event(schedule.Ti(), schedule.Tr_ti(), EventType.ItoR, group)
+            node.add_transition_event(schedule.Ti(), schedule.Tr_ti(), EventType.ItoR.name, group)
         else:
             # individual will die from infectious
-            node.add_transition_event(schedule.Ti(), schedule.Td_ti(), EventType.ItoD, group)
+            node.add_transition_event(schedule.Ti(), schedule.Td_ti(), EventType.ItoD.name, group)
         return
 
     def _initialize_contact_events(self, node, group, schedule, group_cache):
@@ -219,7 +219,7 @@ class StochasticSEATIRD(DiseaseModel):
             for j in range(len(RiskGroup)):
                 for k in range(len(VaccineGroup)):
                     group = Group(i, j, k)
-                    group_cache[i][j][k] = node.demographic_population(group) / this_population
+                    group_cache[i][j][k] = node.compartments.demographic_population(group) / this_population
         return
 
 
@@ -237,43 +237,43 @@ class StochasticSEATIRD(DiseaseModel):
         this_type = this_event.event_type
 
         if this_type == 'EtoA':
-            self._transition(Compartments.E.value, Compartments.A.value, this_event.origin)
+            self._transition(node, Compartments.E.value, Compartments.A.value, this_event.origin)
 
         elif this_type == 'AtoT':
-            self._transition(Compartments.A.value, Compartments.T.value, this_event.origin)
+            self._transition(node, Compartments.A.value, Compartments.T.value, this_event.origin)
 
         elif this_type == 'AtoR':
-            self._transition(Compartments.A.value, Compartments.R.value, this_event.origin)
+            self._transition(node, Compartments.A.value, Compartments.R.value, this_event.origin)
 
         elif this_type == 'AtoD':
-            self._transition(Compartments.A.value, Compartments.D.value, this_event.origin)
+            self._transition(node, Compartments.A.value, Compartments.D.value, this_event.origin)
 
         elif this_type == 'TtoI':
             if self._keep_event(node, Compartments.T.value, this_event, initial_compartments):
-                self._transition(Compartments.T.value, Compartments.I.value, this_event.origin)
+                self._transition(node, Compartments.T.value, Compartments.I.value, this_event.origin)
             else:
                 self._unqueue_event(node, Compartments.I.value, this_event.origin)
 
         elif this_type == 'TtoR':
             if self._keep_event(node, Compartments.T.value, this_event, initial_compartments):
-                self._transition(Compartments.T.value, Compartments.R.value, this_event.origin)
+                self._transition(node, Compartments.T.value, Compartments.R.value, this_event.origin)
 
         elif this_type == 'TtoD':
             if self._keep_event(node, Compartments.T.value, this_event, initial_compartments):
-                self._transition(Compartments.T.value, Compartments.D.value, this_event.origin)
+                self._transition(node, Compartments.T.value, Compartments.D.value, this_event.origin)
 
         elif this_type == 'ItoR':
             if self._keep_event(node, Compartments.I.value, this_event, initial_compartments):
-                self._transition(Compartments.I.value, Compartments.R.value, this_event.origin)
+                self._transition(node, Compartments.I.value, Compartments.R.value, this_event.origin)
 
         elif this_type == 'ItoD':
             if self._keep_event(node, Compartments.I.value, this_event, initial_compartments):
-                self._transition(Compartments.I.value, Compartments.D.value, this_event.origin)
+                self._transition(node, Compartments.I.value, Compartments.D.value, this_event.origin)
 
         else: # this_type == 'CONTACT'
             if (self._keep_contact(node, this_event.origin)):
                 to = this_event.destination
-                target_pop_size = node.demographic_population(to)
+                target_pop_size = node.compartments.demographic_population(to)
 
                 if (this_event.origin == to):
                     target_pop_size -= 1 
@@ -295,13 +295,14 @@ class StochasticSEATIRD(DiseaseModel):
     def _keep_event(self, node, compartment, event, initial_compartments) -> bool:
 
         group = event.origin
+        logging.info(f'group = {group}')
         unqueued_event_count = node.unqueued_event_counter[group.age][group.risk][group.vaccine][compartment]
         
         if (compartment == Compartments.T.value and event.init_time == self.now):
             return True
         elif (unqueued_event_count == 0 or mtrand.rand() > unqueued_event_count / (unqueued_event_count \
                              + initial_compartments[group.age][group.risk][group.vaccine][compartment])):
-            initial_compartments[group.age][group.risk][group.vaccine][compartment] -= 1
+            initial_compartments.compartment_data[group.age][group.risk][group.vaccine][compartment] -= 1
             return True
         else:
             node.unqueued_event_counter[group.age][group.risk][group.vaccine][compartment] -= 1

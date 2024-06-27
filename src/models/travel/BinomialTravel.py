@@ -82,8 +82,8 @@ class BinomialTravel(TravelModel):
                             #}
 
                             for ag2 in range(parameters.number_of_age_groups):
-                                asymptomatic = node_source.asymptomatic_population(ag2)
-                                transmitting = node_source.transmitting_population(ag2) # asymptomatic, treatable, and infectious
+                                asymptomatic = node_source.compartments.asymptomatic_population_by_age(ag2)
+                                transmitting = node_source.compartments.transmitting_population_by_age(ag2) # asymptomatic, treatable, and infectious
                                 contact_rate = parameters.np_contact_matrix[ag1][ag2] # age group to age group contacts
 
                                 # TODO these don't make sense - why looking at transmitting for one direction and asymptomatic for the other?

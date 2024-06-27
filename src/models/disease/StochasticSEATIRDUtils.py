@@ -47,10 +47,13 @@ class StochasticEvent:
         self.event_type = event_type
         self.origin = origin
         self.destination = destination
+        return
+
 
     def __str__(self) -> str:
         return(f'StochasticEvent object: init_time={self.init_time}, time={self.time}, '
                f'event_type={self.event_type}, origin={self.origin}, destination={self.destination}')
+
 
     # TODO rename this method so that it is clearer what it is doing
     def compare_event_time(self, other) -> bool:
@@ -117,6 +120,7 @@ class Schedule:
         self._Trd_ati = min(self.exit_asymptomatic_time, self.exit_infectious_time)
 
         return
+
 
     def Ta(self):      return(self._Ta)
     def Tt(self):      return(self._Tt)

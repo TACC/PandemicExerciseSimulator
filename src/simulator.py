@@ -29,7 +29,7 @@ logging.basicConfig(level=args.loglevel, format=format_str)
 logger = logging.getLogger(__name__)
 
 
-def run( number_of_days_to_simulate:Type[Day], 
+def run( simulation_days:Type[Day], 
          network:Type[Network],
          disease_model:Type[DiseaseModel],
          travel_model:Type[TravelModel],
@@ -46,7 +46,7 @@ def run( number_of_days_to_simulate:Type[Day],
     writer.write(0, network)
 
     # Iterate over each day, each node...
-    for day in range(number_of_days_to_simulate.day):
+    for day in range(simulation_days.day):
         for node in network.nodes:
 
             # Run distributions, treatments, stockpiles, and simulation for each node
@@ -64,13 +64,15 @@ def run( number_of_days_to_simulate:Type[Day],
 
         # write output
         writer.write(day, network)
+        simulation_days.snapshot(day, network)
 
+    simulation_days.plot()
     logger.info('Completed processes in the run function')
 
     return
 
 
-def run_mock( number_of_days_to_simulate:Type[Day],
+def run_mock( simulation_days:Type[Day],
               network:Type[Network],
               parameters:Type[ModelParameters],
               writer:Type[Writer]
@@ -79,7 +81,7 @@ def run_mock( number_of_days_to_simulate:Type[Day],
     Mock run function for testing
     """
     
-    for day in range(number_of_days_to_simulate.day):
+    for day in range(simulation_days.day):
         writer.write(day, network)
 
         for node in network.nodes:
@@ -112,7 +114,7 @@ def main():
 
     # Initialize Days class instances
     # 365 hardcoded in C++ app, realizations taken from simulation properties
-    number_of_days_to_simulate = Day(args.days)
+    simulation_days = Day(args.days)
     realization_number = int(simulation_properties.number_of_realizations)
 
     # Initialize Network class which will contain a list of Nodes
@@ -154,18 +156,18 @@ def main():
 
     for _ in range(realization_number):
 
-        #run_mock( number_of_days_to_simulate,
+        #run_mock( simulation_days,
         #          network,
         #          parameters,
         #          writer
         #        )
 
-        run( number_of_days_to_simulate,
-            network,
-            disease_model,
-            travel_model,
-            parameters,
-            writer
+        run( simulation_days,
+             network,
+             disease_model,
+             travel_model,
+             parameters,
+             writer
            )
 
     # report other summary statistics
