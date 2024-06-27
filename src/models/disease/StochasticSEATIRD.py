@@ -295,7 +295,7 @@ class StochasticSEATIRD(DiseaseModel):
     def _keep_event(self, node, compartment, event, initial_compartments) -> bool:
 
         group = event.origin
-        logging.info(f'group = {group}')
+        logging.debug(f'group = {group}')
         unqueued_event_count = node.unqueued_event_counter[group.age][group.risk][group.vaccine][compartment]
         
         if (compartment == Compartments.T.value and event.init_time == self.now):

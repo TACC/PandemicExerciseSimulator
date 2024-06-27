@@ -65,7 +65,7 @@ class Node:
         """
         self.events.insert(0, StochasticEvent(init_time, time, event_type, group_origin, group_destination))
         self.contact_counter[group_origin.age][group_origin.risk][group_origin.vaccine] += 1
-        logger.info(f'added EventType={event_type} to queue; length={len(self.events)}')
+        logger.debug(f'added EventType={event_type} to queue; length={len(self.events)}')
         return
 
 
@@ -81,7 +81,7 @@ class Node:
             group (Group): group where event happened
         """
         self.events.insert(0, StochasticEvent(init_time, time, event_type, group, group))
-        logger.info(f'added EventType={event_type} to queue; length={len(self.events)}')
+        logger.debug(f'added EventType={event_type} to queue; length={len(self.events)}')
         return
 
 

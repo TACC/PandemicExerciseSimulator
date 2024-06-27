@@ -40,7 +40,7 @@ def run( simulation_days:Type[Day],
     Run function for simulating each day
     """
 
-    logger.info('Entered the run function')
+    logger.info('entered the run function')
 
     # Write initial conditions
     writer.write(0, network)
@@ -67,7 +67,7 @@ def run( simulation_days:Type[Day],
         simulation_days.snapshot(network)
 
     simulation_days.plot()
-    logger.info('Completed processes in the run function')
+    logger.info('completed processes in the run function')
 
     return
 
@@ -98,7 +98,7 @@ def main():
     """
     Main entry point to PandemicExerciseSimulator
     """
-    logger.info(f'Entered main loop')
+    logger.info(f'entered main loop')
 
     # Read input properties file
     # Can be pre-generated as template, or generated in GUI

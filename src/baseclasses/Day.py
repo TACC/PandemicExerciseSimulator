@@ -66,7 +66,7 @@ class Day:
         Save a plot of all compartments over time
         """
         days = [ val + 1 for val in range(len(self.summary)) ]
-        logging.warning(f'days = {days}')
+        logging.info(f'days simulated = {days}')
         for comp in Compartments:
             values = [ row[comp.value] for row in self.summary ]
             plt.plot(days, values, label=f'Compartment={comp.name}')  
