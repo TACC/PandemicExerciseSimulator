@@ -5,7 +5,7 @@ from typing import Type
 
 from baseclasses.Day import Day
 from baseclasses.Group import Compartments, RiskGroup
-from baseclasses.InputSimulationProperties import InputSimulationProperties
+from baseclasses.InputProperties import InputProperties
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
@@ -102,7 +102,7 @@ def main():
 
     # Read input properties file
     # Can be pre-generated as template, or generated in GUI
-    simulation_properties = InputSimulationProperties(args.input_filename)
+    simulation_properties = InputProperties(args.input_filename)
 
     # Initialize Model Parameters class instance
     # This is a subset of the simulation properties, and contains data from a

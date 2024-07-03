@@ -5,7 +5,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class InputSimulationProperties:
+class InputProperties:
 
     def __init__(self, input_filename:str):
         
@@ -48,11 +48,11 @@ class InputSimulationProperties:
         self.initial                     = data['panflu']['initial']
         self.vaccines                    = data['panflu']['vaccines']
 
-        logger.info(f'instantiated InputSimulationProperties object')
+        logger.info(f'instantiated InputProperties object')
         logger.debug(f'{self}')
 
         if (self._validate_input()):
-            logger.info(f'verified InputSimulationProperties')
+            logger.info(f'verified InputProperties')
 
         return
 

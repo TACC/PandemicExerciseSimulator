@@ -4,14 +4,14 @@ import numpy as np
 import sys
 from typing import Type
 
-from .InputSimulationProperties import InputSimulationProperties
+from .InputProperties import InputProperties
 
 logger = logging.getLogger(__name__)
 
 
 class ModelParameters:
 
-    def __init__(self, simulation_properties:Type[InputSimulationProperties]):
+    def __init__(self, simulation_properties:Type[InputProperties]):
 
         # parameters
         self.R0             = simulation_properties.R0 
@@ -64,7 +64,7 @@ class ModelParameters:
               )
 
 
-    def load_data_files(self, simulation_properties:Type[InputSimulationProperties]):
+    def load_data_files(self, simulation_properties:Type[InputProperties]):
         """
         Read in simulation properties from file and store
         """
