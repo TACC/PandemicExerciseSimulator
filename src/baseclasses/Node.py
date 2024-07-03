@@ -4,9 +4,9 @@ import logging
 import numpy as np
 from typing import Type
 
+from .Event import Event, EventType
 from .Group import Group, RiskGroup, VaccineGroup, Compartments
 from .PopulationCompartments import PopulationCompartments
-from models.disease.StochasticSEATIRDUtils import StochasticEvent, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class Node:
         self.vaccine_stockpile = 0.
         self.antiviral_stockpile = 0.
         self.stochastic = True
-        self.events = []    # list of stochastic event objects
+        self.events = []    # list of event objects
         
         # the contact counter struct is a 3-dimensional array of ints
         # the fields are [number of age groups][risk group size][vaccinated group size]
@@ -63,7 +63,7 @@ class Node:
             group_origin (Group): group originating the event
             group_destination (Group): group destination for the event
         """
-        self.events.insert(0, StochasticEvent(init_time, time, event_type, group_origin, group_destination))
+        self.events.insert(0, Event(init_time, time, event_type, group_origin, group_destination))
         self.contact_counter[group_origin.age][group_origin.risk][group_origin.vaccine] += 1
         logger.debug(f'added EventType={event_type} to queue; length={len(self.events)}')
         return
@@ -80,7 +80,7 @@ class Node:
             event_type (EventType): type of event from a list of possible events
             group (Group): group where event happened
         """
-        self.events.insert(0, StochasticEvent(init_time, time, event_type, group, group))
+        self.events.insert(0, Event(init_time, time, event_type, group, group))
         logger.debug(f'added EventType={event_type} to queue; length={len(self.events)}')
         return
 
