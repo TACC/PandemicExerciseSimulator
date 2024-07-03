@@ -92,7 +92,20 @@ class Node:
         data={}
         data['node_id'] = str(self.node_id)
         data['fips_id'] = str(self.fips_id)
+
+        # TODO collect travel exposure data for the output
+        data['travel_exposure'] = []
+        data['compartment_summary'] = {}
         data['compartments'] = {}
+
+        # TODO this is done elsewhere too, should be a function
+        data['compartment_summary']['S'] = self.compartments.susceptible_population()
+        data['compartment_summary']['E'] = self.compartments.exposed_population()
+        data['compartment_summary']['A'] = self.compartments.asymptomatic_population()
+        data['compartment_summary']['T'] = self.compartments.treatable_population()
+        data['compartment_summary']['I'] = self.compartments.infectious_population()
+        data['compartment_summary']['R'] = self.compartments.recovered_population()
+        data['compartment_summary']['D'] = self.compartments.deceased_population()
 
         for comp in Compartments:
             data['compartments'][comp.name] = { 'U':{}, 'V':{} }
