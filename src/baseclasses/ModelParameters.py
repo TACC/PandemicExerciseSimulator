@@ -113,12 +113,14 @@ class ModelParameters:
         logger.info(f'opening file: {simulation_properties.vaccine_adherence_file}')
         logger.info(f'opening file: {simulation_properties.high_risk_ratios_file}')
         logger.info(f'opening file: {simulation_properties.relative_susceptibility_file}')
+        logger.info(f'opening file: {simulation_properties.flow_reduction_file}')
         logger.info(f'opening file: {simulation_properties.nu_value_matrix_file}')
 
         logger.debug( f'vaccine_effectiveness = {self.vaccine_effectiveness}, '
                       f'vaccine_adherence = {self.vaccine_adherence}, '
                       f'high_risk_ratios = {self.high_risk_ratios}, '
                       f'relative_susceptibility = {self.relative_susceptibility}, '
+                      f'flow_reduction = {self.flow_reduction}, '
                       f'nu_values = {self.nu_values} '
                     )
         return

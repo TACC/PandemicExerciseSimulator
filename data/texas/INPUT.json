@@ -14,63 +14,43 @@
       "nu_value_matrix": "data/texas/nu_value_matrix.5"
     },
     "params": {
-      "R0": "1.8",
+      "R0": "1.2",
       "beta_scale": "65",
-      "tau": "0.83333333",
-      "kappa": "0.52631579",
+      "tau": "1.2",
+      "kappa": "1.9",
       "gamma": "0.24390244",
       "chi": "1.0",
       "rho": "0.39",
       "nu_high": "no",
       "vaccine_wastage_factor": "60",
-      "antiviral_effectiveness": "0.8",
+      "antiviral_effectiveness": "1.5",
       "antiviral_wastage_factor": "60"
     },
     "initial": {
       "v": [
         {
-          "county": "187",
-          "infected": "1",
+          "county": "453",
+          "infected": "10000",
           "age_group": "1"
         },
         {
-          "county": "479",
-          "infected": "1",
+          "county": "113",
+          "infected": "10000",
           "age_group": "1"
         },
         {
           "county": "201",
-          "infected": "1",
+          "infected": "10000",
           "age_group": "1"
         },
         {
-          "county": "61",
-          "infected": "3",
+          "county": "141",
+          "infected": "10000",
           "age_group": "1"
         },
         {
-          "county": "427",
-          "infected": "3",
-          "age_group": "1"
-        },
-        {
-          "county": "215",
-          "infected": "1",
-          "age_group": "1"
-        },
-        {
-          "county": "27",
-          "infected": "1",
-          "age_group": "1"
-        },
-        {
-          "county": "453",
-          "infected": "1",
-          "age_group": "1"
-        },
-        {
-          "county": "391",
-          "infected": "1",
+          "county": "375",
+          "infected": "10000",
           "age_group": "1"
         }
       ]

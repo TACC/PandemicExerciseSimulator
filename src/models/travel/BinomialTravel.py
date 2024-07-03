@@ -134,8 +134,8 @@ class BinomialTravel(TravelModel):
                     sink_S = int( node_sink.compartments.compartment_data[ag][rg][vg][Compartments.S.value] + 0.5 )
                     number_of_exposures = self.rng.binomial(sink_S, prob)
                     if number_of_exposures > 1:
-                        logging.info(f'susceptible people in sink = {sink_S}, probability = {prob}, '
-                                     f'number_of_exposures = {number_of_exposures}')
+                        logging.debug(f'susceptible people in sink = {sink_S}, probability = {prob}, '
+                                      f'number_of_exposures = {number_of_exposures}')
                         
                     group = Group(ag, rg, vg)
                     disease_model.expose_number_of_people(node_sink, group, number_of_exposures)
