@@ -10,6 +10,7 @@ from baseclasses.Group import RiskGroup, VaccineGroup, Compartments, Group
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.Node import Node
+from utils.RNGMath import rand_binomial
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +18,12 @@ logger = logging.getLogger(__name__)
 class BinomialTravel(TravelModel):
 
     def __init__(self):
-        self.rng = np.random.default_rng()
         logger.info(f'instantiated a BinomialTravel object: {BinomialTravel}')
         return
 
 
     def __str__(self):
-        return(f'BinomialTravel, {self.rng.random()}')
+        return(f'BinomialTravel')
 
 
     def travel(self, network:Type[Network], disease_model:Type[DiseaseModel], parameters:Type[ModelParameters], time:int):
@@ -132,7 +132,7 @@ class BinomialTravel(TravelModel):
                     
                     # TODO what is this continuity correction (+ 0.5)?
                     sink_S = int( node_sink.compartments.compartment_data[ag][rg][vg][Compartments.S.value] + 0.5 )
-                    number_of_exposures = self.rng.binomial(sink_S, prob)
+                    number_of_exposures = rand_binomial(sink_S, prob)
                     if number_of_exposures > 1:
                         logging.debug(f'susceptible people in sink = {sink_S}, probability = {prob}, '
                                       f'number_of_exposures = {number_of_exposures}')

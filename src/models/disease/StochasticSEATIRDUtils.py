@@ -1,28 +1,13 @@
 #!/usr/bin/env python3
 from enum import Enum
 import logging
-import math
-from numpy.random import mtrand
 from typing import Type
 
 from baseclasses.Group import Group
 from baseclasses.ModelParameters import ModelParameters
+from utils.RNGMath import rand_exp
 
 logger = logging.getLogger(__name__)
-
-
-def rand_exp(lambda_val:float, rand_val:float) -> float:
-    """
-    Return negative log of a random value divided by the provided lambda value
-    """
-    return (-math.log(rand_val)/lambda_val)
-
-
-def rand_int(lower:int, upper:int) -> int:
-    """
-    Expected behavior is that the int returned is in the range [lower, upper], inclusive
-    """
-    return (mtrand.randint(lower, upper+1))
 
 
 class EventType(Enum):
@@ -55,21 +40,23 @@ class StochasticEvent:
                f'event_type={self.event_type}, origin={self.origin}, destination={self.destination}')
 
 
-    # TODO rename this method so that it is clearer what it is doing
     def compare_event_time(self, other) -> bool:
+        """
+        Given a StochasticEvent object (other), return True if self is greater than (happens after)
+        other
+        """
         return (True if self.time > other.time else False)
-
 
 
 class Schedule:
 
     def __init__(self, parameters:type[ModelParameters], now:float, group:Type[Group]):
         """
-        TAU      # exposed to asymptomatic
-        KAPPA    # asymptomatic to treatable
-        CHI      # treatable to infectious -- fixed rate, in days
-        GAMMA    # asymptomatic/treatable/infectious to recovered
-        NU       # asymptomatic/treatable/infectious to deceased
+        TAU      # Latency period in days (exposed to asymptomatic)
+        KAPPA    # Asymptomatic infectious period in days (asymptomatic to treatable)
+        CHI      # Treatable to infectious rate in days
+        GAMMA    # Total infectious period in days (asymptomatic/treatable/infectious to recovered)
+        NU       # Mortality rate (asymptomatic/treatable/infectious to deceased)
 
         self._Ta         # Time from exposed to asymptomatic
         self._Tt         # Time from asymptomatic to treatable
@@ -81,13 +68,13 @@ class Schedule:
         self._Trd_ati    # Time from A/T/I to R/D
         """
 
-        self._Ta    = rand_exp(parameters.tau, mtrand.rand()) + now
-        self._Tt    = rand_exp(parameters.kappa, mtrand.rand()) + self._Ta
+        self._Ta    = rand_exp(parameters.tau) + now
+        self._Tt    = rand_exp(parameters.kappa) + self._Ta
         self._Ti    = self._Tt + parameters.chi
-        self._Td_a  = rand_exp(parameters.nu_values[group.age][group.risk], mtrand.rand()) + self._Ta
-        self._Td_ti = rand_exp(parameters.nu_values[group.age][group.risk], mtrand.rand()) + self._Tt
-        self._Tr_a  = rand_exp(parameters.gamma, mtrand.rand()) + self._Ta
-        self._Tr_ti = rand_exp(parameters.gamma, mtrand.rand()) + self._Tt
+        self._Td_a  = rand_exp(parameters.nu_values[group.age][group.risk]) + self._Ta
+        self._Td_ti = rand_exp(parameters.nu_values[group.age][group.risk]) + self._Tt
+        self._Tr_a  = rand_exp(parameters.gamma) + self._Ta
+        self._Tr_ti = rand_exp(parameters.gamma) + self._Tt
 
         # exit_asymptomatic_time means via recovery or death, not progression to symptomatic stage
         self.exit_asymptomatic_time = min(self._Td_a, self._Tr_a)
@@ -105,13 +92,13 @@ class Schedule:
         S=0, E=1, A=2, T=3, I=4, R=5, D=6
         """
         assert int(compartment_num) > 0 and int(compartment_num) < 5
-        self._Ta    = (rand_exp(parameters.tau, mtrand.rand()) + now) if compartment_num < 2 else now
-        self._Tt    = (rand_exp(parameters.kappa, mtrand.rand()) + self._Ta) if compartment_num < 3 else self._Ta
+        self._Ta    = (rand_exp(parameters.tau) + now) if compartment_num < 2 else now
+        self._Tt    = (rand_exp(parameters.kappa) + self._Ta) if compartment_num < 3 else self._Ta
         self._Ti    = (self._Tt + parameters.chi) if compartment_num < 4 else self._Tt
-        self._Td_a  = (rand_exp(parameters.nu_values[group.age][group.risk], mtrand.rand())) + self._Ta if compartment_num < 3 else float('inf')
-        self._Td_ti = rand_exp(parameters.nu_values[group.age][group.risk], mtrand.rand()) + self._Tt
-        self._Tr_a  = (rand_exp(parameters.gamma, mtrand.rand())) if compartment_num < 3 else float('inf')
-        self._Tr_ti = rand_exp(parameters.gamma, mtrand.rand()) + self._Tt
+        self._Td_a  = (rand_exp(parameters.nu_values[group.age][group.risk])) + self._Ta if compartment_num < 3 else float('inf')
+        self._Td_ti = rand_exp(parameters.nu_values[group.age][group.risk]) + self._Tt
+        self._Tr_a  = (rand_exp(parameters.gamma)) if compartment_num < 3 else float('inf')
+        self._Tr_ti = rand_exp(parameters.gamma) + self._Tt
         
         self.exit_asymptomatic_time = min(self._Td_a, self._Tr_a)
         if (self._Tt < self.exit_asymptomatic_time): self.exit_asymptomatic_time = float('inf')

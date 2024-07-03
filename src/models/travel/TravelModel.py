@@ -10,5 +10,10 @@ class TravelModel:
         logger.info(f'instantiated a TravelModel object: {TravelModel}')
         return
 
+
     def __str__(self) -> str:
         return(f'TravelModel')
+
+
+    def travel(self):
+        pass

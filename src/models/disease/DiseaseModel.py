@@ -26,18 +26,18 @@ class DiseaseModel:
         return(f'DiseaseModel:Stochastic={self.is_stochastic}')
 
 
-    def set_initial_conditions(self, initial:list, network:Type[Network]):
+    def set_initial_conditions(self):
         pass
 
 
-    def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int):
+    def expose_number_of_people(self):
         pass
 
 
-    def simulate():
+    def simulate(self):
         pass
 
 
-    def reinitialize_events():
+    def reinitialize_events(self):
         pass
 
