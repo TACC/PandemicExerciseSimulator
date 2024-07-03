@@ -3,6 +3,7 @@ from copy import deepcopy
 import logging
 import math
 import numpy as np
+import numpy.typing as npt
 from typing import Type
 
 from .DiseaseModel import DiseaseModel
@@ -11,8 +12,8 @@ from baseclasses.Group import Group, RiskGroup, VaccineGroup, Compartments
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.Node import Node
+from baseclasses.PopulationCompartments import PopulationCompartments
 from utils.RNGMath import rand_exp, rand_int, rand_mt
-
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class Schedule:
 
 class StochasticSEATIRD(DiseaseModel):
 
-    def __init__(self, disease_model):
+    def __init__(self, disease_model:Type[DiseaseModel]):
         self.is_stochastic = disease_model.is_stochastic
         self.now = disease_model.now
         self.parameters = disease_model.parameters
@@ -103,7 +104,8 @@ class StochasticSEATIRD(DiseaseModel):
 
     def set_initial_conditions(self, initial:list, network:Type[Network]):
         """
-        Method called 
+        This method is invoked from the main simulator block. Read in the list of initial infected
+        per location per age group, and expose 
 
         Args:
             initial (list): list of initial infected per age group per county from INPUT
@@ -111,7 +113,7 @@ class StochasticSEATIRD(DiseaseModel):
         """
         for item in initial['v']:
             # TODO the word "county" is hardcoded here but should be made dynamic in case
-            # people want to do zip codes instead
+            # people want to do zip codes instead. Maybe 'location_id'
             this_node_id = int(item['county'])
             this_infected = int(item['infected'])
             this_age_group = int(item['age_group'])
@@ -124,10 +126,13 @@ class StochasticSEATIRD(DiseaseModel):
         return
 
 
-    # why are we sending ModelParameters into this method since self.parameters is part of class?
-    def simulate(self, node:Type[Node], time:int, parameters:Type[ModelParameters]):
+    def simulate(self, node:Type[Node], time:int):
         """
         Main simulation logic for stochastic SEATIRD model
+
+        Args:
+            node (Node): Movement between compartments happens within the given node
+            time (int): Simulation day
         """
         logger.debug(f'node={node}, time={time}')
 
@@ -146,62 +151,84 @@ class StochasticSEATIRD(DiseaseModel):
         return
 
 
-    def epidemic_size(self):
-        #return C->recoveredTotal() + C->deceasedTotal();
-        pass
-
-
-    def reinitialize_events(self, node):
-        pass
-
-
-    def _is_susceptible(self, node, group, num):
-        if (node.compartments.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] > num):
-            return True
-        else:
-            return False
-
-
     def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int):
         """
-        Initial infected should be moved into 'Exposed' compartment
-        """
+        Initial infected are moved from 'Susceptible' into 'Exposed' compartment
 
+        Args:
+            node (Node): The node where people will be exposed
+            group (Group): Compartment descriptor including age group, risk group, vaccine status
+            num_to_expose (int): The number of people to expose
+        """
         group_cache = np.zeros((self.parameters.number_of_age_groups, len(RiskGroup), len(VaccineGroup)))
         self._demographic_sizes(node, group_cache)
+        # TODO the num_to_expose value should be the min of {num_to_expose, current_susceptible}
         for i in range(num_to_expose):
             self._transmit_disease(node, group, group_cache)
-
         return
 
 
-    def _transmit_disease(self, node, group, group_cache):
+    def reinitialize_events(self, node:Type[Node]):
+        """
+        Used for transition from deterministic to stochastic computation. Not currently implemented
+        """
+        pass
 
+
+    ###### Private Methods ######
+
+
+    def _demographic_sizes(self, node:Type[Node], group_cache:npt.ArrayLike):
+        """
+        Given a node, calculate demographic percentages and fill a given cache
+        """
+        this_population = node.total_population()
+        for i in range(self.parameters.number_of_age_groups):
+            for j in range(len(RiskGroup)):
+                for k in range(len(VaccineGroup)):
+                    group = Group(i, j, k)
+                    group_cache[i][j][k] = node.compartments.demographic_population(group) / this_population
+        return
+
+
+    def _transmit_disease(self, node:Type[Node], group:Type[Group], group_cache:npt.ArrayLike):
+        """
+        Given a node and a group, move one individual from 'Susceptible' to 'Exposed'. Then, since a
+        new individual has been exposed, initialize exposed transitions and contact events
+        """
         assert(node.compartments.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] > 0)
-
-
-        # TODO the num_to_expose value should be the min of {num_to_expose, current susceptible}
-        #node.compartments.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] -= 1
-        #node.compartments.compartment_data[group.age][group.risk][group.vaccine][Compartments.E.value] += 1
         self._transition(node, Compartments.S.value, Compartments.E.value, group)
-
-        # Is there any reason to put this functionality in the PopulationCompartments class?
-        #node.compartments.expose_number_of_people(group.age, group.risk, group.vaccine)
 
         schedule = Schedule(self.parameters, self.now, group)
         self._initialize_exposed_transitions(node, group, schedule)
         self._initialize_contact_events(node, group, schedule, group_cache)
+        return
 
+
+    def _transition(self, node:Type[Node], old_compartment:int, new_compartment:int, group:Type[Group]):
+        """
+        Given a node, a group, and two compartments (old and new), use the methods in the 
+        PopulationCompartments class to move one individual
+        """
+        node.compartments.decrement(group, old_compartment)
+        node.compartments.increment(group, new_compartment)
         return
 
 
     def _initialize_exposed_transitions(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule]):
+        """
+        When an individual moves into Exposed, queue a new EtoA event
+        """
         node.add_transition_event(self.now, schedule.Ta(), EventType.EtoA.name, group)
         self._initialize_asymptomatic_transitions(node, group, schedule)
         return
     
 
-    def _initialize_asymptomatic_transitions(self, node, group, schedule):
+    def _initialize_asymptomatic_transitions(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule]):
+        """
+        When an individual moves into Asymptomatic, they can either move to Treatable, Recovered, or
+        Deceased based on given Schedule
+        """
         if (schedule.Tt() < schedule.Td_a() and schedule.Tt() < schedule.Tr_a()):
             # individual will progress from asymptomatic to treatable
             node.add_transition_event(schedule.Ta(), schedule.Tt(), EventType.AtoT.name, group)
@@ -216,6 +243,10 @@ class StochasticSEATIRD(DiseaseModel):
 
 
     def _initialize_treatable_transitions(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule]):
+        """
+        When an individual moves into Treatable, they can either move to Infectious, Recovered, or 
+        Deceased based on given Schedule
+        """
         if (schedule.Ti() < schedule.Td_ti() and schedule.Ti() < schedule.Tr_ti()):
             # individual will progress from treatable to infectious
             node.add_transition_event(schedule.Tt(), schedule.Ti(), EventType.TtoI.name, group)
@@ -230,6 +261,10 @@ class StochasticSEATIRD(DiseaseModel):
 
 
     def _initialize_infectious_transitions(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule]):
+        """
+        When an individual moves into Infectious, then can either move to Recovered or Deceased
+        based on given Schedule
+        """
         if (schedule.Tr_ti() < schedule.Td_ti()):
             # individual will recover from infectious
             node.add_transition_event(schedule.Ti(), schedule.Tr_ti(), EventType.ItoR.name, group)
@@ -239,21 +274,30 @@ class StochasticSEATIRD(DiseaseModel):
         return
 
 
-    def _initialize_contact_events(self, node, group, schedule, group_cache):
-        beta = self._calculate_beta_w_pha() # this is a list
-        vaccine_effectiveness = self.parameters.vaccine_effectiveness  # this is a list
+    def _initialize_contact_events(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule], 
+                                   group_cache:npt.ArrayLike):
+        """
+        This method is called when exposing Susceptible individuals for the first time. The exposed
+        individual contacts other susceptible individuals and queues new contact events.
+        """
+        beta = self._calculate_beta_w_pha()
+        vaccine_effectiveness = self.parameters.vaccine_effectiveness
 
         for ag in range(self.parameters.number_of_age_groups):
             sigma = float(self.parameters.relative_susceptibility[ag])
+
             for rg in range(len(RiskGroup)):
                 for vg in range(len(VaccineGroup)):
                     to = Group(ag, rg, vg)
                     contact_rate = float(self.parameters.np_contact_matrix[group.age][to.age])
-                    # If noone is vaccinated, then the transmission rate for vaccine group is 0 and causes runtime warning
-                    # divide by zero eror in the rand_exp step
+
+                    # If noone is vaccinated, then the transmission rate for vaccine group is 0 and 
+                    # causes runtime warning divide by zero eror in the rand_exp step
                     # TODO dig in to what is expected behavior of this method when group size is 0
                     if (group_cache[ag][rg][vg] == 0): continue
-                    transmission_rate = ( 1.0 - float(vaccine_effectiveness[ag]) ) * beta[ag] * contact_rate * sigma * group_cache[ag][rg][vg]
+                    
+                    transmission_rate = (1.0 - vaccine_effectiveness[ag]) * beta[ag] * contact_rate \
+                                        * sigma * group_cache[ag][rg][vg]
                     Tc_init = schedule.Ta()
                     Tc = rand_exp(transmission_rate) + Tc_init
 
@@ -264,7 +308,10 @@ class StochasticSEATIRD(DiseaseModel):
         return
 
 
-    def _calculate_beta_w_pha(self):
+    def _calculate_beta_w_pha(self) -> list:
+        """
+        Calculate the change in beta given public health announcements
+        """
         # TODO fix these terms once we start account for PHA
         pha_effectiveness = [0.4, 0.4, 0.4, 0.4, 0.4]
         pha_halflife = [10.0, 10.0, 10.0, 10.0, 10.0]
@@ -279,33 +326,16 @@ class StochasticSEATIRD(DiseaseModel):
             for ag in range(age_group_size):
                 if (pha_halflife[ag] > 0):
                     beta[ag] = beta_baseline * (1.0 - pha_effectiveness[ag] * math.pow(2, -1*(pha_age/pha_halflife[ag])))
-
         return beta
 
 
-    def _demographic_sizes(self, node, group_cache):
+    def _next_event(self, node:Type[Node], group_cache:npt.ArrayLike, initial_compartments:Type[PopulationCompartments]):
         """
-        Given a node, calculate demographic percentages and fill a given cache
+        Grab the next event from the queue (last thing in the list) and act on it
         """
-        this_population = node.total_population()
-        for i in range(self.parameters.number_of_age_groups):
-            for j in range(len(RiskGroup)):
-                for k in range(len(VaccineGroup)):
-                    group = Group(i, j, k)
-                    group_cache[i][j][k] = node.compartments.demographic_population(group) / this_population
-        return
-
-
-    def _next_event(self, node, group_cache, initial_compartments):
-        """
-        Grab the next event (last thing in the list) and act on it
-        """
-        # if list of events is empty, return from this method
-        if not node.events: return
-
+        if not node.events: return # if list of events is empty, return from this method
 
         this_event = deepcopy(node.events.pop())
-        this_time = this_event.time
         this_type = this_event.event_type
 
         if this_type == 'EtoA':
@@ -342,7 +372,7 @@ class StochasticSEATIRD(DiseaseModel):
             if self._keep_event(node, Compartments.I.value, this_event, initial_compartments):
                 self._transition(node, Compartments.I.value, Compartments.D.value, this_event.origin)
 
-        else: # this_type == 'CONTACT'
+        else: # this_type == 'CONTACT':
             if (self._keep_contact(node, this_event.origin)):
                 to = this_event.destination
                 target_pop_size = node.compartments.demographic_population(to)
@@ -355,18 +385,14 @@ class StochasticSEATIRD(DiseaseModel):
 
                     if (self._is_susceptible(node, to, contact)):
                         self._transmit_disease(node, to, group_cache)
-        
         return
 
 
-    def _transition(self, node, old_compartment, new_compartment, group):
-        node.compartments.decrement(group, old_compartment)
-        node.compartments.increment(group, new_compartment)
-        return
-
-
-    def _keep_event(self, node, compartment, event, initial_compartments) -> bool:
-
+    def _keep_event(self, node:Type[Node], compartment:int, event:Type[EventType], 
+                    initial_compartments:Type[PopulationCompartments]) -> bool:
+        """
+        Stochastic check to see whether an event occurs
+        """
         group = event.origin
         logging.debug(f'group = {group}')
         unqueued_event_count = node.unqueued_event_counter[group.age][group.risk][group.vaccine][compartment]
@@ -382,25 +408,37 @@ class StochasticSEATIRD(DiseaseModel):
             return False
 
 
-    def _unqueue_event(self, node, compartment, group):
+    def _unqueue_event(self, node:Type[Node], compartment:int, group:Type[Group]):
+        """
+        An event was discarded so increment the counter
+        """
         node.unqueued_event_counter[group.age][group.risk][group.vaccine][compartment] += 1
         return
 
 
-    def _keep_contact(self, node, group) -> bool:
-
+    def _keep_contact(self, node:Type[Node], group:Type[Group]) -> bool:
+        """
+        If the ratio of unqueued contact counts to total contact counts for this group is low,
+        then keep the contact
+        """
         contact_count = node.contact_counter[group.age][group.risk][group.vaccine]
         unqueued_contact_count = node.unqueued_contact_counter[group.age][group.risk][group.vaccine]
 
         if (contact_count > 0):
-            # getting a divide by zero error on this line 
+            # occasionally getting a divide by zero error on this line 
             if (rand_mt() > float(unqueued_contact_count) / float(contact_count)):
                 node.contact_counter[group.age][group.risk][group.vaccine] -= 1
                 return True
-
         node.unqueued_contact_counter[group.age][group.risk][group.vaccine] -= 1
         node.contact_counter[group.age][group.risk][group.vaccine] -= 1
         return False
 
 
-
+    def _is_susceptible(self, node:Type[Node], group:Type[Group], num:int) -> bool:
+        """
+        Return True if the size of the Susceptible compartment is greater than the input num
+        """
+        if (node.compartments.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] > num):
+            return True
+        else:
+            return False

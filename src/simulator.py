@@ -57,7 +57,7 @@ def run( simulation_days:Type[Day],
             # simulate one step.  (what are node, time, parameters)
             time=day+1
             #disease_model.reinitialize_events(node) # only for node->totalTransmitting() < 450
-            disease_model.simulate(node, time, parameters)
+            disease_model.simulate(node, time)
 
         # Run travel model
         travel_model.travel(network, disease_model, parameters, time)
@@ -112,7 +112,7 @@ def main():
     parameters.load_contact_matrix(simulation_properties.contact_data_file)
 
     # Initialize Days class instances
-    # 365 hardcoded in C++ app, realizations taken from simulation properties
+    # Also used for exporting day-by-day summary information
     simulation_days = Day(args.days)
     realization_number = int(simulation_properties.number_of_realizations)
 

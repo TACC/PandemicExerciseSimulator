@@ -2,11 +2,7 @@
 import logging
 from typing import Type
 
-from baseclasses.Group import Group
 from baseclasses.ModelParameters import ModelParameters
-from baseclasses.Network import Network
-from baseclasses.Node import Node
-from baseclasses.Group import RiskGroup, VaccineGroup, Compartments
 
 logger = logging.getLogger(__name__)
 

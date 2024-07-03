@@ -22,10 +22,6 @@ class BinomialTravel(TravelModel):
         return
 
 
-    def __str__(self):
-        return(f'BinomialTravel')
-
-
     def travel(self, network:Type[Network], disease_model:Type[DiseaseModel], parameters:Type[ModelParameters], time:int):
         """
         Simulate travel between nodes. "Sink" refers to the Node where people travel to; "Source"
