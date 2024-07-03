@@ -20,6 +20,7 @@ class InputSimulationProperties:
         self.kappa      = float(data['panflu']['params']['kappa'])
         self.gamma      = float(data['panflu']['params']['gamma'])
         self.chi        = float(data['panflu']['params']['chi'])
+        self.rho        = float(data['panflu']['params']['rho'])
         self.nu_high    = data['panflu']['params']['nu_high']
         self.vaccine_wastage_factor   = float(data['panflu']['params']['vaccine_wastage_factor'])
         self.antiviral_effectiveness  = float(data['panflu']['params']['antiviral_effectiveness'])
@@ -29,6 +30,7 @@ class InputSimulationProperties:
         self.population_data_file         = data['panflu']['data']['population']
         self.contact_data_file            = data['panflu']['data']['contact']
         self.flow_data_file               = data['panflu']['data']['flow']
+        self.flow_reduction_file          = data['panflu']['data']['flow_reduction']
         self.vaccine_effectiveness_file   = data['panflu']['data']['vaccine_effectiveness']
         self.vaccine_adherence_file       = data['panflu']['data']['vaccine_adherence'] 
         self.high_risk_ratios_file        = data['panflu']['data']['high_risk_ratios']
@@ -72,6 +74,7 @@ class InputSimulationProperties:
                 f'population_data_file={self.population_data_file}\n'
                 f'contact_data_file={self.contact_data_file}\n'
                 f'flow_data_file={self.flow_data_file}\n'
+                f'flow_reduction_file={self.flow_data_file}\n'
                 f'vaccine_effectiveness_file={self.vaccine_effectiveness_file}\n'
                 f'vaccine_adherence_file={self.vaccine_adherence_file}\n'
                 f'high_risk_ratios_file={self.high_risk_ratios_file}\n'

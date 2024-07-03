@@ -21,6 +21,7 @@ class ModelParameters:
         self.kappa          = simulation_properties.kappa
         self.gamma          = simulation_properties.gamma
         self.chi            = simulation_properties.chi
+        self.rho            = simulation_properties.rho
         self.low_death_rate = True if simulation_properties.nu_high == "no" else False
         self.vaccine_wastage_factor   = simulation_properties.vaccine_wastage_factor
         self.antiviral_effectiveness  = simulation_properties.antiviral_effectiveness
@@ -34,6 +35,7 @@ class ModelParameters:
         self.vaccine_adherence       = []
         self.high_risk_ratios        = []
         self.relative_susceptibility = []       # SIGMA / sigma
+        self.flow_reduction          = []
         self.nu_values               = [[],[]]
 
         # TODO some parameters still need to be set
@@ -54,10 +56,11 @@ class ModelParameters:
                 f'kappa={self.kappa}, '
                 f'gamma={self.gamma}, '
                 f'chi={self.chi}, '
+                f'rho={self.rho}, '
                 f'low_death_rate={self.low_death_rate}, '
                 f'vaccine_wastage_factor={self.vaccine_wastage_factor}, '
                 f'antiviral_effectiveness={self.antiviral_effectiveness}, '
-                f'antiviral_wastage_factor={self.antiviral_wastage_factor}'
+                f'antiviral_wastage_factor={self.antiviral_wastage_factor} '
               )
 
 
@@ -76,6 +79,9 @@ class ModelParameters:
 
         with open(simulation_properties.relative_susceptibility_file, 'r') as f:
             self.relative_susceptibility = [ line.rstrip() for line in f ]
+
+        with open(simulation_properties.flow_reduction_file, 'r') as f:
+            self.flow_reduction = [ float(line.rstrip()) for line in f ]
 
         # This file is N rows X 4 columns. N=number of age groups
         # column 1 = low death rate, low risk group
@@ -103,12 +109,12 @@ class ModelParameters:
         logger.debug(f'all nu values include = {np_all_nu_values}')
         logger.debug(f'nu valeus for low_death_rate = {self.low_death_rate} = {self.nu_values}')
 
-        logger.info( f'opening files: {simulation_properties.vaccine_effectiveness_file}, '
-                      f'{simulation_properties.vaccine_adherence_file}, '
-                      f'{simulation_properties.high_risk_ratios_file} '
-                      f'{simulation_properties.relative_susceptibility_file} '
-                      f'{simulation_properties.nu_value_matrix_file} '
-                    )
+        logger.info(f'opening file: {simulation_properties.vaccine_effectiveness_file}')
+        logger.info(f'opening file: {simulation_properties.vaccine_adherence_file}')
+        logger.info(f'opening file: {simulation_properties.high_risk_ratios_file}')
+        logger.info(f'opening file: {simulation_properties.relative_susceptibility_file}')
+        logger.info(f'opening file: {simulation_properties.nu_value_matrix_file}')
+
         logger.debug( f'vaccine_effectiveness = {self.vaccine_effectiveness}, '
                       f'vaccine_adherence = {self.vaccine_adherence}, '
                       f'high_risk_ratios = {self.high_risk_ratios}, '
