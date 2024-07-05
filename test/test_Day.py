@@ -39,5 +39,4 @@ def test_increment_day_exceptions():
         D.increment_day(-1)
     with pytest.raises(Exception):
         D.increment_day('s')
-    
 
