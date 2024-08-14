@@ -40,7 +40,7 @@ class Schedule:
 
         self._Ta    = rand_exp(parameters.tau) + now
         self._Tt    = rand_exp(parameters.kappa) + self._Ta
-        self._Ti    = self._Tt + parameters.chi
+        self._Ti    = parameters.chi + self._Tt
         self._Td_a  = rand_exp(parameters.nu_values[group.age][group.risk]) + self._Ta
         self._Td_ti = rand_exp(parameters.nu_values[group.age][group.risk]) + self._Tt
         self._Tr_a  = rand_exp(parameters.gamma) + self._Ta

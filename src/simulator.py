@@ -155,12 +155,6 @@ def main():
 
     for _ in range(realization_number):
 
-        #run_mock( simulation_days,
-        #          network,
-        #          parameters,
-        #          writer
-        #        )
-
         run( simulation_days,
              network,
              disease_model,
