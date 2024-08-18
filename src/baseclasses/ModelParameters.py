@@ -17,9 +17,12 @@ class ModelParameters:
         self.R0             = simulation_properties.R0 
         self.beta_scale     = simulation_properties.beta_scale   # R0CorrectionFactor
         self.beta           = self.R0 / self.beta_scale
-        self.tau            = simulation_properties.tau
-        self.kappa          = simulation_properties.kappa
-        self.gamma          = simulation_properties.gamma
+        #self.tau            = simulation_properties.tau
+        #self.kappa          = simulation_properties.kappa
+        #self.gamma          = simulation_properties.gamma
+        self.tau            = 1/simulation_properties.tau
+        self.kappa          = 1/simulation_properties.kappa
+        self.gamma          = 1/simulation_properties.gamma
         self.chi            = simulation_properties.chi
         self.rho            = simulation_properties.rho
         self.low_death_rate = True if simulation_properties.nu_high == "no" else False

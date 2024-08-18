@@ -380,7 +380,9 @@ class StochasticSEATIRD(DiseaseModel):
                 if (this_event.origin == to):
                     target_pop_size -= 1 
 
-                if (target_pop_size > 0):
+                #if (target_pop_size > 0):
+                if (target_pop_size > 1):
+                    
                     contact = rand_int(1, target_pop_size)
 
                     if (self._is_susceptible(node, to, contact)):
