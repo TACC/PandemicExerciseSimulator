@@ -1,15 +1,17 @@
 [tool.poetry]
-name = "simulator"
+name = "pandemic-exercise-simulator"
 version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
+description = "Python command line implementation of a pandemic exercise simulator"
+authors = ["Joe Allen <wallen@tacc.utexas.edu>",
+           "Lena Duplechin Seymour <l.duplechinseymour@tacc.utexas.edu>"]
 license = "MIT"
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.10"
 numpy = "^1.26.4"
-pandas = "^2.2.2."
+pandas = "^2.2.2"
 scipy = "^1.13.0"
 xmltodict = "^0.13.0"
 pytest = "^8.2.0"
