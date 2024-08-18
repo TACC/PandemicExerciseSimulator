@@ -3,7 +3,7 @@
     "output": "OUTPUT.json",
     "number_of_realizations": "1",
     "data": {
-      "population": "data/texas/county_age_matrix.5",
+      "population": "data/texas/county_age_matrix_small.5",
       "contact": "data/texas/contact_matrix.5",
       "flow": "data/texas/work_matrix_rel.csv",
       "high_risk_ratios": "data/texas/high_risk_ratios.5",
@@ -30,27 +30,27 @@
       "v": [
         {
           "county": "453",
-          "infected": "10000",
+          "infected": "100",
           "age_group": "1"
         },
         {
           "county": "113",
-          "infected": "10000",
+          "infected": "100",
           "age_group": "1"
         },
         {
           "county": "201",
-          "infected": "10000",
+          "infected": "100",
           "age_group": "1"
         },
         {
           "county": "141",
-          "infected": "10000",
+          "infected": "100",
           "age_group": "1"
         },
         {
           "county": "375",
-          "infected": "10000",
+          "infected": "100",
           "age_group": "1"
         }
       ]
