@@ -1,4 +1,15 @@
 
+
+docker-build:
+	docker build -t pes:0.1.0 .
+
+docker-test:
+	docker run --rm pes:0.1.0 python3 src/simulator.py -l INFO -d 10 -i data/texas/INPUT.json
+
+
+
+
+
 run:
 	python3 src/simulator.py -d 10 -i data/texas/INPUT.json
 

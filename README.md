@@ -5,17 +5,40 @@ using a SEATIRD compartment model.
 
 ### Install:
 
+Depends on [Poetry](https://python-poetry.org/docs/#installation) for native install.
+After installing Poetry, do:
+
 ```
 $ git clone https://github.com/TACC/PandemicExerciseSimulator
-$ pip install .
+$ cd PandemicExerciseSimulator/
+$ poetry install --no-root
 ```
+
+The above will create a virtual environment. You can automatically access the virtual
+environment by prefacing your commands with 'poetry run'. For example:
+
+```
+$ poetry run python3 src/simulator.py --help
+$ poetry run python3 src/simulator.py -l INFO -d 10 -i data/texas/INPUT.json
+```
+
+
+### Docker:
+
+Instead of installing Poetry, you can run a containerized version of the simulator
+with [Docker](https://docs.docker.com/engine/install/).
+
+```
+$ docker build -t pes:0.1.0 .
+$ docker run --rm pes:0.1.0 python3 src/simulator.py --help
+$ docker run --rm pes:0.1.0 python3 src/simulator.py -l INFO -d 10 -i data/texas/INPUT.json
+```
+
 
 ### Test:
 
 ```
-$ make run
-$ make debug
-$ pytest
+$ poetry run pytest
 ```
 
 ### Input Data Required:
