@@ -15,7 +15,7 @@ class InputProperties:
 
         # parameters
         self.R0         = float(data['panflu']['params']['R0'])
-        self.beta_scale = float(data['panflu']['params']['beta_scale'])  # R0CorrectionFactor
+        self.beta_scale = float(data['panflu']['params']['beta_scale'])  # "R0CorrectionFactor"
         self.tau        = float(data['panflu']['params']['tau'])
         self.kappa      = float(data['panflu']['params']['kappa'])
         self.gamma      = float(data['panflu']['params']['gamma'])
