@@ -1,216 +1,128 @@
 {
-  "panflu": {
-    "output": "OUTPUT.json",
-    "number_of_realizations": "1",
-    "data": {
-      "population": "data/texas/county_age_matrix.5",
-      "contact": "data/texas/contact_matrix.5",
-      "flow": "data/texas/work_matrix_rel.csv",
-      "high_risk_ratios": "data/texas/high_risk_ratios.5",
-      "flow_reduction": "data/texas/flow_reduction.5",
-      "vaccine_effectiveness": "data/texas/vaccine_effectiveness.5",
-      "vaccine_adherence": "data/texas/vaccine_adherence.5",
-      "relative_susceptibility": "data/texas/relative_susceptibility.5",
-      "nu_value_matrix": "data/texas/nu_value_matrix.5"
+  "output": "OUTPUT.json",
+  "number_of_realizations": "1",
+  "data": {
+    "population": "data/texas/county_age_matrix.csv",
+    "contact": "data/texas/contact_matrix.csv",
+    "flow": "data/texas/work_matrix_rel.csv",
+    "high_risk_ratios": "data/texas/high_risk_ratios.csv",
+    "flow_reduction": "data/texas/flow_reduction.csv",
+    "relative_susceptibility": "data/texas/relative_susceptibility.csv",
+    "nu_value_matrix": "data/texas/nu_value_matrix.csv"
+  },
+  "parameters": {
+    "R0": "1.2",
+    "beta_scale": "1",
+    "tau": "1.2",
+    "kappa": "1.9",
+    "gamma": "4.1",
+    "chi": "1.0",
+    "rho": "0.39",
+    "nu": "high"
+  },
+  "initial_infected": [
+    {
+      "county": "453",
+      "infected": "10000",
+      "age_group": "1"
     },
-    "params": {
-      "R0": "1.2",
-      "beta_scale": "1",
-      "tau": "1.2",
-      "kappa": "1.9",
-      "gamma": "4.1",
-      "chi": "1.0",
-      "rho": "0.39",
-      "nu_high": "no",
-      "vaccine_wastage_factor": "60",
-      "antiviral_effectiveness": "1.5",
-      "antiviral_wastage_factor": "60"
+    {
+      "county": "113",
+      "infected": "10000",
+      "age_group": "1"
     },
-    "initial": {
-      "v": [
-        {
-          "county": "453",
-          "infected": "10000",
-          "age_group": "1"
-        },
-        {
-          "county": "113",
-          "infected": "10000",
-          "age_group": "1"
-        },
-        {
-          "county": "201",
-          "infected": "10000",
-          "age_group": "1"
-        },
-        {
-          "county": "141",
-          "infected": "10000",
-          "age_group": "1"
-        },
-        {
-          "county": "375",
-          "infected": "10000",
-          "age_group": "1"
-        }
-      ]
+    {
+      "county": "201",
+      "infected": "10000",
+      "age_group": "1"
     },
-    "public_health_announcements": {
-      "v": [
-        {
-          "day": "50",
-          "effectiveness": "0.4",
-          "halflife": "10.0"
-        },
-        {
-          "day": "200",
-          "effectiveness": "0.6",
-          "halflife": "50.0"
-        }
-      ]
+    {
+      "county": "141",
+      "infected": "10000",
+      "age_group": "1"
     },
-    "antivirals": null,
-    "pro_rata": "children",
-    "universal": "high_risk",
-    "vaccines": {
-      "v": [
-        {
-          "day": "203",
-          "amount": "178300"
-        },
-        {
-          "day": "210",
-          "amount": "653100"
-        },
-        {
-          "day": "217",
-          "amount": "339000"
-        },
-        {
-          "day": "224",
-          "amount": "922300"
-        },
-        {
-          "day": "231",
-          "amount": "483400"
-        },
-        {
-          "day": "238",
-          "amount": "932300"
-        },
-        {
-          "day": "240",
-          "amount": "98300"
-        },
-        {
-          "day": "244",
-          "amount": "267800"
-        },
-        {
-          "day": "248",
-          "amount": "44100"
-        },
-        {
-          "day": "249",
-          "amount": "11700"
-        },
-        {
-          "day": "250",
-          "amount": "746000"
-        },
-        {
-          "day": "251",
-          "amount": "24600"
-        },
-        {
-          "day": "252",
-          "amount": "197400"
-        },
-        {
-          "day": "255",
-          "amount": "14200"
-        },
-        {
-          "day": "256",
-          "amount": "221300"
-        },
-        {
-          "day": "257",
-          "amount": "615800"
-        },
-        {
-          "day": "258",
-          "amount": "255900"
-        },
-        {
-          "day": "262",
-          "amount": "1200"
-        },
-        {
-          "day": "263",
-          "amount": "91400"
-        },
-        {
-          "day": "264",
-          "amount": "148300"
-        },
-        {
-          "day": "265",
-          "amount": "182000"
-        },
-        {
-          "day": "269",
-          "amount": "160000"
-        },
-        {
-          "day": "270",
-          "amount": "2000"
-        },
-        {
-          "day": "273",
-          "amount": "469000"
-        },
-        {
-          "day": "278",
-          "amount": "139800"
-        },
-        {
-          "day": "280",
-          "amount": "190100"
-        },
-        {
-          "day": "285",
-          "amount": "410100"
-        },
-        {
-          "day": "286",
-          "amount": "216200"
-        },
-        {
-          "day": "287",
-          "amount": "925600"
-        },
-        {
-          "day": "288",
-          "amount": "69500"
-        },
-        {
-          "day": "292",
-          "amount": "252600"
-        },
-        {
-          "day": "293",
-          "amount": "123300"
-        },
-        {
-          "day": "294",
-          "amount": "49200"
-        },
-        {
-          "day": "295",
-          "amount": "18800"
-        }
-      ]
+    {
+      "county": "375",
+      "infected": "10000",
+      "age_group": "1"
     }
+  ],
+  "public_health_announcements": [
+    {
+      "day": "50",
+      "effectiveness": "0.4",
+      "halflife": "10.0"
+    },
+    {
+      "day": "200",
+      "effectiveness": "0.6",
+      "halflife": "50.0"
+    }
+  ],
+  "antivirals": {
+    "antiviral_effectiveness": "1.5",
+    "antiviral_wastage_factor": "60",
+    "antiviral_stockpile": [
+      {
+        "day": "103",
+        "amount": "17830"
+      },
+      {
+        "day": "110",
+        "amount": "65310"
+      },
+      {
+        "day": "117",
+        "amount": "33900"
+      },
+      {
+        "day": "124",
+        "amount": "92230"
+      },
+      {
+        "day": "131",
+        "amount": "48340"
+      }
+    ] 
+  },
+  "vaccines": {
+    "vaccine_wastage_factor": "60",
+    "vaccine_pro_rata": "children",
+    "vaccine_adherence": [
+      "0.4345",
+      "0.298",
+      "0.388",
+      "0.450",
+      "0.696"
+    ],
+    "vaccine_effectiveness": [
+      "0.8",
+      "0.8",
+      "0.8",
+      "0.8",
+      "0.8"
+    ],
+    "vaccine_stockpile": [
+      {
+        "day": "203",
+        "amount": "178300"
+      },
+      {
+        "day": "210",
+        "amount": "653100"
+      },
+      {
+        "day": "217",
+        "amount": "339000"
+      },
+      {
+        "day": "224",
+        "amount": "922300"
+      },
+      {
+        "day": "231",
+        "amount": "483400"
+      }
+    ]
   }
 }

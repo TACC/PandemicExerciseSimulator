@@ -24,9 +24,9 @@ class Schedule:
         """
         TAU      # Latency period in days (exposed to asymptomatic)
         KAPPA    # Asymptomatic infectious period in days (asymptomatic to treatable)
-        CHI      # Treatable to infectious rate in days
+        CHI      # Treatable infectious period in days (treatable to infectious)
         GAMMA    # Total infectious period in days (asymptomatic/treatable/infectious to recovered)
-        NU       # Mortality rate (asymptomatic/treatable/infectious to deceased)
+        NU       # Mortality rate in 1/days (asymptomatic/treatable/infectious to deceased)
 
         self._Ta         # Time from exposed to asymptomatic
         self._Tt         # Time from asymptomatic to treatable
@@ -111,7 +111,7 @@ class StochasticSEATIRD(DiseaseModel):
             initial (list): list of initial infected per age group per county from INPUT
             network (Network): network object with list of nodes
         """
-        for item in initial['v']:
+        for item in initial:
             # TODO the word "county" is hardcoded here but should be made dynamic in case
             # people want to do zip codes instead. Maybe 'location_id'
             this_node_id = int(item['county'])
@@ -122,6 +122,7 @@ class StochasticSEATIRD(DiseaseModel):
 
             for node in network.nodes:
                 if node.node_id == this_node_id:
+                    logging.debug(f'county={this_node_id}, age_group={this_age_group}, infected={this_infected}')
                     self.expose_number_of_people(node, group, this_infected)
         return
 
@@ -162,8 +163,10 @@ class StochasticSEATIRD(DiseaseModel):
         """
         group_cache = np.zeros((self.parameters.number_of_age_groups, len(RiskGroup), len(VaccineGroup)))
         self._demographic_sizes(node, group_cache)
-        # TODO the num_to_expose value should be the min of {num_to_expose, current_susceptible}
-        for i in range(num_to_expose):
+        current_susceptible = int(node.compartments.susceptible_population())
+        logging.debug(f'current_susceptible={current_susceptible}')
+
+        for _ in range(min(num_to_expose, current_susceptible)):
             self._transmit_disease(node, group, group_cache)
         return
 
@@ -296,6 +299,8 @@ class StochasticSEATIRD(DiseaseModel):
                     # TODO dig in to what is expected behavior of this method when group size is 0
                     if (group_cache[ag][rg][vg] == 0): continue
                     
+                    # TODO we should really only be using vaccine_effectiveness[] in this 
+                    # equation when VaccineGroup=V
                     transmission_rate = (1.0 - vaccine_effectiveness[ag]) * beta[ag] * contact_rate \
                                         * sigma * group_cache[ag][rg][vg]
                     Tc_init = schedule.Ta()

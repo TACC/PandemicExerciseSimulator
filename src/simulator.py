@@ -12,6 +12,7 @@ from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
 from models.disease.DiseaseModel import DiseaseModel
 from models.disease.StochasticSEATIRD import StochasticSEATIRD
+from models.disease.DeterministicSEATIRD import DeterministicSEATIRD
 from models.travel.BinomialTravel import BinomialTravel
 from models.travel.TravelModel import TravelModel
 
@@ -137,21 +138,24 @@ def main():
     if disease_model.is_stochastic:
         disease_model = StochasticSEATIRD(disease_model)
         disease_model.set_initial_conditions(simulation_properties.initial, network)
+    else:
+        disease_model = DeterministicSEATIRD(disease_model)
+        disease_model.set_initial_conditions(simulation_properties.initial, network)
 
     # Initialize a travel model - will default to Binomial travel
     travel_model = TravelModel()
     if True:
         travel_model = BinomialTravel()
 
+    # Initialize public health announcements
+    #phas = PublicHealthAnnouncements(simulation_properties.public_health_announcements)
+
     # Initialize output writer
     writer = Writer(simulation_properties.output_data_file)
     
-
     # Vaccine distribution strategy
     # Vaccine schedule
     # Antiviral distribution
-    # Public health announcements
-
 
     for _ in range(realization_number):
 
@@ -162,9 +166,7 @@ def main():
              parameters,
              writer
            )
-
-    # report other summary statistics
-
+        
     return
 
 

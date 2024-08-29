@@ -14,36 +14,45 @@ class ModelParameters:
     def __init__(self, simulation_properties:Type[InputProperties]):
 
         # parameters
-        self.R0             = simulation_properties.R0 
-        self.beta_scale     = simulation_properties.beta_scale   # "R0CorrectionFactor"
+        self.R0             = float(simulation_properties.R0)
+        self.beta_scale     = float(simulation_properties.beta_scale)   # "R0CorrectionFactor"
         self.beta           = self.R0 / self.beta_scale
 
         # the following four parameters are provided by users as periods (units = days),
         # but then stored here as rates (units = 1/days)
-        self.tau            = 1/simulation_properties.tau
-        self.kappa          = 1/simulation_properties.kappa
-        self.gamma          = 1/simulation_properties.gamma
-        self.chi            = 1/simulation_properties.chi
+        self.tau            = 1/float(simulation_properties.tau)
+        self.kappa          = 1/float(simulation_properties.kappa)
+        self.gamma          = 1/float(simulation_properties.gamma)
+        self.chi            = 1/float(simulation_properties.chi)
 
-        self.rho            = simulation_properties.rho
-        self.low_death_rate = True if simulation_properties.nu_high == "no" else False
-        self.vaccine_wastage_factor   = simulation_properties.vaccine_wastage_factor
-        self.antiviral_effectiveness  = simulation_properties.antiviral_effectiveness
-        self.antiviral_wastage_factor = simulation_properties.antiviral_wastage_factor
-
-        # some things assigned later
-        self.number_of_age_groups = 0
+        self.rho            = float(simulation_properties.rho)
+        self.low_death_rate = True if simulation_properties.nu == "low" else False
 
         # data files
-        self.vaccine_effectiveness   = []
-        self.vaccine_adherence       = []
         self.high_risk_ratios        = []
         self.relative_susceptibility = []       # SIGMA / sigma
         self.flow_reduction          = []
         self.nu_values               = [[],[]]
 
+        # public health announcements
+        self.public_health_announcements = simulation_properties.public_health_announcements
+        
+        # antivirals
+        self.antiviral_effectiveness  = float(simulation_properties.antiviral_effectiveness)
+        self.antiviral_wastage_factor = float(simulation_properties.antiviral_wastage_factor)
+        self.antiviral_stockpile      = simulation_properties.antiviral_stockpile
+
+        # vaccines
+        self.vaccine_wastage_factor  = float(simulation_properties.vaccine_wastage_factor)
+        self.vaccine_pro_rata        = simulation_properties.vaccine_pro_rata
+        self.vaccine_adherence       = [float(x) for x in simulation_properties.vaccine_adherence]
+        self.vaccine_effectiveness   = [float(x) for x in simulation_properties.vaccine_effectiveness]
+        self.vaccine_stockpile       = simulation_properties.vaccine_stockpile
+
+        # some things assigned later
+        self.number_of_age_groups = 0
+
         # TODO some parameters still need to be set
-        ## self.pha_day = 0
         ## self.max_child_age_group = 1
         ## self.children_range = [0, 1]
 
@@ -62,9 +71,10 @@ class ModelParameters:
                 f'chi={self.chi}, '
                 f'rho={self.rho}, '
                 f'low_death_rate={self.low_death_rate}, '
-                f'vaccine_wastage_factor={self.vaccine_wastage_factor}, '
                 f'antiviral_effectiveness={self.antiviral_effectiveness}, '
-                f'antiviral_wastage_factor={self.antiviral_wastage_factor} '
+                f'antiviral_wastage_factor={self.antiviral_wastage_factor}, '
+                f'vaccine_wastage_factor={self.vaccine_wastage_factor}, '
+                f'vaccine_pro_rata={self.vaccine_pro_rata}, '
               )
 
 
@@ -72,17 +82,11 @@ class ModelParameters:
         """
         Read in simulation properties from file and store
         """
-        with open(simulation_properties.vaccine_effectiveness_file, 'r') as f:
-            self.vaccine_effectiveness = [ float(line.rstrip()) for line in f ]
-
-        with open(simulation_properties.vaccine_adherence_file, 'r') as f:
-            self.vaccine_adherence = [ line.rstrip() for line in f ]
-
         with open(simulation_properties.high_risk_ratios_file, 'r') as f:
-            self.high_risk_ratios = [ line.rstrip() for line in f ]
+            self.high_risk_ratios = [ float(line.rstrip()) for line in f ]
 
         with open(simulation_properties.relative_susceptibility_file, 'r') as f:
-            self.relative_susceptibility = [ line.rstrip() for line in f ]
+            self.relative_susceptibility = [ float(line.rstrip()) for line in f ]
 
         with open(simulation_properties.flow_reduction_file, 'r') as f:
             self.flow_reduction = [ float(line.rstrip()) for line in f ]
@@ -113,12 +117,13 @@ class ModelParameters:
         logger.debug(f'all nu values include = {np_all_nu_values}')
         logger.debug(f'nu valeus for low_death_rate = {self.low_death_rate} = {self.nu_values}')
 
-        logger.info(f'opening file: {simulation_properties.vaccine_effectiveness_file}')
-        logger.info(f'opening file: {simulation_properties.vaccine_adherence_file}')
         logger.info(f'opening file: {simulation_properties.high_risk_ratios_file}')
         logger.info(f'opening file: {simulation_properties.relative_susceptibility_file}')
         logger.info(f'opening file: {simulation_properties.flow_reduction_file}')
         logger.info(f'opening file: {simulation_properties.nu_value_matrix_file}')
+
+        if not self.vaccine_effectiveness:
+            self.vaccine_effectiveness = [0]*len(self.high_risk_ratios)
 
         logger.debug( f'vaccine_effectiveness = {self.vaccine_effectiveness}, '
                       f'vaccine_adherence = {self.vaccine_adherence}, '

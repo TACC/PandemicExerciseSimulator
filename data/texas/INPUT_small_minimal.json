@@ -1,0 +1,53 @@
+{
+  "output": "OUTPUT.json",
+  "number_of_realizations": "1",
+  "data": {
+    "population": "data/texas/county_age_matrix_small.csv",
+    "contact": "data/texas/contact_matrix.csv",
+    "flow": "data/texas/work_matrix_rel.csv",
+    "high_risk_ratios": "data/texas/high_risk_ratios.csv",
+    "flow_reduction": "data/texas/flow_reduction.csv",
+    "relative_susceptibility": "data/texas/relative_susceptibility.csv",
+    "nu_value_matrix": "data/texas/nu_value_matrix.csv"
+  },
+  "parameters": {
+    "R0": "1.2",
+    "beta_scale": "1",
+    "tau": "1.2",
+    "kappa": "1.9",
+    "gamma": "4.1",
+    "chi": "1.0",
+    "rho": "0.39",
+    "nu": "high"
+  },
+  "initial_infected": [
+    {
+      "county": "453",
+      "infected": "100",
+      "age_group": "1"
+    },
+    {
+      "county": "113",
+      "infected": "100",
+      "age_group": "1"
+    },
+    {
+      "county": "201",
+      "infected": "100",
+      "age_group": "1"
+    },
+    {
+      "county": "141",
+      "infected": "100",
+      "age_group": "1"
+    },
+    {
+      "county": "375",
+      "infected": "100",
+      "age_group": "1"
+    }
+  ],
+  "public_health_announcements": [],
+  "antivirals": {},
+  "vaccines": {}
+}

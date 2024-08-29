@@ -1,7 +1,7 @@
 ## PandemicExerciseSimulator
 
 This is a Python command line implementation of a pandemic exercise simulator
-using a SEATIRD compartment model.
+using a SEATIRD compartment model and binomial travel model.
 
 ### Install:
 
