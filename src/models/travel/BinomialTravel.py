@@ -33,7 +33,7 @@ class BinomialTravel(TravelModel):
             parameters (ModelParameters): simulation parameters
             time (int): the current day
         """
-        logging.info('entered the travel function')
+        logging.debug('entered the travel function')
         logging.debug(f'network.nodes len = {len(network.nodes)} first_val = {network.nodes[0].node_id}')
 
         for node_sink_id, node_sink in enumerate(network.nodes):
@@ -128,6 +128,7 @@ class BinomialTravel(TravelModel):
                     
                     # TODO what is this continuity correction (+ 0.5)?
                     sink_S = int( node_sink.compartments.compartment_data[ag][rg][vg][Compartments.S.value] + 0.5 )
+                    prob=max(min(prob,1.0), 0.0)
                     number_of_exposures = rand_binomial(sink_S, prob)
                     if number_of_exposures > 1:
                         logging.debug(f'susceptible people in sink = {sink_S}, probability = {prob}, '
