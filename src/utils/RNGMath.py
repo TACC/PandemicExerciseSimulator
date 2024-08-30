@@ -30,3 +30,10 @@ def rand_binomial(num:int, prob:float) -> int:
     """
     return (default_rng().binomial(num, prob))
     
+
+def rand_rayleigh(sigma:float) -> float:
+    """
+    Return a sample from the Rayleigh distribution with the provided sigma value.
+    In this case, sigma should be provided in units of days.
+    """
+    return (sigma * math.sqrt(-2 * math.log(mtrand.rand())))
