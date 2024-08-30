@@ -38,15 +38,30 @@ class ModelParameters:
         self.public_health_announcements = simulation_properties.public_health_announcements
         
         # antivirals
-        self.antiviral_effectiveness  = float(simulation_properties.antiviral_effectiveness)
-        self.antiviral_wastage_factor = float(simulation_properties.antiviral_wastage_factor)
+        if simulation_properties.antiviral_effectiveness is not None:
+            self.antiviral_effectiveness  = float(simulation_properties.antiviral_effectiveness)
+        else:
+            self.antiviral_effectiveness  = simulation_properties.antiviral_effectiveness
+        if simulation_properties.antiviral_wastage_factor is not None:
+            self.antiviral_wastage_factor = float(simulation_properties.antiviral_wastage_factor)
+        else:
+            self.antiviral_wastage_factor = simulation_properties.antiviral_wastage_factor
         self.antiviral_stockpile      = simulation_properties.antiviral_stockpile
 
         # vaccines
-        self.vaccine_wastage_factor  = float(simulation_properties.vaccine_wastage_factor)
+        if simulation_properties.vaccine_wastage_factor is not None:
+            self.vaccine_wastage_factor  = float(simulation_properties.vaccine_wastage_factor)
+        else:
+            self.vaccine_wastage_factor  = simulation_properties.vaccine_wastage_factor
         self.vaccine_pro_rata        = simulation_properties.vaccine_pro_rata
-        self.vaccine_adherence       = [float(x) for x in simulation_properties.vaccine_adherence]
-        self.vaccine_effectiveness   = [float(x) for x in simulation_properties.vaccine_effectiveness]
+        if simulation_properties.vaccine_adherence is not None:
+            self.vaccine_adherence       = [float(x) for x in simulation_properties.vaccine_adherence]
+        else:
+            self.vaccine_adherence = simulation_properties.vaccine_adherence
+        if simulation_properties.vaccine_effectiveness is not None:
+            self.vaccine_effectiveness   = [float(x) for x in simulation_properties.vaccine_effectiveness]
+        else:
+            self.vaccine_effectiveness = simulation_properties.vaccine_effectiveness
         self.vaccine_stockpile       = simulation_properties.vaccine_stockpile
 
         # some things assigned later
