@@ -12,7 +12,7 @@
   },
   "parameters": {
     "R0": "1.2",
-    "beta_scale": "1",
+    "beta_scale": "10",
     "tau": "1.2",
     "kappa": "1.9",
     "gamma": "4.1",

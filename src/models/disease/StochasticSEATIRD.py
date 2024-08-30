@@ -145,10 +145,23 @@ class StochasticSEATIRD(DiseaseModel):
         self._demographic_sizes(node, group_cache)
         initial_compartments = deepcopy(node.compartments)
 
+        node.events.sort(key=lambda x: x.time, reverse=True)
+
+        if node.node_id == 1:
+            logging.debug(f'PRE EVENT LENGTH = {len(node.events)}, t_max = {t_max}')
+            for item in node.events:
+                logging.debug(f'EVENT: init_time={item.init_time}, time={item.time}')
+
         while (len(node.events)) > 0 and (node.events[-1].time < t_max):
             self._next_event(node, group_cache, initial_compartments)
 
         self.now = t_max
+
+        if node.node_id == 1:
+            logging.debug(f'POST EVENT LENGTH = {len(node.events)}, t_max = {t_max}')
+            for item in node.events:
+                logging.debug(f'EVENT: init_time={item.init_time}, time={item.time}')
+
         return
 
 
