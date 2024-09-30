@@ -34,8 +34,8 @@ class ModelParameters:
         self.flow_reduction          = []
         self.nu_values               = [[],[]]
 
-        # public health announcements
-        self.public_health_announcements = simulation_properties.public_health_announcements
+        # non-pharmaceutical interventions
+        self.non_pharma_interventions = simulation_properties.non_pharma_interventions
         
         # antivirals
         if simulation_properties.antiviral_effectiveness is not None:

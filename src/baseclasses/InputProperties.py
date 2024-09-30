@@ -39,8 +39,8 @@ class InputProperties:
         # initial infected
         self.initial     = input['initial_infected']
 
-        # public health announcements (optional)
-        self.public_health_announcements = input.get('public_health_announcements', [])
+        # non-pharmaceutical interventions (optional)
+        self.non_pharma_interventions = input.get('non_pharma_interventions', [])
 
         # antivirals (optional)
         self.antiviral_effectiveness  = input.get('antivirals').get('antiviral_effectiveness', 0)
@@ -87,8 +87,8 @@ class InputProperties:
                 f'nu_value_matrix_file={self.nu_value_matrix_file}\n'
                 f'## INITIAL INFECTIONS ##\n'
                 f'initial={self.initial}\n'
-                f'## PUBLIC HEALTH ANNOUNCEMENTS ##\n'
-                f'public_health_announcements={self.public_health_announcements}\n'
+                f'## NON-PHARMACEUTICAL INTERVENTIONS ##\n'
+                f'non_pharma_interventions={self.non_pharma_interventions}\n'
                 f'## ANTIVIRALS ##\n'
                 f'antiviral_effectiveness={self.antiviral_effectiveness}\n'
                 f'antiviral_wastage_factor={self.antiviral_wastage_factor}\n'

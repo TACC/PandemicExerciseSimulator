@@ -10,9 +10,9 @@ from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
+from models.disease.DeterministicSEATIRD import DeterministicSEATIRD
 from models.disease.DiseaseModel import DiseaseModel
 from models.disease.StochasticSEATIRD import StochasticSEATIRD
-from models.disease.DeterministicSEATIRD import DeterministicSEATIRD
 from models.travel.BinomialTravel import BinomialTravel
 from models.travel.TravelModel import TravelModel
 
@@ -147,8 +147,8 @@ def main():
     if True:
         travel_model = BinomialTravel()
 
-    # Initialize public health announcements
-    #phas = PublicHealthAnnouncements(simulation_properties.public_health_announcements)
+    # Initialize non-pharmaceutical interventions
+    #npis = NonPharmaInterventions(simulation_properties.non_pharma_interventions)
 
     # Initialize output writer
     writer = Writer(simulation_properties.output_data_file)
