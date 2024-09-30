@@ -96,7 +96,9 @@ class Node:
         # TODO collect travel exposure data for the output
         data['travel_exposure'] = []
         data['compartment_summary'] = {}
-        data['compartments'] = {}
+        data['compartment_summary_percent'] = {}
+        # TODO put this back in when we start to use this output data
+        #data['compartments'] = {}
 
         # TODO this is done elsewhere too, should be a function
         data['compartment_summary']['S'] = self.compartments.susceptible_population()
@@ -107,13 +109,19 @@ class Node:
         data['compartment_summary']['R'] = self.compartments.recovered_population()
         data['compartment_summary']['D'] = self.compartments.deceased_population()
 
+        total = sum(data['compartment_summary'].values())
         for comp in Compartments:
-            data['compartments'][comp.name] = { 'U':{}, 'V':{} }
+            data['compartment_summary_percent'][comp.name] = \
+                round(data['compartment_summary'][comp.name] / total * 100, 2)
 
-            for vac in VaccineGroup:
-                for risk in RiskGroup:
-                    data['compartments'][comp.name][vac.name][risk.name] = \
-                        self.compartments.return_list_by_age_group(comp.value, vac.value, risk.value)
+        # TODO put this back in when we start to use this output data
+        #for comp in Compartments:
+        #    data['compartments'][comp.name] = { 'U':{}, 'V':{} }
+
+        #    for vac in VaccineGroup:
+        #        for risk in RiskGroup:
+        #            data['compartments'][comp.name][vac.name][risk.name] = \
+        #                self.compartments.return_list_by_age_group(comp.value, vac.value, risk.value)
         return(data)
 
 

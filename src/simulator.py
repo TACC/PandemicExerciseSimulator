@@ -153,6 +153,10 @@ def main():
     # Initialize output writer
     writer = Writer(simulation_properties.output_data_file)
     
+    # write initial conditions
+    writer.write(0, network)
+    simulation_days.snapshot(network)
+
     # Vaccine distribution strategy
     # Vaccine schedule
     # Antiviral distribution
