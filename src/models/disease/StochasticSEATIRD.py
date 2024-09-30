@@ -176,7 +176,7 @@ class StochasticSEATIRD(DiseaseModel):
         """
         group_cache = np.zeros((self.parameters.number_of_age_groups, len(RiskGroup), len(VaccineGroup)))
         self._demographic_sizes(node, group_cache)
-        current_susceptible = int(node.compartments.susceptible_population())
+        current_susceptible = int(node.compartments.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value])
         logging.debug(f'current_susceptible={current_susceptible}')
 
         for _ in range(min(num_to_expose, current_susceptible)):
