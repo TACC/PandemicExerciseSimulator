@@ -45,9 +45,10 @@ def run( simulation_days:Type[Day],
 
     # Write initial conditions
     writer.write(0, network)
+    simulation_days.snapshot(network)
 
     # Iterate over each day, each node...
-    for day in range(simulation_days.day):
+    for day in range(1, simulation_days.day+1):
         for node in network.nodes:
 
             # Run distributions, treatments, stockpiles, and simulation for each node
@@ -55,13 +56,12 @@ def run( simulation_days:Type[Day],
             # apply treatments
             # modify stockpiles
        
-            # simulate one step.  (what are node, time, parameters)
-            time=day+1
+            # simulate one step
             #disease_model.reinitialize_events(node) # only for node->totalTransmitting() < 450
-            disease_model.simulate(node, time)
+            disease_model.simulate(node, day)
 
         # Run travel model
-        travel_model.travel(network, disease_model, parameters, time)
+        travel_model.travel(network, disease_model, parameters, day)
 
         # write output
         writer.write(day, network)
@@ -153,10 +153,6 @@ def main():
     # Initialize output writer
     writer = Writer(simulation_properties.output_data_file)
     
-    # write initial conditions
-    writer.write(0, network)
-    simulation_days.snapshot(network)
-
     # Vaccine distribution strategy
     # Vaccine schedule
     # Antiviral distribution
