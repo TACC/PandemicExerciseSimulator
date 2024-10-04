@@ -24,7 +24,7 @@ def SEATIRD_model(t, y, beta, nu, mu, tau, gamma, delta, rho):
     dR_dt = gamma * I + rho * T
     dD_dt = delta * I
     
-    logging.info(f'{dS_dt}, {dE_dt}, {dA_dt}, {dT_dt}, {dI_dt}, {dR_dt}, {dD_dt}')
+    logging.debug(f'{dS_dt}, {dE_dt}, {dA_dt}, {dT_dt}, {dI_dt}, {dR_dt}, {dD_dt}')
     return [dS_dt, dE_dt, dA_dt, dT_dt, dI_dt, dR_dt, dD_dt]
 
 
@@ -34,6 +34,7 @@ class DeterministicSEATIRD(DiseaseModel):
         self.is_stochastic = disease_model.is_stochastic
         self.now = disease_model.now
         self.parameters = disease_model.parameters
+        self.npis_schedule = disease_model.npis_schedule
 
         logger.info(f'instantiated DeterministicSEATIRD object with stochastic={self.is_stochastic}')
         logger.debug(f'{self.parameters}')
@@ -121,8 +122,9 @@ class DeterministicSEATIRD(DiseaseModel):
         solution = solve_ivp(SEATIRD_model, t_span, initial_conditions, args=model_parameters, t_eval=t_eval, vectorized=True)
 
         # Extract solutions
-        #S, E, A, T, I, R, D = solution.y
-        #logger.info(f'solution.y = {solution.y}')
+        if (node.node_id == 113):
+            S, E, A, T, I, R, D = solution.y
+            logger.info(f'solution.y = {solution.y}')
         return
 
 
