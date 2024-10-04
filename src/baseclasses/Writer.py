@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class Writer:
 
-    def __init__(self, filename:str = 'output.json') -> bool:
+    def __init__(self, filename:str = 'output.json'):
         self.output_filename=filename
         try:
             with open(self.output_filename, 'w') as o:
