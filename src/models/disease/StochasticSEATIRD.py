@@ -13,6 +13,7 @@ from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.Node import Node
 from baseclasses.PopulationCompartments import PopulationCompartments
+from models.treatments.NonPharmaInterventions import NonPharmaInterventions
 from utils.RNGMath import rand_exp, rand_int, rand_mt
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,7 @@ class StochasticSEATIRD(DiseaseModel):
         self.is_stochastic = disease_model.is_stochastic
         self.now = disease_model.now
         self.parameters = disease_model.parameters
+        self.npis_schedule = disease_model.npis_schedule
 
         logger.info(f'instantiated StochasticSEATIRD object with stochastic={self.is_stochastic}')
         logger.debug(f'{self.parameters}')
@@ -137,8 +139,6 @@ class StochasticSEATIRD(DiseaseModel):
         """
         logger.debug(f'node={node}, time={time}')
 
-        # TODO grab PHA info
-
         self.now = time
         t_max = self.now + 1
         group_cache = np.zeros((self.parameters.number_of_age_groups, len(RiskGroup), len(VaccineGroup)))
@@ -147,20 +147,20 @@ class StochasticSEATIRD(DiseaseModel):
 
         node.events.sort(key=lambda x: x.time, reverse=True)
 
-        if node.node_id == 1:
-            logging.debug(f'PRE EVENT LENGTH = {len(node.events)}, t_max = {t_max}')
-            for item in node.events:
-                logging.debug(f'EVENT: init_time={item.init_time}, time={item.time}')
+        #if node.node_id == 1:
+        #    logging.debug(f'PRE EVENT LENGTH = {len(node.events)}, t_max = {t_max}')
+        #    for item in node.events:
+        #        logging.debug(f'EVENT: init_time={item.init_time}, time={item.time}')
 
         while (len(node.events)) > 0 and (node.events[-1].time < t_max):
             self._next_event(node, group_cache, initial_compartments)
 
         self.now = t_max
 
-        if node.node_id == 1:
-            logging.debug(f'POST EVENT LENGTH = {len(node.events)}, t_max = {t_max}')
-            for item in node.events:
-                logging.debug(f'EVENT: init_time={item.init_time}, time={item.time}')
+        #if node.node_id == 1:
+        #    logging.debug(f'POST EVENT LENGTH = {len(node.events)}, t_max = {t_max}')
+        #    for item in node.events:
+        #        logging.debug(f'EVENT: init_time={item.init_time}, time={item.time}')
 
         return
 
@@ -296,7 +296,7 @@ class StochasticSEATIRD(DiseaseModel):
         This method is called when exposing Susceptible individuals for the first time. The exposed
         individual contacts other susceptible individuals and queues new contact events.
         """
-        beta = self._calculate_beta_w_pha()
+        beta = self._calculate_beta_w_npi(node.node_index, node.node_id)
         vaccine_effectiveness = self.parameters.vaccine_effectiveness
 
         for ag in range(self.parameters.number_of_age_groups):
@@ -326,24 +326,25 @@ class StochasticSEATIRD(DiseaseModel):
         return
 
 
-    def _calculate_beta_w_pha(self) -> list:
+    def _calculate_beta_w_npi(self, node_index:int, node_id:int) -> list:
         """
-        Calculate the change in beta given public health announcements
+        Calculate the change in beta given non-pharmaceutical interventions
         """
-        # TODO fix these terms once we start account for PHA
-        pha_effectiveness = [0.4, 0.4, 0.4, 0.4, 0.4]
-        pha_halflife = [10.0, 10.0, 10.0, 10.0, 10.0]
-        pha_day = 50
+        this_day = 0 if self.now == 0 else self.now - 1
+        logging.debug(f'day = {this_day}; node_id = {node_id}; node_index = {node_index}')
 
-        pha_age = float('inf') if self.now < pha_day else self.now - pha_day
+        npi_effectiveness = self.npis_schedule[this_day][node_index]
+        logging.debug(f'npi_effectiveness = {npi_effectiveness}')
+
         beta_baseline =  self.parameters.beta
         age_group_size = self.parameters.number_of_age_groups
         beta = [beta_baseline] * age_group_size
 
-        if (len(pha_effectiveness) == age_group_size and len(pha_halflife) == age_group_size):
+        if (len(npi_effectiveness) == age_group_size):
             for ag in range(age_group_size):
-                if (pha_halflife[ag] > 0):
-                    beta[ag] = beta_baseline * (1.0 - pha_effectiveness[ag] * math.pow(2, -1*(pha_age/pha_halflife[ag])))
+                beta[ag] = beta_baseline * (1.0 - npi_effectiveness[ag])
+        
+        logging.debug(f'beta_baseline = {beta_baseline}, beta = {beta}')
         return beta
 
 

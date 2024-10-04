@@ -3,16 +3,18 @@ import logging
 from typing import Type
 
 from baseclasses.ModelParameters import ModelParameters
+from models.treatments.NonPharmaInterventions import NonPharmaInterventions
 
 logger = logging.getLogger(__name__)
 
 
 class DiseaseModel:
 
-    def __init__(self, parameters:Type[ModelParameters], is_stochastic:bool = False, now:float = 0.0):
+    def __init__(self, parameters:Type[ModelParameters], npis:Type[NonPharmaInterventions], is_stochastic:bool = False, now:float = 0.0):
         self.is_stochastic = is_stochastic
         self.now = now
         self.parameters = parameters
+        self.npis_schedule = npis.schedule
         logger.info(f'instantiated DiseaseModel object with stochastic={self.is_stochastic}, now={self.now}')
         logger.debug(f'DiseaseModel.parameters = {self.parameters}')
         return
