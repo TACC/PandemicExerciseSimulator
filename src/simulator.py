@@ -15,6 +15,7 @@ from models.disease.DiseaseModel import DiseaseModel
 from models.disease.StochasticSEATIRD import StochasticSEATIRD
 from models.travel.BinomialTravel import BinomialTravel
 from models.travel.TravelModel import TravelModel
+from models.treatments.NonPharmaInterventions import NonPharmaInterventions
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNING',
@@ -55,7 +56,7 @@ def run( simulation_days:Type[Day],
             # handle distributions
             # apply treatments
             # modify stockpiles
-       
+
             # simulate one step
             #disease_model.reinitialize_events(node) # only for node->totalTransmitting() < 450
             disease_model.simulate(node, day)
@@ -72,28 +73,6 @@ def run( simulation_days:Type[Day],
 
     return
 
-
-def run_mock( simulation_days:Type[Day],
-              network:Type[Network],
-              parameters:Type[ModelParameters],
-              writer:Type[Writer]
-            ):
-    """
-    Mock run function for testing
-    """
-    for day in range(simulation_days.day):
-        writer.write(day, network)
-
-        for node in network.nodes:
-            for i in range(parameters.number_of_age_groups):
-                for j in range(len(RiskGroup)):
-                    for k in range(len(Compartments)-1):
-                        if node.compartments.compartment_data[i][j][0][k] > 1:
-                            diff = node.compartments.compartment_data[i][j][0][k] * 0.05
-                            node.compartments.compartment_data[i][j][0][k] -= diff
-                            node.compartments.compartment_data[i][j][0][k+1] += diff
-    return
- 
 
 def main():
     """
@@ -131,10 +110,18 @@ def main():
     travel_flow.load_travel_flow_file(simulation_properties.flow_data_file)
     network.add_travel_flow_data(travel_flow.flow_data)
 
+    # Initialize non-pharmaceutical interventions
+    npis = NonPharmaInterventions(simulation_properties.non_pharma_interventions,
+                                  simulation_days.day,
+                                  network.get_number_of_nodes(),
+                                  parameters.number_of_age_groups
+                                  )
+    npis.pre_process(network)
+
     # Initialize base disease model with stochastic flag and set number of initial
     # infected people in each node. Use this flag in future iterations to select
     # different disease model here.
-    disease_model = DiseaseModel(parameters, is_stochastic=True, now=0.0)
+    disease_model = DiseaseModel(parameters, npis, is_stochastic=True, now=0.0)
     if disease_model.is_stochastic:
         disease_model = StochasticSEATIRD(disease_model)
         disease_model.set_initial_conditions(simulation_properties.initial, network)
@@ -147,12 +134,9 @@ def main():
     if True:
         travel_model = BinomialTravel()
 
-    # Initialize non-pharmaceutical interventions
-    #npis = NonPharmaInterventions(simulation_properties.non_pharma_interventions)
-
     # Initialize output writer
     writer = Writer(simulation_properties.output_data_file)
-    
+
     # Vaccine distribution strategy
     # Vaccine schedule
     # Antiviral distribution
