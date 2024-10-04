@@ -7,8 +7,7 @@
     "flow": "data/texas/work_matrix_rel.csv",
     "high_risk_ratios": "data/texas/high_risk_ratios.csv",
     "flow_reduction": "data/texas/flow_reduction.csv",
-    "relative_susceptibility": "data/texas/relative_susceptibility.csv",
-    "nu_value_matrix": "data/texas/nu_value_matrix.csv"
+    "relative_susceptibility": "data/texas/relative_susceptibility.csv"
   },
   "parameters": {
     "R0": "1.2",
@@ -18,7 +17,13 @@
     "gamma": "4.1",
     "chi": "1.0",
     "rho": "0.39",
-    "nu": "high"
+    "nu": [
+      "0.0000223193",
+      "0.0000409747",
+      "0.0000837293",
+      "0.0000618089",
+      "0.0000089781"
+    ]
   },
   "initial_infected": [
     {

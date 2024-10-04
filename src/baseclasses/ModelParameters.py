@@ -26,13 +26,18 @@ class ModelParameters:
         self.chi            = 1/float(simulation_properties.chi)
 
         self.rho            = float(simulation_properties.rho)
-        self.low_death_rate = True if simulation_properties.nu == "low" else False
+        self.nu_values      = [[],[]]
+        self.nu_values[0]   = [float(x)   for x in simulation_properties.nu]
+        self.nu_values[1]   = [float(x)*9 for x in simulation_properties.nu]
+
+        # transpose nu_values so that we can access values in the order we are used to
+        #   e.g.:    nu_values[age][risk]
+        self.nu_values = np.array(self.nu_values).transpose().tolist()
 
         # data files
         self.high_risk_ratios        = []
         self.relative_susceptibility = []       # SIGMA / sigma
         self.flow_reduction          = []
-        self.nu_values               = [[],[]]
 
         # non-pharmaceutical interventions
         self.non_pharma_interventions = simulation_properties.non_pharma_interventions
@@ -85,7 +90,7 @@ class ModelParameters:
                 f'gamma={self.gamma}, '
                 f'chi={self.chi}, '
                 f'rho={self.rho}, '
-                f'low_death_rate={self.low_death_rate}, '
+                f'nu_values = {self.nu_values} '
                 f'antiviral_effectiveness={self.antiviral_effectiveness}, '
                 f'antiviral_wastage_factor={self.antiviral_wastage_factor}, '
                 f'vaccine_wastage_factor={self.vaccine_wastage_factor}, '
@@ -106,36 +111,9 @@ class ModelParameters:
         with open(simulation_properties.flow_reduction_file, 'r') as f:
             self.flow_reduction = [ float(line.rstrip()) for line in f ]
 
-        # This file is N rows X 4 columns. N=number of age groups
-        # column 1 = low death rate, low risk group
-        # column 2 = low death rate, high risk group
-        # column 3 = high death rate, low risk group
-        # column 4 = high death rate, high risk group
-        try:
-            np_all_nu_values = np.genfromtxt(simulation_properties.nu_value_matrix_file, delimiter=',')
-        except FileNotFoundError as e:
-            raise Exception(f'Could not open {simulation_properties.nu_value_matrix_file}') from e
-            sys.exit()
-
-        if self.low_death_rate == True: # grab columns 1 and 2 from data
-            self.nu_values[0] = list(np_all_nu_values.transpose()[0])
-            self.nu_values[1] = list(np_all_nu_values.transpose()[1])
-
-        elif self.low_death_rate == False: # grab columns 3 and 4 from data
-            self.nu_values[0] = list(np_all_nu_values.transpose()[2])
-            self.nu_values[1] = list(np_all_nu_values.transpose()[3])
-
-        # transpose once more so that we can access values in the order we are used to:
-        #   nu_values[age][risk]
-        self.nu_values = np.array(self.nu_values).transpose().tolist()
-        
-        logger.debug(f'all nu values include = {np_all_nu_values}')
-        logger.debug(f'nu valeus for low_death_rate = {self.low_death_rate} = {self.nu_values}')
-
         logger.info(f'opening file: {simulation_properties.high_risk_ratios_file}')
         logger.info(f'opening file: {simulation_properties.relative_susceptibility_file}')
         logger.info(f'opening file: {simulation_properties.flow_reduction_file}')
-        logger.info(f'opening file: {simulation_properties.nu_value_matrix_file}')
 
         if not self.vaccine_effectiveness:
             self.vaccine_effectiveness = [0]*len(self.high_risk_ratios)
@@ -145,7 +123,6 @@ class ModelParameters:
                       f'high_risk_ratios = {self.high_risk_ratios}, '
                       f'relative_susceptibility = {self.relative_susceptibility}, '
                       f'flow_reduction = {self.flow_reduction}, '
-                      f'nu_values = {self.nu_values} '
                     )
         return
 
@@ -158,7 +135,6 @@ class ModelParameters:
             self.np_contact_matrix = np.genfromtxt(filename, delimiter=',')
         except FileNotFoundError as e:
             raise Exception(f'Could not open {filename}') from e
-            sys.exit(1)
 
         self._set_age_group_size()
         logger.debug(f'number_of_age_groups = {self.number_of_age_groups}')

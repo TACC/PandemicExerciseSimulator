@@ -34,7 +34,6 @@ class InputProperties:
         self.flow_reduction_file          = input['data']['flow_reduction']
         self.high_risk_ratios_file        = input['data']['high_risk_ratios']
         self.relative_susceptibility_file = input['data']['relative_susceptibility'] # SIGMA
-        self.nu_value_matrix_file         = input['data']['nu_value_matrix']
 
         # initial infected
         self.initial     = input['initial_infected']
@@ -84,7 +83,6 @@ class InputProperties:
                 f'flow_reduction_file={self.flow_data_file}\n'
                 f'high_risk_ratios_file={self.high_risk_ratios_file}\n'
                 f'relative_susceptibility_file={self.relative_susceptibility_file}\n'
-                f'nu_value_matrix_file={self.nu_value_matrix_file}\n'
                 f'## INITIAL INFECTIONS ##\n'
                 f'initial={self.initial}\n'
                 f'## NON-PHARMACEUTICAL INTERVENTIONS ##\n'
