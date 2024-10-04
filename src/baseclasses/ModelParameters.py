@@ -26,6 +26,9 @@ class ModelParameters:
         self.chi            = 1/float(simulation_properties.chi)
 
         self.rho            = float(simulation_properties.rho)
+
+        # the user enters one nu value for each age group, assumed to be low risk
+        # population. use multiplier 9x to derive values for high risk population
         self.nu_values      = [[],[]]
         self.nu_values[0]   = [float(x)   for x in simulation_properties.nu]
         self.nu_values[1]   = [float(x)*9 for x in simulation_properties.nu]
