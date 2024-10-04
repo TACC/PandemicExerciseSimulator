@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 class Node:
 
-    def __init__(self, node_id:int, fips_id:int, compartments:Type[PopulationCompartments]):
+    def __init__(self, node_index:int, node_id:int, fips_id:int, compartments:Type[PopulationCompartments]):
+        self.node_index = node_index
         self.node_id = node_id
         self.fips_id = fips_id
         self.compartments = compartments
@@ -45,6 +46,7 @@ class Node:
 
     def __str__(self) -> str:
         data={}
+        data['node_index'] = str(self.node_index)
         data['node_id'] = str(self.node_id)
         data['fips_id'] = str(self.fips_id)
         data['compartments'] = f'{self.compartments}'
@@ -90,6 +92,7 @@ class Node:
         Return dictionary representation of node object for easier printing
         """
         data={}
+        data['node_index'] = str(self.node_index)
         data['node_id'] = str(self.node_id)
         data['fips_id'] = str(self.fips_id)
 

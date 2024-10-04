@@ -51,11 +51,12 @@ class Network:
         partition between high risk and low risk compartments
         """
         for index, row in self.df_county_age_matrix.iterrows():
+            this_index = index
             this_id = row.iloc[0]
             this_fips = (48000+int(this_id)) if True else None  # this works for Texas FIPS
             this_group = list(row[1:])
             this_compartment = PopulationCompartments(this_group, high_risk_ratios)
-            this_node = Node(this_id, this_fips, this_compartment)
+            this_node = Node(this_index, this_id, this_fips, this_compartment)
             self._add_node(this_node)
 
         logger.info(f'converted population data into {self.get_number_of_nodes()} nodes')
@@ -113,5 +114,16 @@ class Network:
         num = age groups * risk groups * vaccine groups
         """
         return (self.nodes[0].compartments.number_of_age_groups * len(RiskGroup) * len(VaccineGroup))
+
+
+    def get_node_index_by_id(self, node_id:int) -> int:
+        """
+        Given a location ID, return the index of the Node in the list of nodes
+        """
+        for index, node in enumerate(self.nodes):
+            if node.node_id == node_id:
+                logging.debug(f'found node {node_id} at index {index}')
+                return index
+        raise Exception(f'could not find node {node_id}')
 
 
