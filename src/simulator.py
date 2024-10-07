@@ -111,7 +111,7 @@ def main():
     network.add_travel_flow_data(travel_flow.flow_data)
 
     # Initialize non-pharmaceutical interventions
-    if NonPharmaInterventions[0] is not None:
+    if NonPharmaInterventions is not None:
         npis = NonPharmaInterventions(simulation_properties.non_pharma_interventions,
                                     simulation_days.day,
                                     network.get_number_of_nodes(),
