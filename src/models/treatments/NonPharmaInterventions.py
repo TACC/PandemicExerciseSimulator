@@ -33,22 +33,23 @@ class NonPharmaInterventions:
         Iterate over each NPI and calculate total effectiveness for each age
         group by Day & County
         """
-        for npi in self.npis:
+        if self.npis is not None:
+            for npi in self.npis:
 
-            npi_day = int(npi['day'])
-            npi_duration = int(npi['duration'])
-            npi_location = npi['location']
-            npi_index_list = self._location_to_index_list(npi_location, network)
-            npi_effectiveness = [float(x) for x in npi['effectiveness']]
+                npi_day = int(npi['day'])
+                npi_duration = int(npi['duration'])
+                npi_location = npi['location']
+                npi_index_list = self._location_to_index_list(npi_location, network)
+                npi_effectiveness = [float(x) for x in npi['effectiveness']]
 
-            logging.debug(f'npi_index_list = {npi_index_list}')
-            logging.debug(f'npi_day = {npi_day}; npis_length = {self.length}')
-            logging.debug(f'duration = {npi_duration}; effectiveness = {npi_effectiveness}')
+                logging.debug(f'npi_index_list = {npi_index_list}')
+                logging.debug(f'npi_day = {npi_day}; npis_length = {self.length}')
+                logging.debug(f'duration = {npi_duration}; effectiveness = {npi_effectiveness}')
 
-            for i in range(npi_day, npi_day+npi_duration):
-                if (i > self.length-1): continue
-                for j in npi_index_list:
-                    self._add_percent_effectiveness(i, int(j), npi_effectiveness)
+                for i in range(npi_day, npi_day+npi_duration):
+                    if (i > self.length-1): continue
+                    for j in npi_index_list:
+                        self._add_percent_effectiveness(i, int(j), npi_effectiveness)
         return
 
 
