@@ -111,13 +111,12 @@ def main():
     network.add_travel_flow_data(travel_flow.flow_data)
 
     # Initialize non-pharmaceutical interventions
-    if simulation_properties.non_pharma_interventions is not None:
-        npis = NonPharmaInterventions(simulation_properties.non_pharma_interventions,
-                                    simulation_days.day,
-                                    network.get_number_of_nodes(),
-                                    parameters.number_of_age_groups
-                                    )
-        npis.pre_process(network)
+    npis = NonPharmaInterventions(simulation_properties.non_pharma_interventions,
+                                  simulation_days.day,
+                                  network.get_number_of_nodes(),
+                                  parameters.number_of_age_groups
+                                  )
+    npis.pre_process(network)
 
     # Initialize base disease model with stochastic flag and set number of initial
     # infected people in each node. Use this flag in future iterations to select
