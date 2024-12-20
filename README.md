@@ -1,9 +1,9 @@
 ## PandemicExerciseSimulator
 
-This is a stand-alone Python command line implementation of a pandemic exercise
+This is a stand-alone Python command line implementation of an outbreak
 simulator using a SEATIRD compartment model and binomial travel model.
 
-### Install:
+### Install Using Poetry:
 
 Depends on [Poetry](https://python-poetry.org/docs/#installation) for native install.
 After installing Poetry, do:
@@ -22,8 +22,13 @@ $ poetry run python3 src/simulator.py --help
 $ poetry run python3 src/simulator.py -l INFO -d 10 -i data/texas/INPUT.json
 ```
 
+### Test:
 
-### Docker:
+```
+$ poetry run pytest
+```
+
+### Run Using Docker (Preferred):
 
 As an alternative to Poetry, you can instead run a containerized version of the
 simulator with [Docker](https://docs.docker.com/engine/install/).
@@ -32,13 +37,6 @@ simulator with [Docker](https://docs.docker.com/engine/install/).
 $ docker build -t pes:0.1.0 .
 $ docker run --rm pes:0.1.0 python3 src/simulator.py --help
 $ docker run --rm pes:0.1.0 python3 src/simulator.py -l INFO -d 10 -i data/texas/INPUT.json
-```
-
-
-### Test:
-
-```
-$ poetry run pytest
 ```
 
 ### Input Data Required:
@@ -77,11 +75,12 @@ INPUT.json file:
 * **kappa:** (ex: 1.9) asymptomatic infectious period in days (asymptomatic to treatable)
 * **gamma:** (ex: 4.1) total infectious period in days (transmitting (A/T/I) to recovered)
 * **chi:** (ex: 1.0) treatable to infectious period in days
-* **rho:** (ex: 0.39) multiplier to reduce age-specific mixing rate pattern to account for reduced rate of contact when traveling
+* **rho:** (ex: 0.39) multiplier to reduce age-specific mixing rate pattern to account for reduced
+  rate of contact when traveling
 * **nu**: (["0.01", "0.01", ..., "0.01"]) list of mortality rates per age group (units of 1/days)
 
 
-There also must be at least one county with initial infected population. Provide the 
+There also must be at least one county with initial infected population. Provide the
 county ID (as listed in the population file), number of initial infected, and the age
 group index of the infected, e.g.:
 ```
@@ -99,7 +98,7 @@ group index of the infected, e.g.:
 Any number of non-pharmaceutical interventions can be added. Following the example in
 INPUT.json, interventions are assigned a name, a start day, a duration (number of days the
 intervention should be applied), a location (comma separated list of county IDs, or "0" for
-all counties), and a list of effectivenesses per age group. The effectiveness models the 
+all counties), and a list of effectivenesses per age group. The effectiveness models the
 reduction in transmission in that age group for the duration of the intervention:
 
 ```
@@ -122,5 +121,5 @@ reduction in transmission in that age group for the duration of the intervention
 
 ### Development Notes
 
-This simulator can run stand-alone, or as the backend to a related project which provides a 
+This simulator can run stand-alone, or as the backend to a related project which provides a
 front end GUI: https://github.com/TACC/PandemicExerciseTool
