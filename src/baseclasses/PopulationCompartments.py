@@ -185,6 +185,22 @@ class PopulationCompartments:
                flat[age_group][Compartments.T.value] + \
                flat[age_group][Compartments.I.value]
 
+    # Adding helper function to get the subgroups into the deterministic compartmental model
+    def get_all_groups(self):
+        groups = []
+        for age in range(self.number_of_age_groups):
+            for risk in range(len(RiskGroup)):
+                for vac in range(len(VaccineGroup)):
+                    groups.append(Group(age, risk, vac))
+        return groups
+
+    def get_compartment_vector_for(self, group):
+        return list(self.compartment_data[group.age][group.risk][group.vaccine])
+
+    def set_compartment_vector_for(self, group, values):
+        for i in range(len(Compartments)):
+            self.compartment_data[group.age][group.risk][group.vaccine][i] = values[i]
+
 
 # Compartment data object is a 4-dimensional array of floats. The four dimensions are:
 # [Group (N=5)] [Risk status (N=2)] [Vaccinated status (N=2)] [Compartment (N=7)]
