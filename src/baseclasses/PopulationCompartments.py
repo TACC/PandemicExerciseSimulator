@@ -28,8 +28,9 @@ class PopulationCompartments:
                                         ))
 
         for i in range(len(self.groups)):
-            number_of_low_risk = (self.groups[i] * (1.0-float(self.high_risk_ratios[i])))
-            number_of_high_risk = (self.groups[i] - number_of_low_risk)
+            low_risk_ratio = 1.0 - float(self.high_risk_ratios[i]) # convert high risk ratios to low
+            number_of_low_risk = round(self.groups[i] * low_risk_ratio) # get an integer number of low risk
+            number_of_high_risk = max((self.groups[i] - number_of_low_risk), 0.0) # diff is high risk but never negative
 
             self.compartment_data[i][RiskGroup.L.value][VaccineGroup.U.value][Compartments.S.value] = number_of_low_risk
             self.compartment_data[i][RiskGroup.H.value][VaccineGroup.U.value][Compartments.S.value] = number_of_high_risk
