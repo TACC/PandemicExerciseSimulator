@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import numpy as np
-from scipy.integrate import solve_ivp
 
 import logging
 from typing import Type
@@ -12,38 +11,33 @@ from baseclasses.Node import Node
 
 logger = logging.getLogger(__name__)
 
-
-def SEATIRD_model(t, y, beta, nu, mu, tau, gamma, delta, rho):
+def SEATIRD_model(y, beta, tau, kappa, chi, gamma, nu):
     """
-        SEATIRD compartmental model ODE function.
-
-        Parameters:
-            t (float): Time point (required by ODE solvers, but unused directly).
-            y (List[float]): Current values for compartments [S, E, A, T, I, R, D].
-            beta (float): Transmission rate.
-            nu (float): Rate from exposed (E) to asymptomatic infectious (A).
-            mu (float): Rate from asymptomatic infectious (A) to symptomatic infectious (I).
-            tau (float): Rate from asymptomatic infectious (A) to treatable non-infectious(T).
-            gamma (float): Recovery rate from symptomatic infectious (I) to recovered (R).
-            delta (float): Mortality rate from symptomatic infectious (I) to deceased (D).
-            rho (float): Recovery rate from treatable non-infectious (T) to recovered (R).
-
-        Returns:
-            List[float]: Derivatives [dS/dt, dE/dt, dA/dt, dT/dt, dI/dt, dR/dt, dD/dt].
-        """
+    SEATIRD compartmental model ODE function.
+    Parameters:
+        y (List[float]): Current values for compartments [S, E, A, T, I, R, D]
+        tau (float): 1/Latency period in days (exposed to asymptomatic)
+        kappa (float): 1/Asymptomatic infectious period in days (asymptomatic to treatable)
+        chi (float): 1/Treatable infectious period in days (treatable to infectious)
+        gamma (float): 1/symptomatic infectious period in days (asymptomatic/treatable/infectious to recovered)
+        nu (float): Mortality rate in 1/days (asymptomatic/treatable/infectious to deceased)
+    Returns:
+       List[float]: Derivatives [dS/dt, dE/dt, dA/dt, dT/dt, dI/dt, dR/dt, dD/dt].
+   """
+    N = sum(y) # need to normalize by the population in each node
     S, E, A, T, I, R, D = y
-    
-    dS_dt = -beta * (A + I) * S
-    dE_dt = beta * (A + I) * S - nu * E
-    dA_dt = nu * E - (mu + tau) * A
-    dT_dt = tau * A - rho * T
-    dI_dt = mu * A - (gamma + delta) * I
-    dR_dt = gamma * I + rho * T
-    dD_dt = delta * I
-    
-    logging.debug(f'{dS_dt}, {dE_dt}, {dA_dt}, {dT_dt}, {dI_dt}, {dR_dt}, {dD_dt}')
-    return [dS_dt, dE_dt, dA_dt, dT_dt, dI_dt, dR_dt, dD_dt]
 
+    dS_dt = -beta * (A + T + I) * S/N
+    dE_dt = beta * (A + T + I) * S/N - (tau) * E
+
+    dA_dt = (tau) * E - ((kappa) + gamma + nu) * A
+    dT_dt = (kappa) * A - ((chi) + gamma + nu) * T
+    dI_dt = (chi) * T - (gamma + nu) * I
+
+    dR_dt = gamma * (A + T + I)
+    dD_dt = nu * (A + T + I)
+
+    return np.array([dS_dt, dE_dt, dA_dt, dT_dt, dI_dt, dR_dt, dD_dt])
 
 class DeterministicSEATIRD(DiseaseModel):
 
@@ -56,7 +50,6 @@ class DeterministicSEATIRD(DiseaseModel):
         logger.info(f'instantiated DeterministicSEATIRD object with stochastic={self.is_stochastic}')
         logger.debug(f'{self.parameters}')
         return
-
 
     def set_initial_conditions(self, initial:list, network:Type[Network]):
         """
@@ -86,9 +79,6 @@ class DeterministicSEATIRD(DiseaseModel):
 
 
     def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int):
-        """
-        
-        """
         node.compartments.expose_number_of_people(group, num_to_expose)
         return
 
@@ -103,40 +93,33 @@ class DeterministicSEATIRD(DiseaseModel):
 
         logger.debug(f'node={node}, time={time}')
 
-        # model_parameters = (
-        #    self.parameters.beta,
-        #    self.parameters.nu,
-        #    self.parameters.mu,
-        #    self.parameters.tau,
-        #    self.parameters.gamma,
-        #    self.parameters.delta,
-        #    self.parameters.rho,
-        # )
-
-        model_parameters = (
-            0.005,  # beta, S => E
-            0.50,   # nu, E => A
-            0.50,   # mu, A => I
-            0.50,   # tau, A => T
-            0.20,   # gamma, I => R
-            0.01,   # delta, I => D
-            0.10,   # rho, T => R
-        )
-
-        t_span = (0, 1)         # simulate one day
-        t_eval = [1]            # get result at end of day
-
         for group in node.compartments.get_all_groups():
-            y0 = node.compartments.get_compartment_vector_for(group)
+            # print(group) # e.g. Group object: age=0, risk=0, vaccine=0
+            compartments_today = np.array(node.compartments.get_compartment_vector_for(group))
 
-            if sum(y0) == 0:
+            if sum(compartments_today) == 0:
                 continue  # skip empty groups
 
-            solution = solve_ivp(SEATIRD_model, t_span, y0,
-                                 args=model_parameters, t_eval=t_eval)
+            # get nu as scalar needed for the model
+            nu = self.parameters.nu_values[group.age][group.risk] # nu is vector of values
+            model_parameters = (
+                self.parameters.beta,  # S => E
+                self.parameters.tau,   # E => A
+                self.parameters.kappa, # A => T
+                self.parameters.chi,   # T => I
+                self.parameters.gamma, # A/T/I => R
+                nu                     # A/T/I => D
+            )
 
-            final_values = solution.y[:, -1]
-            node.compartments.set_compartment_vector_for(group, final_values)
+            daily_change = SEATIRD_model(compartments_today, *model_parameters)
+            compartments_tomorrow = compartments_today + daily_change
+            node.compartments.set_compartment_vector_for(group, compartments_tomorrow)
+        """
+            if (node.node_id == 113 and group.age == 1 and group.risk == 0 and group.vaccine == 0):
+                print(f"[group 1-0-0] prev = {compartments_today.astype(int)}")
+                print(f"[group 1-0-0] Δ = {daily_change.astype(int)}")
+                print(f"[group 1-0-0] updated = {compartments_tomorrow.astype(int)}")
+
 
         # Log summary totals for a specific node (Dallas County = 113)
         if node.node_id == 113:
@@ -149,6 +132,7 @@ class DeterministicSEATIRD(DiseaseModel):
             D = node.compartments.deceased_population()
 
             logger.info(f'Updated node 113: S={S}, E={E}, A={A}, T={T}, I={I}, R={R}, D={D}')
+        """
 
         return
 
