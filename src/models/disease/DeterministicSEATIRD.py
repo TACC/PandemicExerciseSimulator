@@ -30,8 +30,8 @@ def SEATIRD_model(y, beta, tau, kappa, chi, gamma, nu):
     dS_dt = -beta * (A + T + I) * S/N
     dE_dt = beta * (A + T + I) * S/N - (tau) * E
 
-    dA_dt = (tau) * E - ((kappa) + gamma + nu) * A
-    dT_dt = (kappa) * A - ((chi) + gamma + nu) * T
+    dA_dt = (tau) * E - (kappa + gamma + nu) * A
+    dT_dt = (kappa) * A - (chi + gamma + nu) * T
     dI_dt = (chi) * T - (gamma + nu) * I
 
     dR_dt = gamma * (A + T + I)
