@@ -1,11 +1,5 @@
 #!/bin/bash
 
-# Run deterministic model as well
-# This assumes all params are what you want already, e.g. mobility turned off etc
-mkdir -p OUTPUT_small_deterministic/
-poetry run python3 src/simulator.py -l INFO -d 30 -i data/texas/INPUT_small_deterministic.json
-echo "✨🌸🌙 Finished deterministic model"
-
 for i in {0..10}
 do
    # Define the full sim subdirectory path
@@ -38,4 +32,8 @@ done
 rm tmp_input.json
 
 
-
+# Run deterministic model as well
+# This assumes all params are what you want already, e.g. mobility turned off etc
+mkdir -p OUTPUT_small_deterministic_min1/
+poetry run python3 src/simulator.py -l INFO -d 30 -i data/texas/INPUT_small_deterministic.json
+echo "✨🌸🌙 Finished deterministic model"
