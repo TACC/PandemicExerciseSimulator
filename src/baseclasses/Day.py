@@ -58,7 +58,7 @@ class Day:
             this_summary[Compartments.D.value] += node.compartments.deceased_population()
         self.summary.append(this_summary)
         logging.info(f'summary information for day {len(self.summary)-1} = {this_summary}')
-        return
+        return this_summary
 
 
     def plot(self):
