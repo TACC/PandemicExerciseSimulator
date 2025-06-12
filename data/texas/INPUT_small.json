@@ -8,7 +8,7 @@
     "flow": "data/texas/no_travel.csv", 
     "high_risk_ratios": "data/texas/high_risk_ratios.csv",
     "flow_reduction": "data/texas/flow_reduction.csv",
-    "relative_susceptibility": "data/texas/relative_susceptibility.csv"
+    "relative_susceptibility": "data/texas/no_relative_susceptibility.csv"
   },
   "parameters": {
     "R0": "5",
@@ -29,27 +29,27 @@
   "initial_infected": [
     {
       "county": "453",
-      "infected": "100",
+      "infected": "10",
       "age_group": "2"
     },
     {
       "county": "113",
-      "infected": "100",
+      "infected": "10",
       "age_group": "2"
     },
     {
       "county": "201",
-      "infected": "100",
+      "infected": "10",
       "age_group": "2"
     },
     {
       "county": "141",
-      "infected": "100",
+      "infected": "10",
       "age_group": "2"
     },
     {
       "county": "375",
-      "infected": "100",
+      "infected": "10",
       "age_group": "2"
     }
   ],
