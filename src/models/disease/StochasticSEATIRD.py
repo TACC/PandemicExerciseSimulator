@@ -238,7 +238,7 @@ class StochasticSEATIRD(DiseaseModel):
         node.add_transition_event(self.now, schedule.Ta(), EventType.EtoA.name, group)
         self._initialize_asymptomatic_transitions(node, group, schedule)
         return
-    
+
 
     def _initialize_asymptomatic_transitions(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule]):
         """
@@ -307,22 +307,22 @@ class StochasticSEATIRD(DiseaseModel):
                     to = Group(ag, rg, vg)
                     contact_rate = float(self.parameters.np_contact_matrix[group.age][to.age])
 
-                    # If noone is vaccinated, then the transmission rate for vaccine group is 0 and 
-                    # causes runtime warning divide by zero eror in the rand_exp step
+                    # If no one is vaccinated, then the transmission rate for vaccine group is 0 and
+                    # causes runtime warning divide by zero error in the rand_exp step
                     # TODO dig in to what is expected behavior of this method when group size is 0
                     if (group_cache[ag][rg][vg] == 0): continue
                     
                     # TODO we should really only be using vaccine_effectiveness[] in this 
                     # equation when VaccineGroup=V
                     transmission_rate = (1.0 - vaccine_effectiveness[ag]) * beta[ag] * contact_rate \
-                                        * sigma * group_cache[ag][rg][vg]
+                                        * sigma #* group_cache[ag][rg][vg]
                     Tc_init = schedule.Ta()
-                    Tc = rand_exp_min1(transmission_rate) + Tc_init
+                    Tc = rand_exp(transmission_rate) + Tc_init
 
                     while (Tc < schedule.Trd_ati()):
                         node.add_contact_event(Tc_init, Tc, EventType.CONTACT, group, to)
                         Tc_init = Tc
-                        Tc = rand_exp_min1(transmission_rate) + Tc_init
+                        Tc = rand_exp(transmission_rate) + Tc_init
         return
 
 
@@ -409,7 +409,7 @@ class StochasticSEATIRD(DiseaseModel):
         return
 
 
-    def _keep_event(self, node:Type[Node], compartment:int, event:Type[EventType], 
+    def _keep_event(self, node:Type[Node], compartment:int, event:Type[EventType],
                     initial_compartments:Type[PopulationCompartments]) -> bool:
         """
         Stochastic check to see whether an event occurs
@@ -417,7 +417,7 @@ class StochasticSEATIRD(DiseaseModel):
         group = event.origin
         logging.debug(f'group = {group}')
         unqueued_event_count = node.unqueued_event_counter[group.age][group.risk][group.vaccine][compartment]
-        
+
         if (compartment == Compartments.T.value and event.init_time == self.now):
             return True
         elif (unqueued_event_count == 0 or rand_mt() > unqueued_event_count / (unqueued_event_count \
