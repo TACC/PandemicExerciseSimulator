@@ -14,7 +14,7 @@ from baseclasses.Network import Network
 from baseclasses.Node import Node
 from baseclasses.PopulationCompartments import PopulationCompartments
 from models.treatments.NonPharmaInterventions import NonPharmaInterventions
-from utils.RNGMath import rand_exp, rand_int, rand_mt
+from utils.RNGMath import rand_exp, rand_int, rand_mt, rand_exp_min1
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +39,13 @@ class Schedule:
         self._Trd_ati    # Time from A/T/I to R/D
         """
 
-        self._Ta    = rand_exp(parameters.tau) + now
-        self._Tt    = rand_exp(parameters.kappa) + self._Ta
+        self._Ta    = rand_exp_min1(parameters.tau) + now
+        self._Tt    = rand_exp_min1(parameters.kappa) + self._Ta
         self._Ti    = parameters.chi + self._Tt
-        self._Td_a  = rand_exp(parameters.nu_values[group.age][group.risk]) + self._Ta
-        self._Td_ti = rand_exp(parameters.nu_values[group.age][group.risk]) + self._Tt
-        self._Tr_a  = rand_exp(parameters.gamma) + self._Ta
-        self._Tr_ti = rand_exp(parameters.gamma) + self._Tt
+        self._Td_a  = rand_exp_min1(parameters.nu_values[group.age][group.risk]) + self._Ta
+        self._Td_ti = rand_exp_min1(parameters.nu_values[group.age][group.risk]) + self._Tt
+        self._Tr_a  = rand_exp_min1(parameters.gamma) + self._Ta
+        self._Tr_ti = rand_exp_min1(parameters.gamma) + self._Tt
 
         # exit_asymptomatic_time means via recovery or death, not progression to symptomatic stage
         self.exit_asymptomatic_time = min(self._Td_a, self._Tr_a)
@@ -63,13 +63,13 @@ class Schedule:
         S=0, E=1, A=2, T=3, I=4, R=5, D=6
         """
         assert int(compartment_num) > 0 and int(compartment_num) < 5
-        self._Ta    = (rand_exp(parameters.tau) + now) if compartment_num < 2 else now
-        self._Tt    = (rand_exp(parameters.kappa) + self._Ta) if compartment_num < 3 else self._Ta
+        self._Ta    = (rand_exp_min1(parameters.tau) + now) if compartment_num < 2 else now
+        self._Tt    = (rand_exp_min1(parameters.kappa) + self._Ta) if compartment_num < 3 else self._Ta
         self._Ti    = (self._Tt + parameters.chi) if compartment_num < 4 else self._Tt
-        self._Td_a  = (rand_exp(parameters.nu_values[group.age][group.risk])) + self._Ta if compartment_num < 3 else float('inf')
-        self._Td_ti = rand_exp(parameters.nu_values[group.age][group.risk]) + self._Tt
-        self._Tr_a  = (rand_exp(parameters.gamma)) if compartment_num < 3 else float('inf')
-        self._Tr_ti = rand_exp(parameters.gamma) + self._Tt
+        self._Td_a  = (rand_exp_min1(parameters.nu_values[group.age][group.risk])) + self._Ta if compartment_num < 3 else float('inf')
+        self._Td_ti = rand_exp_min1(parameters.nu_values[group.age][group.risk]) + self._Tt
+        self._Tr_a  = (rand_exp_min1(parameters.gamma)) if compartment_num < 3 else float('inf')
+        self._Tr_ti = rand_exp_min1(parameters.gamma) + self._Tt
         
         self.exit_asymptomatic_time = min(self._Td_a, self._Tr_a)
         if (self._Tt < self.exit_asymptomatic_time): self.exit_asymptomatic_time = float('inf')
@@ -317,12 +317,12 @@ class StochasticSEATIRD(DiseaseModel):
                     transmission_rate = (1.0 - vaccine_effectiveness[ag]) * beta[ag] * contact_rate \
                                         * sigma * group_cache[ag][rg][vg]
                     Tc_init = schedule.Ta()
-                    Tc = rand_exp(transmission_rate) + Tc_init
+                    Tc = rand_exp_min1(transmission_rate) + Tc_init
 
                     while (Tc < schedule.Trd_ati()):
                         node.add_contact_event(Tc_init, Tc, EventType.CONTACT, group, to)
                         Tc_init = Tc
-                        Tc = rand_exp(transmission_rate) + Tc_init
+                        Tc = rand_exp_min1(transmission_rate) + Tc_init
         return
 
 
