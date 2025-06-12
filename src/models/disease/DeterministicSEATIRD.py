@@ -111,6 +111,7 @@ class DeterministicSEATIRD(DiseaseModel):
                 nu                     # A/T/I => D
             )
 
+            # Euler's Method solve of the system
             daily_change = SEATIRD_model(compartments_today, *model_parameters)
             compartments_tomorrow = compartments_today + daily_change
             node.compartments.set_compartment_vector_for(group, compartments_tomorrow)
