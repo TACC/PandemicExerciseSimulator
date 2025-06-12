@@ -66,7 +66,13 @@ def run( simulation_days:Type[Day],
 
         # write output
         writer.write(day, network)
-        simulation_days.snapshot(network)
+
+        # Early termination if no more infectious or soon to be people
+        compartment_totals = simulation_days.snapshot(network)
+        total_eati = sum(compartment_totals[1:5]) # Sum E, A, T, I
+        if total_eati == 0:
+            logger.info(f"All E, A, T, I are zero on day {day}, ending simulation early.")
+            break
 
     simulation_days.plot()
     logger.info('completed processes in the run function')
