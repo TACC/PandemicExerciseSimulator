@@ -102,6 +102,12 @@ class DeterministicSEATIRD(DiseaseModel):
 
             # get nu as scalar needed for the model
             nu = self.parameters.nu_values[group.age][group.risk] # nu is vector of values
+
+            #### Currently this model doesn't use any NPI features ####
+            # beta = self._calculate_beta_w_npi(node.node_index, node.node_id)
+            # vaccine_effectiveness = self.parameters.vaccine_effectiveness
+            # transmission_rate = (1.0 - vaccine_effectiveness[ag]) * beta[ag] * contact_rate * sigma
+
             model_parameters = (
                 self.parameters.beta,  # S => E
                 self.parameters.tau,   # E => A
