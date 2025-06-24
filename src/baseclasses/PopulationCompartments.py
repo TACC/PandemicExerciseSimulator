@@ -28,8 +28,9 @@ class PopulationCompartments:
                                         ))
 
         for i in range(len(self.groups)):
-            number_of_low_risk = (self.groups[i] * (1.0-float(self.high_risk_ratios[i])))
-            number_of_high_risk = (self.groups[i] - number_of_low_risk)
+            low_risk_ratio = 1.0 - float(self.high_risk_ratios[i]) # convert high risk ratios to low
+            number_of_low_risk = round(self.groups[i] * low_risk_ratio) # get an integer number of low risk
+            number_of_high_risk = max((self.groups[i] - number_of_low_risk), 0.0) # diff is high risk but never negative
 
             self.compartment_data[i][RiskGroup.L.value][VaccineGroup.U.value][Compartments.S.value] = number_of_low_risk
             self.compartment_data[i][RiskGroup.H.value][VaccineGroup.U.value][Compartments.S.value] = number_of_high_risk
@@ -184,6 +185,22 @@ class PopulationCompartments:
         return flat[age_group][Compartments.A.value] + \
                flat[age_group][Compartments.T.value] + \
                flat[age_group][Compartments.I.value]
+
+    # Adding helper function to get the subgroups into the deterministic compartmental model
+    def get_all_groups(self):
+        groups = []
+        for age in range(self.number_of_age_groups):
+            for risk in range(len(RiskGroup)):
+                for vac in range(len(VaccineGroup)):
+                    groups.append(Group(age, risk, vac))
+        return groups
+
+    def get_compartment_vector_for(self, group):
+        return list(self.compartment_data[group.age][group.risk][group.vaccine])
+
+    def set_compartment_vector_for(self, group, values):
+        for i in range(len(Compartments)):
+            self.compartment_data[group.age][group.risk][group.vaccine][i] = values[i]
 
 
 # Compartment data object is a 4-dimensional array of floats. The four dimensions are:

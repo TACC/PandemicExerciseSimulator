@@ -66,7 +66,14 @@ def run( simulation_days:Type[Day],
 
         # write output
         writer.write(day, network)
-        simulation_days.snapshot(network)
+
+        # Early termination if no more infectious or soon to be people
+        compartment_totals = simulation_days.snapshot(network)
+        total_eati = sum(compartment_totals[1:5]) # Sum E, A, T, I
+        tolerance = 1e-4
+        if total_eati <= tolerance:
+            logger.info(f"All E, A, T, I are below {tolerance:.1e} on day {day}, ending simulation early.")
+            break
 
     simulation_days.plot()
     logger.info('completed processes in the run function')
@@ -121,9 +128,14 @@ def main():
     # Initialize base disease model with stochastic flag and set number of initial
     # infected people in each node. Use this flag in future iterations to select
     # different disease model here.
-    disease_model = DiseaseModel(parameters, npis, is_stochastic=True, now=0.0)
-    if disease_model.is_stochastic:
+
+    # default to True is is_stochastic is not in the parameter file
+    is_stochastic = simulation_properties.is_stochastic
+    disease_model = DiseaseModel(parameters, npis, is_stochastic=is_stochastic, now=0.0)
+    if is_stochastic:
         disease_model = StochasticSEATIRD(disease_model)
+        # set_initial_conditions is inside if because we need to have an exposed compartment/model dependent
+        # TODO classic SIR would not have an exposed compartment so determine genetic way to initialize
         disease_model.set_initial_conditions(simulation_properties.initial, network)
     else:
         disease_model = DeterministicSEATIRD(disease_model)

@@ -25,6 +25,7 @@ class ModelParameters:
         self.gamma          = 1/float(simulation_properties.gamma)
         self.chi            = 1/float(simulation_properties.chi)
 
+        # Mobility reduction parameter
         self.rho            = float(simulation_properties.rho)
 
         # the user enters one nu value for each age group, assumed to be low risk

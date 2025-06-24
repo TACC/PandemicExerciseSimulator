@@ -16,6 +16,13 @@ def rand_exp(lambda_val:float) -> float:
     """
     return (-math.log(mtrand.rand())/lambda_val)
 
+def rand_exp_min1(lambda_val:float) -> float:
+    """
+    x
+    """
+    value = -math.log(mtrand.rand())/lambda_val
+    if value < 1: return 1
+    else: return value
 
 def rand_int(lower:int, upper:int) -> int:
     """

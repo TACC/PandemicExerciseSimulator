@@ -14,8 +14,9 @@ class InputProperties:
             input = json.load(f)
 
         # simulation control
+        self.output_data_file = input['output']
         self.number_of_realizations = int(input['number_of_realizations'])
-        self.output_data_file       = input['output']
+        self.is_stochastic = input['is_stochastic']
 
         # parameters
         self.R0         = input['parameters']['R0']
