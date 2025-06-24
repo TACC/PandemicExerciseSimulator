@@ -57,7 +57,7 @@ class Day:
             this_summary[Compartments.R.value] += node.compartments.recovered_population()
             this_summary[Compartments.D.value] += node.compartments.deceased_population()
         self.summary.append(this_summary)
-        logging.info(f'summary information for day {len(self.summary)-1} = {this_summary}')
+        logging.info(f'summary information for day {len(self.summary)-1} = {[float(x) for x in this_summary]}')
         return this_summary
 
 
