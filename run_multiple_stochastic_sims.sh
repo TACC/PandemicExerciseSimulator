@@ -1,7 +1,7 @@
 #!/bin/bash
 
 run_days=500
-for i in {0..1000}
+for i in {1..10}
 do
    # Define the full sim subdirectory path
    init_sim_dir="OUTPUT_small_stochastic_min1/OUTPUT_small_stochastic_min1_sim0"
@@ -25,16 +25,18 @@ do
    # Run the simulation
    poetry run python3 src/simulator.py -l INFO -d ${run_days} -i tmp_input.json
 
+   mv plot.png stochastic_plot_${i}.png
    echo "🌙🌙🌙 Finished sim set ${i}"
    echo ""
 done
 
-# Clean up temp file
-rm tmp_input.json
-
-
 # Run deterministic model as well
 # This assumes all params are what you want already, e.g. mobility turned off etc
 mkdir -p OUTPUT_small_deterministic_min1/
+echo "✨🌸🌙 Starting deterministic model"
 poetry run python3 src/simulator.py -l INFO -d ${run_days} -i data/texas/INPUT_small_deterministic.json
-echo "✨🌸🌙 Finished deterministic model"
+mv plot.png deterministic_plot.png
+echo "🌙🌙🌙 Finished deterministic model"
+
+# Clean up temp file
+rm tmp_input.json
