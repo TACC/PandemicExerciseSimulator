@@ -4,8 +4,8 @@
     "is_stochastic": true,
   "data": {
     "population": "data/texas/county_age_matrix_small.csv",
-    "contact": "data/texas/no_contact_matrix.csv",
-    "flow": "data/texas/no_travel.csv", 
+    "contact": "data/texas/mistry_agegrp_contact_matrix.csv",
+    "flow": "data/texas/work_matrix_rel.csv", 
     "high_risk_ratios": "data/texas/high_risk_ratios.csv",
     "flow_reduction": "data/texas/flow_reduction.csv",
     "relative_susceptibility": "data/texas/no_relative_susceptibility.csv"
