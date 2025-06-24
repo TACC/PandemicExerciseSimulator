@@ -104,31 +104,6 @@ class StochasticSEATIRD(DiseaseModel):
         return
 
 
-    def set_initial_conditions(self, initial:list, network:Type[Network]):
-        """
-        This method is invoked from the main simulator block. Read in the list of initial infected
-        per location per age group, and expose 
-
-        Args:
-            initial (list): list of initial infected per age group per county from INPUT
-            network (Network): network object with list of nodes
-        """
-        for item in initial:
-            # TODO the word "county" is hardcoded here but should be made dynamic in case
-            # people want to do zip codes instead. Maybe 'location_id'
-            this_node_id = int(item['county'])
-            this_infected = int(item['infected'])
-            this_age_group = int(item['age_group'])
-
-            group = Group(this_age_group, RiskGroup.L.value, VaccineGroup.U.value)
-
-            for node in network.nodes:
-                if node.node_id == this_node_id:
-                    logging.debug(f'county={this_node_id}, age_group={this_age_group}, infected={this_infected}')
-                    self.expose_number_of_people(node, group, this_infected)
-        return
-
-
     def simulate(self, node:Type[Node], time:int):
         """
         Main simulation logic for stochastic SEATIRD model
@@ -141,8 +116,9 @@ class StochasticSEATIRD(DiseaseModel):
 
         self.now = time
         t_max = self.now + 1
-        group_cache = np.zeros((self.parameters.number_of_age_groups, len(RiskGroup), len(VaccineGroup)))
-        self._demographic_sizes(node, group_cache)
+        #group_cache = np.zeros((self.parameters.number_of_age_groups, len(RiskGroup), len(VaccineGroup)))
+        #self._demographic_sizes(node, group_cache)
+        group_cache = node.group_cache
         initial_compartments = deepcopy(node.compartments)
 
         node.events.sort(key=lambda x: x.time, reverse=True)
@@ -174,8 +150,7 @@ class StochasticSEATIRD(DiseaseModel):
             group (Group): Compartment descriptor including age group, risk group, vaccine status
             num_to_expose (int): The number of people to expose
         """
-        group_cache = np.zeros((self.parameters.number_of_age_groups, len(RiskGroup), len(VaccineGroup)))
-        self._demographic_sizes(node, group_cache)
+        group_cache = node.group_cache
         current_susceptible = int(node.compartments.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value])
         logging.debug(f'current_susceptible={current_susceptible}')
 
@@ -192,21 +167,6 @@ class StochasticSEATIRD(DiseaseModel):
 
 
     ###### Private Methods ######
-
-
-    def _demographic_sizes(self, node:Type[Node], group_cache:npt.ArrayLike):
-        """
-        Given a node, calculate demographic percentages and fill a given cache
-        """
-        this_population = node.total_population()
-        for i in range(self.parameters.number_of_age_groups):
-            for j in range(len(RiskGroup)):
-                for k in range(len(VaccineGroup)):
-                    group = Group(i, j, k)
-                    group_cache[i][j][k] = node.compartments.demographic_population(group) / this_population
-        return
-
-
     def _transmit_disease(self, node:Type[Node], group:Type[Group], group_cache:npt.ArrayLike):
         """
         Given a node and a group, move one individual from 'Susceptible' to 'Exposed'. Then, since a
@@ -297,7 +257,6 @@ class StochasticSEATIRD(DiseaseModel):
         individual contacts other susceptible individuals and queues new contact events.
         """
         beta = self._calculate_beta_w_npi(node.node_index, node.node_id)
-        vaccine_effectiveness = self.parameters.vaccine_effectiveness
 
         for ag in range(self.parameters.number_of_age_groups):
             sigma = float(self.parameters.relative_susceptibility[ag])
@@ -313,40 +272,29 @@ class StochasticSEATIRD(DiseaseModel):
                     if (group_cache[ag][rg][vg] == 0): continue
                     
                     # TODO we should really only be using vaccine_effectiveness[] in this 
-                    # equation when VaccineGroup=V
-                    transmission_rate = (1.0 - vaccine_effectiveness[ag]) * beta[ag] * contact_rate \
-                                        * sigma #* group_cache[ag][rg][vg]
+                    # Cannot have vaccine effectiveness hitting beta unless in vaccinated group
+                    if vg == 1:  # vaccinated then get effectiveness by age group
+                        vaccine_effectiveness = self.parameters.vaccine_effectiveness[ag]
+                    else:  # if you're not vaccinated, it has no effectiveness
+                        vaccine_effectiveness = 0
+                    # group_cache is weighting the force of infection
+                    transmission_rate = (1.0 - vaccine_effectiveness) * beta[ag] * contact_rate \
+                                        * sigma * group_cache[ag][rg][vg]
+                    """
+                    if node.node_id == 113:
+                        print(f"{group} \
+                        ve={vaccine_effectiveness:.2f}, beta={beta[ag]}, contact={contact_rate:.2f} \
+                        sigma={sigma:.2f}, tx_rate={transmission_rate:.4f}")
+                    """
+
                     Tc_init = schedule.Ta()
-                    Tc = rand_exp(transmission_rate) + Tc_init
+                    Tc = rand_exp_min1(transmission_rate) + Tc_init
 
                     while (Tc < schedule.Trd_ati()):
                         node.add_contact_event(Tc_init, Tc, EventType.CONTACT, group, to)
                         Tc_init = Tc
-                        Tc = rand_exp(transmission_rate) + Tc_init
+                        Tc = rand_exp_min1(transmission_rate) + Tc_init
         return
-
-
-    def _calculate_beta_w_npi(self, node_index:int, node_id:int) -> list:
-        """
-        Calculate the change in beta given non-pharmaceutical interventions
-        """
-        this_day = 0 if self.now == 0 else self.now - 1
-        logging.debug(f'day = {this_day}; node_id = {node_id}; node_index = {node_index}')
-
-        npi_effectiveness = self.npis_schedule[this_day][node_index]
-        logging.debug(f'npi_effectiveness = {npi_effectiveness}')
-
-        beta_baseline =  self.parameters.beta
-        age_group_size = self.parameters.number_of_age_groups
-        beta = [beta_baseline] * age_group_size
-
-        if (len(npi_effectiveness) == age_group_size):
-            for ag in range(age_group_size):
-                beta[ag] = beta_baseline * (1.0 - npi_effectiveness[ag])
-        
-        logging.debug(f'beta_baseline = {beta_baseline}, beta = {beta}')
-        return beta
-
 
     def _next_event(self, node:Type[Node], group_cache:npt.ArrayLike, initial_compartments:Type[PopulationCompartments]):
         """
