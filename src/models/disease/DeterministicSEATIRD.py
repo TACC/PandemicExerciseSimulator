@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
-
 import logging
 from typing import Type
-
-from numpy import typing as npt
 
 from .DiseaseModel import DiseaseModel
 from baseclasses.Group import Group, RiskGroup, VaccineGroup
@@ -76,12 +73,7 @@ class DeterministicSEATIRD(DiseaseModel):
             (group.age, group.risk, group.vaccine): np.array(node.compartments.get_compartment_vector_for(group))
             for group in node.compartments.get_all_groups()
         }
-        '''
-        node_id_vect = [453, 113, 201, 141, 375]
-        if node.node_id in node_id_vect:
-            print(node.node_id)
-            print(node.compartments)
-        '''
+
         # Get the total population of node
         total_node_pop = node.total_population()
 
@@ -116,12 +108,10 @@ class DeterministicSEATIRD(DiseaseModel):
                     vaccine_effectiveness = self.parameters.vaccine_effectiveness[contacted_group.age]
                 else: # if you're not vaccinated, it has no effectiveness
                     vaccine_effectiveness = 0
-
                 sigma              = float(self.parameters.relative_susceptibility[contacted_group.age])
                 # infectious_contacted/total_node_pop this captures the fraction of population we need to move from S -> E
                 transmission_rate += (1.0 - vaccine_effectiveness) * beta_vector[contacted_group.age] * contact_rate \
                                     * sigma * (infectious_contacted/total_node_pop)
-
             # Can't have negative transmission_rate
             transmission_rate = max(transmission_rate, 0)
 
