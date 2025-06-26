@@ -70,7 +70,6 @@ class DeterministicSEATIRD(DiseaseModel):
 
         # Need to update the node sense of time to get NPIs to take effect
         self.now = time
-        t_max = self.now + 1
 
         # Snapshot: all compartments at start of the day so we don't call the updated subgroups
         compartments_today = {
@@ -132,7 +131,7 @@ class DeterministicSEATIRD(DiseaseModel):
             daily_change = SEATIRD_model(focal_group_compartments_today, *model_parameters)
             compartments_tomorrow = focal_group_compartments_today + daily_change
             node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
-            self.now = t_max # update the day counter for NPI schedule impact
+
         return
 
 
