@@ -4,7 +4,7 @@ from baseclasses.Node import Node
 from baseclasses.Network import Network
 
 
-class ProChildrenVaccineStockpileStrategy:
+class ProHighRiskVaccineStockpileStrategy:
     def __init__(self, vaccination, network):
         """
         Args:
