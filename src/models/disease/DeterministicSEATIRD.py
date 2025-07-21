@@ -86,7 +86,7 @@ class DeterministicSEATIRD(DiseaseModel):
         # focal_group is the group we are simulating forward in time
         # contacted_group is the group causing disease spread interaction
         for focal_group in node.compartments.get_all_groups():
-            # print(group)  # e.g. Group object: age=0, risk=0, vaccine=0
+            # print(focal_group)  # e.g. Group object: age=0, risk=0, vaccine=0
             focal_group_compartments_today = np.array(node.compartments.get_compartment_vector_for(focal_group))
             if sum(focal_group_compartments_today) == 0:
                 continue  # skip empty groups
