@@ -8,8 +8,13 @@ from baseclasses.PopulationCompartments import Compartments
 
 class Vaccination:
 
-    def __init__(self):
-        pass
+    def __init__(self, vaccine_wastage_factor, vaccine_pro_rata, vaccine_adherence,
+                 vaccine_effectiveness, vaccine_stockpile):
+        self.vaccine_wastage_factor = vaccine_wastage_factor
+        self.vaccine_pro_rata = vaccine_pro_rata
+        self.vaccine_adherence = vaccine_adherence
+        self.vaccine_effectiveness = vaccine_effectiveness
+        self.vaccine_stockpile = vaccine_stockpile
 
     # Taking in the unvax and vax groups in case we ever want more than 2 compartments, e.g. boosters, multiple vaccines
     def vaccinate_number_of_people(self, node: Type[Node], unvax_group: Type[Group], vax_group: Type[Group], num_to_vaccinate: int):
@@ -47,3 +52,6 @@ class Vaccination:
         node.compartments.compartment_data[vax_group.age][vax_group.risk][vax_group.vaccine][Compartments.S.value] += num_vaccinating
 
         return
+
+    def distribute_vaccines(self, node: Type[Node], day: int):
+        pass
