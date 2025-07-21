@@ -2,6 +2,7 @@
 import argparse
 import logging
 from typing import Type
+from icecream import ic
 
 from baseclasses.Day import Day
 from baseclasses.Group import Compartments, RiskGroup
@@ -10,12 +11,18 @@ from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
+
 from models.disease.DeterministicSEATIRD import DeterministicSEATIRD
 from models.disease.DiseaseModel import DiseaseModel
 from models.disease.StochasticSEATIRD import StochasticSEATIRD
 from models.travel.BinomialTravel import BinomialTravel
 from models.travel.TravelModel import TravelModel
+
 from models.treatments.NonPharmaInterventions import NonPharmaInterventions
+from models.treatments.Vaccination import Vaccination
+from models.treatments.ProChildrenVaccineStockpileStrategy import ProChildrenVaccineStockpileStrategy
+from models.treatments.ProHighRiskVaccineStockpileStrategy import ProHighRiskVaccineStockpileStrategy
+from models.treatments.UniformVaccineStockpileStrategy import UniformVaccineStockpileStrategy
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNING',
@@ -33,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 def run( simulation_days:Type[Day], 
          network:Type[Network],
+         vaccination_model:Type[Vaccination],
          disease_model:Type[DiseaseModel],
          travel_model:Type[TravelModel],
          parameters:Type[ModelParameters],
@@ -54,6 +62,7 @@ def run( simulation_days:Type[Day],
 
             # Run distributions, treatments, stockpiles, and simulation for each node
             # handle distributions
+            vaccination_model.distribute_vaccines(node, day)
             # apply treatments
             # modify stockpiles
 
@@ -125,6 +134,28 @@ def main():
                                   )
     npis.pre_process(network)
 
+    # Initialize vaccination
+    ic(simulation_properties.vaccine_adherence)
+    vaccination_model = Vaccination(simulation_properties.vaccine_wastage_factor,
+                                    simulation_properties.vaccine_pro_rata,
+                                    simulation_properties.vaccine_adherence,
+                                    simulation_properties.vaccine_effectiveness,
+                                    simulation_properties.vaccine_stockpile
+                                    )
+    ic(vaccination_model.vaccine_adherence)
+
+    # need to add if statement for the appropriate vax strategy based on simulation_properties.vaccine_pro_rata
+    # which means it doesn't need to be passed to the initialization
+    vaccination_strategy = simulation_properties.vaccine_pro_rata
+    if vaccination_strategy == "children-stockpile":
+        vaccination_model = ProChildrenVaccineStockpileStrategy(vaccination_model, network)
+    elif vaccination_strategy == "high-risk-stockpile":
+        vaccination_model = ProHighRiskVaccineStockpileStrategy(vaccination_model, network)
+    elif vaccination_strategy == "uniform-stockpile":
+        vaccination_model = UniformVaccineStockpileStrategy(vaccination_model, network)
+    else:
+        logger.debug(f'only acceptible strategies are children-stockpile, high-risk-stockpile, and uniform-stockpile')
+
     # Initialize base disease model with stochastic flag and set number of initial
     # infected people in each node. Use this flag in future iterations to select
     # different disease model here.
@@ -157,6 +188,7 @@ def main():
 
         run( simulation_days,
              network,
+             vaccination_model,
              disease_model,
              travel_model,
              parameters,
