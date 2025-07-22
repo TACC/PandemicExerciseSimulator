@@ -2,7 +2,7 @@ import numpy as np
 import logging
 from typing import Type
 from icecream import ic
-#ic.disable()
+ic.disable()
 
 from baseclasses.Group import Group, VaccineGroup, Compartments
 from baseclasses.Node import Node
@@ -20,7 +20,7 @@ class UniformVaccineStockpileStrategy:
 
         # Convert list of dicts to {day: amount}
         self.stockpile_by_day = {
-            int(entry["day"]): float(entry["amount"])
+            int(entry["day"]) + self.vaccination.vaccine_eff_lag_days: float(entry["amount"])
             for entry in self.vaccination.vaccine_stockpile
         }
 
@@ -121,11 +121,11 @@ class UniformVaccineStockpileStrategy:
                 num_to_vaccinate = round((vaccines_left * proportion * adherence), 0)
                 ic(num_to_vaccinate)
                 # Safety: don't assign more than what's left
-                num_to_vaccinate = min(num_to_vaccinate, vaccines_left)
+                num_to_vaccinate = round(min(num_to_vaccinate, vaccines_left), 0)
                 ic(num_to_vaccinate)
 
             # Cap at the number of susceptible people in this group (can't vaccinate more than exist)
-            num_to_vaccinate = min(num_to_vaccinate, sus_unvax)
+            num_to_vaccinate = round(min(num_to_vaccinate, sus_unvax), 0)
             ic(num_to_vaccinate)
 
             ic(VaccineGroup.U.value)

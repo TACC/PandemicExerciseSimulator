@@ -64,13 +64,17 @@ class ModelParameters:
             self.vaccine_wastage_factor  = simulation_properties.vaccine_wastage_factor
         self.vaccine_pro_rata        = simulation_properties.vaccine_pro_rata
         if simulation_properties.vaccine_adherence is not None:
-            self.vaccine_adherence       = [float(x) for x in simulation_properties.vaccine_adherence]
+            self.vaccine_adherence = [float(x) for x in simulation_properties.vaccine_adherence]
         else:
             self.vaccine_adherence = simulation_properties.vaccine_adherence
         if simulation_properties.vaccine_effectiveness is not None:
-            self.vaccine_effectiveness   = [float(x) for x in simulation_properties.vaccine_effectiveness]
+            self.vaccine_effectiveness = [float(x) for x in simulation_properties.vaccine_effectiveness]
         else:
             self.vaccine_effectiveness = simulation_properties.vaccine_effectiveness
+        if simulation_properties.vaccine_eff_lag_days is not None:
+            self.vaccine_eff_lag_days  = float(simulation_properties.vaccine_eff_lag_days)
+        else:
+            self.vaccine_eff_lag_days  = simulation_properties.vaccine_eff_lag_days
         self.vaccine_stockpile       = simulation_properties.vaccine_stockpile
 
         # some things assigned later

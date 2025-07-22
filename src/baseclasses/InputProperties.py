@@ -52,6 +52,7 @@ class InputProperties:
         self.vaccine_pro_rata         = input.get('vaccines').get('vaccine_pro_rata', None)
         self.vaccine_adherence        = input.get('vaccines').get('vaccine_adherence', [])
         self.vaccine_effectiveness    = input.get('vaccines').get('vaccine_effectiveness', [])
+        self.vaccine_eff_lag_days     = input.get('vaccines').get('vaccine_eff_lag_days', 0)
         self.vaccine_stockpile        = input.get('vaccines').get('vaccine_stockpile', [])
 
         logger.info(f'instantiated InputProperties object')
@@ -97,6 +98,7 @@ class InputProperties:
                 f'vaccine_pro_rata={self.vaccine_pro_rata}\n'
                 f'vaccine_adherence={self.vaccine_adherence}\n'
                 f'vaccine_effectiveness={self.vaccine_effectiveness}\n'
+                f'vaccine_eff_lag_days={self.vaccine_eff_lag_days}\n'
                 f'vaccine_stockpile={self.vaccine_stockpile}\n'
               )
 

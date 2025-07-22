@@ -8,13 +8,14 @@ from baseclasses.PopulationCompartments import Compartments
 
 class Vaccination:
 
-    def __init__(self, vaccine_wastage_factor, vaccine_pro_rata, vaccine_adherence,
-                 vaccine_effectiveness, vaccine_stockpile):
-        self.vaccine_wastage_factor = vaccine_wastage_factor
-        self.vaccine_pro_rata = vaccine_pro_rata
-        self.vaccine_adherence = vaccine_adherence
-        self.vaccine_effectiveness = vaccine_effectiveness
-        self.vaccine_stockpile = vaccine_stockpile
+    def __init__(self, vaccine_wastage_factor, vaccine_pro_rata, vaccine_adherence, vaccine_effectiveness, 
+                 vaccine_eff_lag_days, vaccine_stockpile):
+        self.vaccine_wastage_factor  = vaccine_wastage_factor # need to re-name, it is int days of vaccine half life (60 days)
+        self.vaccine_pro_rata        = vaccine_pro_rata # name of strategy for vaccine distribution
+        self.vaccine_adherence       = vaccine_adherence # age specific float 0.0 to 1.0, but need by any county/risk/breakout
+        self.vaccine_effectiveness   = vaccine_effectiveness # float 0.0 to 1.0
+        self.vaccine_eff_lag_days    = vaccine_eff_lag_days # non-negative int of when vax is effective (14 days)
+        self.vaccine_stockpile       = vaccine_stockpile # dictionary but need csv file option, should re-name from "stockpile" to vax given
 
     # Taking in the unvax and vax groups in case we ever want more than 2 compartments, e.g. boosters, multiple vaccines
     def vaccinate_number_of_people(self, node: Type[Node], unvax_group: Type[Group], vax_group: Type[Group], num_to_vaccinate: int):
