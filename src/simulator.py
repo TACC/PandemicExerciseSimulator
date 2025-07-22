@@ -140,6 +140,7 @@ def main():
                                     simulation_properties.vaccine_pro_rata,
                                     simulation_properties.vaccine_adherence,
                                     simulation_properties.vaccine_effectiveness,
+                                    simulation_properties.vaccine_eff_lag_days,
                                     simulation_properties.vaccine_stockpile
                                     )
     ic(vaccination_model.vaccine_adherence)
