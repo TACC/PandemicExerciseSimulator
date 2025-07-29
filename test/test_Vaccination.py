@@ -6,6 +6,7 @@ from baseclasses.PopulationCompartments import PopulationCompartments, Compartme
 from baseclasses.Node import Node
 from baseclasses.Group import Group
 from src.models.treatments.Vaccination import Vaccination  # Adjust import based on your structure
+from src.models.treatments.UniformVaccineStockpileStrategy import UniformVaccineStockpileStrategy
 
 # still requires calling with printing more than stdout to the screen to see these debug messages
 # poetry run pytest -s test/test_Vaccination.py
@@ -16,17 +17,15 @@ else:
     ic.disable()
     print("ICECREAM DISABLED")
 
+def make_node_with_population(pop=100):
+    pc = PopulationCompartments(groups=[pop], high_risk_ratios=[0.0])
+    return Node(node_index=0, node_id=0, fips_id=0, compartments=pc)
+
 def test_vaccinate_number_of_people():
-    # Setup: define 1 age group with 10 unvaccinated people
-    groups = [10]
-    high_risk_ratios = [0.0]  # all low-risk
-
-    pc = PopulationCompartments(groups, high_risk_ratios)
-    ic("made pop compartments")
-
+    # Setup: define 1 age group with 10 unvaccinated people, all low-risk
     # Create a Node with these compartments
-    node = Node(node_index=0, node_id=0, fips_id=0, compartments=pc)
-    ic("made node")
+    node = make_node_with_population(pop=10)
+    ic("made compartments & node")
 
     # Define unvaccinated and vaccinated groups
     unvax_group = Group(age=0, risk_group=0, vaccine_group=0)
@@ -37,8 +36,16 @@ def test_vaccinate_number_of_people():
     initial_vax = node.compartments.compartment_data[0][0][1][Compartments.S.value]
     ic("Initial unvax count:", initial_unvax); ic("Initial vax count:", initial_vax)
 
-    # Instantiate Vaccination class
-    vaccination = Vaccination()
+    # Instantiate Vaccination class, pass dummy values, but not calling a strategy
+    vaccination = Vaccination(
+        vaccine_wastage_factor=None,
+        vaccine_pro_rata="uniform-stockpile",
+        vaccine_adherence=["1"],
+        vaccine_effectiveness=["1"],
+        vaccine_eff_lag_days=14,
+        vaccine_stockpile=[
+            {"day": "0", "amount": "0"},  # -> effective day = -66 → update to 0
+        ])
 
     # Vaccinate 3 people
     num_to_vaccinate = 3; ic("Num to vaccinate:", num_to_vaccinate)
@@ -54,15 +61,10 @@ def test_vaccinate_number_of_people():
     assert final_vax == initial_vax + num_to_vaccinate, f"Expected {initial_vax + num_to_vaccinate}, got {final_vax}"
 
 def test_vaccinate_when_no_susceptibles():
-    # Setup: define 1 age group with 0 unvaccinated people
-    groups = [0]  # zero people
-    high_risk_ratios = [0.0]
-
-    pc = PopulationCompartments(groups, high_risk_ratios)
-    ic("made pop compartments with zero people")
-
-    node = Node(node_index=0, node_id=0, fips_id=0, compartments=pc)
-    ic("made node")
+    # Setup: define 1 age group with 10 unvaccinated people, all low-risk
+    # Create a Node with these compartments
+    node = make_node_with_population(pop=0)
+    ic("made compartments & node")
 
     unvax_group = Group(age=0, risk_group=0, vaccine_group=0)
     vax_group = Group(age=0, risk_group=0, vaccine_group=1)
@@ -71,7 +73,16 @@ def test_vaccinate_when_no_susceptibles():
     initial_vax = node.compartments.compartment_data[0][0][1][Compartments.S.value]
     ic("Initial unvax count (should be 0):", initial_unvax); ic("Initial vax count (should be 0):", initial_vax)
 
-    vaccination = Vaccination()
+    # Pass dummy values, but not calling a strategy
+    vaccination = Vaccination(
+        vaccine_wastage_factor=None,
+        vaccine_pro_rata="uniform-stockpile",
+        vaccine_adherence=["1"],
+        vaccine_effectiveness=["1"],
+        vaccine_eff_lag_days=14,
+        vaccine_stockpile=[
+        {"day": "0", "amount": "0"},   # -> effective day = -66 → update to 0
+    ])
 
     # Attempt to vaccinate 10 people when there are 0
     num_to_vaccinate = 10
@@ -86,14 +97,21 @@ def test_vaccinate_when_no_susceptibles():
     assert final_vax == 0, f"Expected 0 vax, got {final_vax}"
 
 def test_vaccinate_non_integer_input():
-    # Setup: 1 age group with 10 unvaccinated people
-    groups = [10]
-    high_risk_ratios = [0.0]
-    pc = PopulationCompartments(groups, high_risk_ratios)
-    node = Node(node_index=0, node_id=0, fips_id=0, compartments=pc)
+    # Setup: define 1 age group with 10 unvaccinated people, all low-risk
+    node = make_node_with_population(pop=10) # Create a Node with these compartments
+    ic("made compartments & node")
+
     unvax_group = Group(age=0, risk_group=0, vaccine_group=0)
     vax_group = Group(age=0, risk_group=0, vaccine_group=1)
-    vaccination = Vaccination()
+    vaccination = Vaccination( # Pass dummy values, but not calling a strategy
+        vaccine_wastage_factor=None,
+        vaccine_pro_rata="uniform-stockpile",
+        vaccine_adherence=["1"],
+        vaccine_effectiveness=["1"],
+        vaccine_eff_lag_days=14,
+        vaccine_stockpile=[
+            {"day": "0", "amount": "0"},  # -> effective day = -66 → update to 0
+        ])
 
     # a) Integer-valued float (3.0) should be accepted without warning
     initial_unvax = node.compartments.compartment_data[0][0][0][Compartments.S.value]
@@ -123,3 +141,59 @@ def test_vaccinate_non_integer_input():
 
     ic("Non-integer input hybrid test passed")
 
+def test_stockpile_combines_negative_and_day0():
+    # 3 entries that all collapse to day 0
+    stockpile_dict = [
+        {"day": "-80", "amount": "50"},   # -> effective day = -66 → update to 0
+        {"day": "-14", "amount": "100"},  # -> effective day = 0   → stays as 0
+        {"day": "0", "amount": "25"},     # -> effective day = 14  → too late, skip for this test
+    ]
+    vaccination = Vaccination(
+        vaccine_wastage_factor=None,
+        vaccine_pro_rata="uniform-stockpile",
+        vaccine_adherence=["1"],
+        vaccine_effectiveness=["1"],
+        vaccine_eff_lag_days=14,
+        vaccine_stockpile=stockpile_dict, # trailing common optional for adding more lines easily if needed
+    )
+
+    node = make_node_with_population(pop=100)
+    strategy = UniformVaccineStockpileStrategy(vaccination, network=type("MockNet", (), {"nodes": [node]}))
+
+    # Only day 0 should exist in the dictionary
+    assert 0 in strategy.stockpile_by_day, "Expected effective day 0 in stockpile_by_day"
+    assert strategy.stockpile_by_day[0] == 150.0, f"Expected total of 150 at day 0, got {strategy.stockpile_by_day[0]}"
+
+    # Run distribution
+    strategy.distribute_vaccines(node, day=0)
+
+    # Check that exactly 150 people were vaccinated
+    vaccinated = node.compartments.compartment_data[0][0][1][Compartments.S.value]
+    assert vaccinated == 100, f"Expected all 100 people vaccinated, got {vaccinated}"
+
+def test_stockpile_combines_duplicate_days():
+    stockpile = [
+        {"day": "1", "amount": "30"},
+        {"day": "1", "amount": "40"},
+        {"day": "1", "amount": "30"},
+    ]
+    vaccination = Vaccination(
+        vaccine_wastage_factor=None,
+        vaccine_pro_rata="uniform-stockpile",
+        vaccine_adherence=["1"],
+        vaccine_effectiveness=["1"],
+        vaccine_eff_lag_days=0,
+        vaccine_stockpile=stockpile,
+    )
+
+    node = make_node_with_population(pop=90) # population less than total vaccines to distribute
+    strategy = UniformVaccineStockpileStrategy(vaccination, network=type("MockNet", (), {"nodes": [node]}))
+
+    # Expect day 1 to have all 3 amounts combined
+    assert strategy.stockpile_by_day[1] == 100.0, f"Expected 100 vaccines at day 1, got {strategy.stockpile_by_day[1]}"
+
+    # Run distribution
+    strategy.distribute_vaccines(node, day=1)
+
+    vaccinated = node.compartments.compartment_data[0][0][1][Compartments.S.value]
+    assert vaccinated == 90, f"Expected all 90 people vaccinated, got {vaccinated}"
