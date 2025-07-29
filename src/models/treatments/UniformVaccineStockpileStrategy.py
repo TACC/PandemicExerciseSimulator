@@ -89,8 +89,13 @@ class UniformVaccineStockpileStrategy:
         logging.debug(f"Day {day} — Node {node.node_id} gets {node_share} vaccines; "
                     f"{self.stockpile_by_day[day]:.0f} remaining")
 
-        self._allocate_within_node(node, node_share)
-
+        # Allocate vaccines released on day
+        leftover_vax = self._allocate_within_node(node, node_share)
+        # If any vaccines remain after trying to distribute them all then save to next day
+        if leftover_vax > 0:
+            self.stockpile_by_day.setdefault(day + 1, 0.0)
+            self.stockpile_by_day[day + 1] += leftover_vax
+            logging.info(f"Day {day}: {leftover_vax} leftover vaccines rolled over to day {day + 1}.")
 
     def _allocate_within_node(self, node, available_vaccines):
         # Prepare a snapshot of today's compartment state so we aren't using updated values mid-loop
@@ -137,16 +142,19 @@ class UniformVaccineStockpileStrategy:
             ic(total_sus_unvax)
             ic(proportion)
 
+            # Debating this, may just keep all the same and stick with rollover
+            '''
             # If this is the LAST group in the list, give them ALL the remaining doses
             if i == len(eligible_groups) - 1:
                 num_to_vaccinate = vaccines_left
             else:
-                # Compute expected vaccines for this group (share * adherence)
-                num_to_vaccinate = round((vaccines_left * proportion * adherence), 0)
-                ic(num_to_vaccinate)
-                # Safety: don't assign more than what's left
-                num_to_vaccinate = round(min(num_to_vaccinate, vaccines_left), 0)
-                ic(num_to_vaccinate)
+            '''
+            # Compute expected vaccines for this group (share * adherence)
+            num_to_vaccinate = round((vaccines_left * proportion * adherence), 0)
+            ic(num_to_vaccinate)
+            # Safety: don't assign more than what's left
+            num_to_vaccinate = round(min(num_to_vaccinate, vaccines_left), 0)
+            ic(num_to_vaccinate)
 
             # Cap at the number of susceptible people in this group (can't vaccinate more than exist)
             num_to_vaccinate = round(min(num_to_vaccinate, sus_unvax), 0)
@@ -168,3 +176,5 @@ class UniformVaccineStockpileStrategy:
             # If we’ve used up all vaccines, stop early
             if vaccines_left <= 0:
                 break
+
+        return vaccines_left
