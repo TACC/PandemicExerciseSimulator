@@ -1,5 +1,6 @@
 import pytest
 import warnings
+import numpy as np
 from icecream import ic
 
 from baseclasses.PopulationCompartments import PopulationCompartments, Compartments
@@ -12,6 +13,7 @@ from src.models.treatments.UniformVaccineStockpileStrategy import UniformVaccine
 # poetry run pytest -s test/test_Vaccination.py
 use_ic = False  # Change to False to disable IceCream
 if use_ic:
+    ic.enable()
     ic("ICECREAM ENABLED")
 else:
     ic.disable()
@@ -197,3 +199,42 @@ def test_stockpile_combines_duplicate_days():
 
     vaccinated = node.compartments.compartment_data[0][0][1][Compartments.S.value]
     assert vaccinated == 90, f"Expected all 90 people vaccinated, got {vaccinated}"
+
+def test_rollover_unused_vaccines_to_next_day():
+    # Day 0: 50 vaccines available, only 30 people in the population
+    # Expect 20 leftover to roll to day 1, where 40 more people are eligible
+
+    stockpile = [
+        {"day": "0", "amount": "50"},
+        #{"day": "1", "amount": "0"},  # Day 1 should be created by the function when rolling over
+    ]
+    vaccination = Vaccination(
+        vaccine_wastage_factor=None,
+        vaccine_pro_rata="uniform-stockpile",
+        vaccine_adherence=["1"],
+        vaccine_effectiveness=["1"],
+        vaccine_eff_lag_days=0,
+        vaccine_stockpile=stockpile,
+    )
+
+    # Setup: node starts with 30 people, we’ll manually add 40 more on day 1
+    node = make_node_with_population(pop=30)
+    strategy = UniformVaccineStockpileStrategy(vaccination, network=type("MockNet", (), {"nodes": [node]}))
+
+    # Day 0: 50 vaccines, only 30 people → 20 leftover
+    strategy.distribute_vaccines(node, day=0)
+    vaccinated_day0 = node.compartments.compartment_data[0][0][1][Compartments.S.value]
+    assert vaccinated_day0 == 30, f"Expected 30 vaccinated on day 0, got {vaccinated_day0}"
+
+    # Manually increase population for day 1
+    node.compartments.compartment_data[0][0][0][Compartments.S.value] += 40  # 40 more susceptibles
+    ic(node.compartments.compartment_data)
+    assert np.sum(node.compartments.compartment_data) == 70
+
+    # Day 1: expect 20 leftover vaccines from day 0 to be used
+    strategy.distribute_vaccines(node, day=1)
+    vaccinated_total = node.compartments.compartment_data[0][0][1][Compartments.S.value]
+    assert vaccinated_total == 50, f"Expected 50 total vaccinated after day 1, got {vaccinated_total}"
+
+    # Verify no doses remain in the stockpile
+    assert strategy.stockpile_by_day[1] == 0.0, f"Expected no vaccines left on day 1, got {strategy.stockpile_by_day[1]}"
