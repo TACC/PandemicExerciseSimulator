@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import logging
+import shutil
+import os
 from typing import Type
 from icecream import ic
 
@@ -59,8 +61,11 @@ def run( simulation_days:Type[Day],
     # Iterate over each day, each node...
     for day in range(1, simulation_days.day+1):
         for node in network.nodes:
-
             # Run distributions, treatments, stockpiles, and simulation for each node
+            if day==1:
+                # Only on the first day check if any day 0 vaccines must be distributed
+                vaccination_model.distribute_vaccines(node, day=0)
+
             # handle distributions
             vaccination_model.distribute_vaccines(node, day)
             # apply treatments
@@ -79,7 +84,7 @@ def run( simulation_days:Type[Day],
         # Early termination if no more infectious or soon to be people
         compartment_totals = simulation_days.snapshot(network)
         total_eati = sum(compartment_totals[1:5]) # Sum E, A, T, I
-        tolerance = 1e-4
+        tolerance = 1e-1
         if total_eati <= tolerance:
             logger.info(f"All E, A, T, I are below {tolerance:.1e} on day {day}, ending simulation early.")
             break
@@ -99,6 +104,24 @@ def main():
     # Read input properties file
     # Can be pre-generated as template, or generated in GUI
     simulation_properties = InputProperties(args.input_filename)
+
+    # Get full paths
+    input_file_path = os.path.abspath(args.input_filename)
+    output_file_path = os.path.abspath(simulation_properties.output_data_file)
+    output_dir = os.path.dirname(output_file_path)
+    copied_input_path = os.path.join(output_dir, 'INPUT.json')
+
+    # Ensure output directory exists
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+        logger.info(f'Created output directory: {output_dir}')
+
+    # Copy input file to output directory (if not already there)
+    if not os.path.exists(copied_input_path):
+        shutil.copyfile(input_file_path, copied_input_path)
+        logger.info(f'Copied input file to: {copied_input_path}')
+    else:
+        logger.info(f'Skipping copy; input file already exists at: {copied_input_path}')
 
     # Initialize Model Parameters class instance
     # This is a subset of the simulation properties, and contains data from a
