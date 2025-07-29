@@ -155,7 +155,7 @@ def main():
     elif vaccination_strategy == "uniform-stockpile":
         vaccination_model = UniformVaccineStockpileStrategy(vaccination_model, network)
     else:
-        logger.debug(f'only acceptible strategies are children-stockpile, high-risk-stockpile, and uniform-stockpile')
+        logger.debug(f'only acceptable strategies are children-stockpile, high-risk-stockpile, and uniform-stockpile')
 
     # Initialize base disease model with stochastic flag and set number of initial
     # infected people in each node. Use this flag in future iterations to select
