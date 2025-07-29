@@ -19,10 +19,34 @@ class UniformVaccineStockpileStrategy:
         self.vaccination = vaccination
 
         # Convert list of dicts to {day: amount}
-        self.stockpile_by_day = {
-            int(entry["day"]) + self.vaccination.vaccine_eff_lag_days: float(entry["amount"])
-            for entry in self.vaccination.vaccine_stockpile
-        }
+        # Leaving in child class in case we want to take in proportions, but leaning toward count only intake
+        self.stockpile_by_day = {}
+        day_collision_tracker = {}
+        for entry in self.vaccination.vaccine_stockpile:
+            stockpile_day = int(entry["day"])
+            amount = float(entry["amount"])
+
+            # Shift by effectiveness lag
+            effective_day = stockpile_day + self.vaccination.vaccine_eff_lag_days
+
+            # Set any negative effective days to day 0, allows for easy shifting of vax release date
+            if effective_day < 0:
+                logging.warning(
+                    f"Effective day {effective_day} is negative (stockpile day {stockpile_day}); reassigning to day 0")
+                effective_day = 0
+
+            # Check if this day already has an entry
+            if effective_day in self.stockpile_by_day:
+                logging.warning(
+                    f"Multiple vaccine stockpile entries assigned to day {effective_day}; combining amounts.")
+                day_collision_tracker.setdefault(effective_day, []).append(stockpile_day)
+
+            self.stockpile_by_day.setdefault(effective_day, 0.0)
+            self.stockpile_by_day[effective_day] += amount
+
+        # Optionally log all combined day mappings at once
+        for day, original_days in day_collision_tracker.items():
+            logging.info(f"Day {day} combines stockpile from original days: {original_days}")
 
         # Total population across all nodes
         self.total_population = sum(node.total_population() for node in network.nodes)
