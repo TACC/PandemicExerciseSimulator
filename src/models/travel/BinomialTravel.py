@@ -17,7 +17,14 @@ logger = logging.getLogger(__name__)
 
 class BinomialTravel(TravelModel):
 
-    def __init__(self):
+    def __init__(self, travel_model:Type[TravelModel]):
+        self.parameters = travel_model.parameters
+        
+        # extract parameters
+        self.rho = float(self.parameters.travel_parameters['rho'])
+        self.flow_reduction = []
+        self.flow_reduction = [float(x) for x in self.parameters.travel_parameters['flow_reduction']]
+
         logger.info(f'instantiated a BinomialTravel object: {BinomialTravel}')
         return
 
@@ -42,7 +49,8 @@ class BinomialTravel(TravelModel):
             for node_source_id, node_source in enumerate(network.nodes):
                 if node_sink_id != node_source_id:
                     self._calculate_flow_probability(parameters, network, node_sink, node_sink_id,
-                                                     node_source, node_source_id, probabilities)
+                                                     node_source, node_source_id, probabilities,
+                                                     disease_model)
                     logging.debug(f'probabilities = {probabilities}')
 
             self._expose_from_travel(parameters, node_sink, probabilities, disease_model)
@@ -50,7 +58,8 @@ class BinomialTravel(TravelModel):
 
 
     def _calculate_flow_probability(self, parameters:Type[ModelParameters], network:Type[Network], node_sink:Type[Node],
-                                    node_sink_id:int, node_source:Type[Node], node_source_id:int, probabilities:list):
+                                    node_sink_id:int, node_source:Type[Node], node_source_id:int, probabilities:list,
+                                    disease_model:Type[DiseaseModel]):
         """
         Given a pair of nodes, (1) identify whether travel happens between the nodes (based on
         travel flow data), (2) if so, iterate over all pairs of age groups, (3) calculate number
@@ -77,8 +86,8 @@ class BinomialTravel(TravelModel):
             for ag1 in range(parameters.number_of_age_groups):
                 number_of_infectious_contacts_sink_to_source = 0
                 number_of_infectious_contacts_source_to_sink = 0
-                this_sigma = float(parameters.relative_susceptibility[ag1])
-                this_beta_baseline = parameters.beta
+                this_sigma = float(disease_model.relative_susceptibility[ag1])
+                this_beta_baseline = disease_model.beta
 
                 # TODO incorporate PHA bits to modify value of beta
                 # pha_effectiveness = params.pha_effectiveness (list)
@@ -95,10 +104,10 @@ class BinomialTravel(TravelModel):
                     contact_rate = parameters.np_contact_matrix[ag1][ag2] # age group to age group contacts
                     logging.debug(f'asymptomatic = {asymptomatic}, transmitting = {transmitting}, contact_rate = {contact_rate}')
 
-                    number_of_infectious_contacts_sink_to_source += transmitting * beta * parameters.rho * contact_rate \
-                                                                    * this_sigma / parameters.flow_reduction[ag1]
-                    number_of_infectious_contacts_source_to_sink += asymptomatic * beta * parameters.rho * contact_rate \
-                                                                    * this_sigma / parameters.flow_reduction[ag2]
+                    number_of_infectious_contacts_sink_to_source += transmitting * beta * self.rho * contact_rate \
+                                                                    * this_sigma / self.flow_reduction[ag1]
+                    number_of_infectious_contacts_source_to_sink += asymptomatic * beta * self.rho * contact_rate \
+                                                                    * this_sigma / self.flow_reduction[ag2]
 
                 probabilities[ag1] += flow_sink_to_source * number_of_infectious_contacts_sink_to_source \
                                                    / node_source.total_population()

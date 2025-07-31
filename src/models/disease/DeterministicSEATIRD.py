@@ -44,12 +44,42 @@ def SEATIRD_model(y, transmission_rate, tau, kappa, chi, gamma, nu):
 class DeterministicSEATIRD(DiseaseModel):
 
     def __init__(self, disease_model:Type[DiseaseModel]):
-        self.is_stochastic = disease_model.is_stochastic
+        #self.is_stochastic = disease_model.is_stochastic
         self.now = disease_model.now
         self.parameters = disease_model.parameters
+
+        self.R0             = float(self.parameters.disease_parameters['R0'])
+        self.beta_scale     = float(self.parameters.disease_parameters['beta_scale'] )   # "R0CorrectionFactor"
+        self.beta           = self.R0 / self.beta_scale
+
+        # the following four parameters are provided by users as periods (units = days),
+        # but then stored here as rates (units = 1/days)
+        self.tau            = 1/float(self.parameters.disease_parameters['tau'])
+        self.kappa          = 1/float(self.parameters.disease_parameters['kappa'])
+        self.gamma          = 1/float(self.parameters.disease_parameters['gamma'])
+        self.chi            = 1/float(self.parameters.disease_parameters['chi'])
+
+        # Mobility reduction parameter
+        #self.rho            = float(simulation_properties.rho)
+        #self.rho = 0.39 # this should be in travel model
+
+
+        # the user enters one nu value for each age group, assumed to be low risk
+        # population. use multiplier 9x to derive values for high risk population
+        self.nu_values      = [[],[]]
+        self.nu_values[0]   = [float(x)   for x in self.parameters.disease_parameters['nu']]
+        self.nu_values[1]   = [float(x)*9 for x in self.parameters.disease_parameters['nu']]
+
+        # transpose nu_values so that we can access values in the order we are used to
+        #   e.g.:    nu_values[age][risk]
+        self.nu_values = np.array(self.nu_values).transpose().tolist()
+
+        self.relative_susceptibility = []
+        self.relative_susceptibility = [float(x) for x in self.parameters.disease_parameters['sigma']]
+
         self.npis_schedule = disease_model.npis_schedule
 
-        logger.info(f'instantiated DeterministicSEATIRD object with stochastic={self.is_stochastic}')
+        logger.info(f'instantiated DeterministicSEATIRD object')
         logger.debug(f'{self.parameters}')
         return
 
@@ -92,7 +122,7 @@ class DeterministicSEATIRD(DiseaseModel):
                 continue  # skip empty groups
 
             # Get nu as scalar needed for the model based on age and risk group
-            nu = float(self.parameters.nu_values[focal_group.age][focal_group.risk]) # nu is vector of values
+            nu = float(self.nu_values[focal_group.age][focal_group.risk]) # nu is vector of values
 
             #### Get force of infection from each interaction subgroup ####
             # This is constant in time if we don't have an NPI schedule hitting beta each day
@@ -111,7 +141,7 @@ class DeterministicSEATIRD(DiseaseModel):
                     vaccine_effectiveness = self.parameters.vaccine_effectiveness[contacted_group.age]
                 else: # if you're not vaccinated, it has no effectiveness
                     vaccine_effectiveness = 0
-                sigma              = float(self.parameters.relative_susceptibility[contacted_group.age])
+                sigma              = float(self.relative_susceptibility[contacted_group.age])
                 # infectious_contacted/total_node_pop this captures the fraction of population we need to move from S -> E
                 transmission_rate += (1.0 - vaccine_effectiveness) * beta_vector[contacted_group.age] * contact_rate \
                                     * sigma * (infectious_contacted/total_node_pop)
@@ -120,10 +150,10 @@ class DeterministicSEATIRD(DiseaseModel):
 
             model_parameters = (
                 transmission_rate,     # S => E
-                self.parameters.tau,   # E => A
-                self.parameters.kappa, # A => T
-                self.parameters.chi,   # T => I
-                self.parameters.gamma, # A/T/I => R
+                self.tau,   # E => A
+                self.kappa, # A => T
+                self.chi,   # T => I
+                self.gamma, # A/T/I => R
                 nu                     # A/T/I => D
             )
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from copy import deepcopy
 import logging
-import math
 import numpy as np
 import numpy.typing as npt
 from typing import Type
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class Schedule:
 
-    def __init__(self, parameters:type[ModelParameters], now:float, group:Type[Group]):
+    def __init__(self, disease_model:type[DiseaseModel], now:float, group:Type[Group]):
         """
         TAU      # Latency period in days (exposed to asymptomatic)
         KAPPA    # Asymptomatic infectious period in days (asymptomatic to treatable)
@@ -39,13 +38,13 @@ class Schedule:
         self._Trd_ati    # Time from A/T/I to R/D
         """
 
-        self._Ta    = rand_exp_min1(parameters.tau) + now
-        self._Tt    = rand_exp_min1(parameters.kappa) + self._Ta
-        self._Ti    = parameters.chi + self._Tt
-        self._Td_a  = rand_exp_min1(parameters.nu_values[group.age][group.risk]) + self._Ta
-        self._Td_ti = rand_exp_min1(parameters.nu_values[group.age][group.risk]) + self._Tt
-        self._Tr_a  = rand_exp_min1(parameters.gamma) + self._Ta
-        self._Tr_ti = rand_exp_min1(parameters.gamma) + self._Tt
+        self._Ta    = rand_exp_min1(disease_model.tau) + now
+        self._Tt    = rand_exp_min1(disease_model.kappa) + self._Ta
+        self._Ti    = disease_model.chi + self._Tt
+        self._Td_a  = rand_exp_min1(disease_model.nu_values[group.age][group.risk]) + self._Ta
+        self._Td_ti = rand_exp_min1(disease_model.nu_values[group.age][group.risk]) + self._Tt
+        self._Tr_a  = rand_exp_min1(disease_model.gamma) + self._Ta
+        self._Tr_ti = rand_exp_min1(disease_model.gamma) + self._Tt
 
         # exit_asymptomatic_time means via recovery or death, not progression to symptomatic stage
         self.exit_asymptomatic_time = min(self._Td_a, self._Tr_a)
@@ -57,19 +56,19 @@ class Schedule:
         return
        
 
-    def update(self, parameters:type[ModelParameters], now:float, group:Type[Group], compartment_num:int):
+    def update(self, disease_model:type[DiseaseModel], now:float, group:Type[Group], compartment_num:int):
         """
-        Used when reinitializing events
+        Used only when reinitializing events (e.g. deterministic to stochastic transition)
         S=0, E=1, A=2, T=3, I=4, R=5, D=6
         """
         assert int(compartment_num) > 0 and int(compartment_num) < 5
-        self._Ta    = (rand_exp_min1(parameters.tau) + now) if compartment_num < 2 else now
-        self._Tt    = (rand_exp_min1(parameters.kappa) + self._Ta) if compartment_num < 3 else self._Ta
-        self._Ti    = (self._Tt + parameters.chi) if compartment_num < 4 else self._Tt
-        self._Td_a  = (rand_exp_min1(parameters.nu_values[group.age][group.risk])) + self._Ta if compartment_num < 3 else float('inf')
-        self._Td_ti = rand_exp_min1(parameters.nu_values[group.age][group.risk]) + self._Tt
-        self._Tr_a  = (rand_exp_min1(parameters.gamma)) if compartment_num < 3 else float('inf')
-        self._Tr_ti = rand_exp_min1(parameters.gamma) + self._Tt
+        self._Ta    = (rand_exp_min1(disease_model.tau) + now) if compartment_num < 2 else now
+        self._Tt    = (rand_exp_min1(disease_model.kappa) + self._Ta) if compartment_num < 3 else self._Ta
+        self._Ti    = (self._Tt + disease_model.chi) if compartment_num < 4 else self._Tt
+        self._Td_a  = (rand_exp_min1(disease_model.nu_values[group.age][group.risk])) + self._Ta if compartment_num < 3 else float('inf')
+        self._Td_ti = rand_exp_min1(disease_model.nu_values[group.age][group.risk]) + self._Tt
+        self._Tr_a  = (rand_exp_min1(disease_model.gamma)) if compartment_num < 3 else float('inf')
+        self._Tr_ti = rand_exp_min1(disease_model.gamma) + self._Tt
         
         self.exit_asymptomatic_time = min(self._Td_a, self._Tr_a)
         if (self._Tt < self.exit_asymptomatic_time): self.exit_asymptomatic_time = float('inf')
@@ -94,12 +93,42 @@ class Schedule:
 class StochasticSEATIRD(DiseaseModel):
 
     def __init__(self, disease_model:Type[DiseaseModel]):
-        self.is_stochastic = disease_model.is_stochastic
+        #self.is_stochastic = disease_model.is_stochastic
         self.now = disease_model.now
         self.parameters = disease_model.parameters
+        
+        self.R0             = float(self.parameters.disease_parameters['R0'])
+        self.beta_scale     = float(self.parameters.disease_parameters['beta_scale'] )   # "R0CorrectionFactor"
+        self.beta           = self.R0 / self.beta_scale
+
+        # the following four parameters are provided by users as periods (units = days),
+        # but then stored here as rates (units = 1/days)
+        self.tau            = 1/float(self.parameters.disease_parameters['tau'])
+        self.kappa          = 1/float(self.parameters.disease_parameters['kappa'])
+        self.gamma          = 1/float(self.parameters.disease_parameters['gamma'])
+        self.chi            = 1/float(self.parameters.disease_parameters['chi'])
+
+        # Mobility reduction parameter
+        #self.rho            = float(simulation_properties.rho)
+        #self.rho = 0.39 # this should be in travel model
+
+
+        # the user enters one nu value for each age group, assumed to be low risk
+        # population. use multiplier 9x to derive values for high risk population
+        self.nu_values      = [[],[]]
+        self.nu_values[0]   = [float(x)   for x in self.parameters.disease_parameters['nu']]
+        self.nu_values[1]   = [float(x)*9 for x in self.parameters.disease_parameters['nu']]
+
+        # transpose nu_values so that we can access values in the order we are used to
+        #   e.g.:    nu_values[age][risk]
+        self.nu_values = np.array(self.nu_values).transpose().tolist()
+
+        self.relative_susceptibility = []
+        self.relative_susceptibility = [float(x) for x in self.parameters.disease_parameters['sigma']]
+
         self.npis_schedule = disease_model.npis_schedule
 
-        logger.info(f'instantiated StochasticSEATIRD object with stochastic={self.is_stochastic}')
+        logger.info(f'instantiated StochasticSEATIRD object')
         logger.debug(f'{self.parameters}')
         return
 
@@ -175,7 +204,7 @@ class StochasticSEATIRD(DiseaseModel):
         assert(node.compartments.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] > 0)
         self._transition(node, Compartments.S.value, Compartments.E.value, group)
 
-        schedule = Schedule(self.parameters, self.now, group)
+        schedule = Schedule(self, self.now, group)
         self._initialize_exposed_transitions(node, group, schedule)
         self._initialize_contact_events(node, group, schedule, group_cache)
         return
@@ -259,7 +288,7 @@ class StochasticSEATIRD(DiseaseModel):
         beta = self._calculate_beta_w_npi(node.node_index, node.node_id)
 
         for ag in range(self.parameters.number_of_age_groups):
-            sigma = float(self.parameters.relative_susceptibility[ag])
+            sigma = float(self.relative_susceptibility[ag])
 
             for rg in range(len(RiskGroup)):
                 for vg in range(len(VaccineGroup)):
