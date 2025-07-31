@@ -92,7 +92,7 @@ class ModelParameters:
             self.np_contact_matrix = np.genfromtxt(simulation_properties.contact_data_file,
                                                    delimiter=',')
         except FileNotFoundError as e:
-            raise Exception(f'Could not open {filename}') from e
+            raise Exception(f'Could not open {simulation_properties.contact_data_file}') from e
 
         self._set_age_group_size()
 
