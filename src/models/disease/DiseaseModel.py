@@ -10,19 +10,38 @@ import numpy.typing as npt
 import numpy as np
 from models.treatments.NonPharmaInterventions import NonPharmaInterventions
 
+
 logger = logging.getLogger(__name__)
 
 
 class DiseaseModel:
 
-    def __init__(self, parameters:Type[ModelParameters], npis:Type[NonPharmaInterventions], is_stochastic:bool = False, now:float = 0.0):
-        self.is_stochastic = is_stochastic
-        self.now = now
+    def __init__(self, parameters:Type[ModelParameters], npis:Type[NonPharmaInterventions], now:float = 0.0):
+        self.disease_model = 'parent'
         self.parameters = parameters
+        self.now = now
         self.npis_schedule = npis.schedule
-        logger.info(f'instantiated DiseaseModel object with stochastic={self.is_stochastic}, now={self.now}')
+
+        logger.info(f'instantiated DiseaseModel object with model={self.disease_model}, now={self.now}')
         logger.debug(f'DiseaseModel.parameters = {self.parameters}')
         return
+
+    def __str__(self) -> str:
+        return(f'DiseaseModel:Model={self.disease_model}')
+
+
+    def get_child(self, disease_model:str):
+        self.disease_model = disease_model
+        if self.disease_model == 'seatird-deterministic':
+            from .DeterministicSEATIRD import DeterministicSEATIRD
+            return DeterministicSEATIRD(self)
+        elif self.disease_model == 'seatird-stochastic':
+            from .StochasticSEATIRD import StochasticSEATIRD
+            return StochasticSEATIRD(self)
+        else:
+            raise Exception(f'Disease model "{self.disease_model}" not recognized')
+        return
+
 
     def set_initial_conditions(self, initial: list, network: Type[Network]):
         """
@@ -34,7 +53,7 @@ class DiseaseModel:
             network (Network): network object with list of nodes
         """
         # Get proportion of the population each subgroup is in for each node = group cache & doesn't change over time
-        self.group_cache_per_node(network)
+        self._group_cache_per_node(network)
 
         for item in initial:
             # TODO the word "county" is hardcoded here but should be made dynamic in case
@@ -49,9 +68,10 @@ class DiseaseModel:
             for node in network.nodes:
                 if node.node_id == this_node_id:
                     self.expose_number_of_people(node, group, this_infected)
+        
         return
 
-    def group_cache_per_node(self, network: Type[Network]):
+    def _group_cache_per_node(self, network: Type[Network]):
         for node in network.nodes:
             group_cache = np.zeros((self.parameters.number_of_age_groups,
                                     len(RiskGroup),
@@ -81,7 +101,7 @@ class DiseaseModel:
         npi_effectiveness = self.npis_schedule[this_day][node_index]
         logging.debug(f'npi_effectiveness = {npi_effectiveness}')
 
-        beta_baseline  = self.parameters.beta
+        beta_baseline  = self.beta
         age_group_size = self.parameters.number_of_age_groups
         beta = [beta_baseline] * age_group_size
 
@@ -92,11 +112,9 @@ class DiseaseModel:
         logging.debug(f'beta_baseline = {beta_baseline}, beta = {beta}')
         return beta
 
-    def __str__(self) -> str:
-        return(f'DiseaseModel:Stochastic={self.is_stochastic}')
 
-    def expose_number_of_people(self):
-        pass
+    #def expose_number_of_people(self):
+    #    pass
 
     def simulate(self):
         pass
