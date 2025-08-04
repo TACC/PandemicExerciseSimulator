@@ -1,55 +1,54 @@
 {
-  "output": "OUTPUT_small_stochastic_min1/OUTPUT_small_stochastic_min1_sim0/OUTPUT_small_stochastic.json",
+  "output": "output/OUTPUT.json",
   "number_of_realizations": "1",
-    "is_stochastic": true,
   "data": {
-    "population": "data/texas/county_age_matrix_small.csv",
-    "contact": "data/texas/mistry_agegrp_contact_matrix.csv",
-    "flow": "data/texas/work_matrix_rel.csv", 
-    "high_risk_ratios": "data/texas/high_risk_ratios.csv",
-    "flow_reduction": "data/texas/flow_reduction.csv",
-    "relative_susceptibility": "data/texas/no_relative_susceptibility.csv"
+    "population": "data/test/county_age_matrix.csv",
+    "contact": "data/test/contact_matrix.csv",
+    "flow": "data/test/travel_work_matrix.csv",
+    "high_risk_ratios": "data/test/high_risk_ratios.csv"
   },
-  "parameters": {
-    "R0": "5",
-    "beta_scale": "10",
-    "tau": "1.2",
-    "kappa": "1.9",
-    "gamma": "10",
-    "chi": "1.0",
-    "rho": "0.39",
-    "nu": [
-      "0.0000223193",
-      "0.0000409747",
-      "0.0000837293",
-      "0.0000618089",
-      "0.0000089781"
-    ]
+  "disease_model": {
+    "identity": "seatird-deterministic",
+    "parameters": {
+        "R0": "5",
+        "beta_scale": "10",
+        "tau": "1.2",
+        "kappa": "1.9",
+        "gamma": "10",
+        "chi": "1.0",
+        "nu": [
+          "0.0000223193", 
+          "0.0000409747",
+          "0.0000837293",
+          "0.0000618089",
+          "0.0000089781"
+        ],
+        "sigma": [
+          "1.00",
+          "0.98",
+          "0.94",
+          "0.91",
+          "0.66"
+        ]
+      }
+  },
+  "travel_model": {
+    "identity": "binomial",
+    "parameters":{
+      "rho": "0.39",
+      "flow_reduction": [
+        "10.0",
+        "2.0",
+        "1.0",
+        "1.0",
+        "2.0"
+      ]
+    }
   },
   "initial_infected": [
     {
-      "county": "453",
-      "infected": "10",
-      "age_group": "2"
-    },
-    {
-      "county": "113",
-      "infected": "10",
-      "age_group": "2"
-    },
-    {
-      "county": "201",
-      "infected": "10",
-      "age_group": "2"
-    },
-    {
-      "county": "141",
-      "infected": "10",
-      "age_group": "2"
-    },
-    {
-      "county": "375",
-      "infected": "10",
+      "county": "99001",
+      "infected": "1000",
       "age_group": "2"
     }
   ],
@@ -58,26 +57,13 @@
       "name": "School Closure",
       "day": "20",
       "duration": "10",
-      "location": "113,141,201,375,453",
+      "location": "99003,99005",
       "effectiveness": [
         "0.9",
         "0.9",
         "0.0",
         "0.0",
         "0.0"
-      ]
-    },
-    {
-      "name": "Public Health Announcement",
-      "day": "50",
-      "duration": "10",
-      "location": "0",
-      "effectiveness": [
-        "0.6",
-        "0.6",
-        "0.6",
-        "0.6",
-        "0.6"
       ]
     }
   ],
@@ -86,14 +72,20 @@
     "antiviral_wastage_factor": "60",
     "antiviral_stockpile": [
       {
+        "antiviral_effectiveness": "1.5",
+        "antiviral_wastage_factor": "60",
         "day": "103",
         "amount": "17830"
       },
       {
+        "antiviral_effectiveness": "1.5",
+        "antiviral_wastage_factor": "60",
         "day": "110",
         "amount": "65310"
       },
       {
+        "antiviral_effectiveness": "1.5",
+        "antiviral_wastage_factor": "60",
         "day": "117",
         "amount": "33900"
       },

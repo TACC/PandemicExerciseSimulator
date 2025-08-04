@@ -7,17 +7,14 @@ from typing import Type
 from icecream import ic
 
 from baseclasses.Day import Day
-from baseclasses.Group import Compartments, RiskGroup
+#from baseclasses.Group import Compartments, RiskGroup
 from baseclasses.InputProperties import InputProperties
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
-
-from models.disease.DeterministicSEATIRD import DeterministicSEATIRD
 from models.disease.DiseaseModel import DiseaseModel
-from models.disease.StochasticSEATIRD import StochasticSEATIRD
-from models.travel.BinomialTravel import BinomialTravel
+#from models.travel.BinomialTravel import BinomialTravel
 from models.travel.TravelModel import TravelModel
 
 from models.treatments.NonPharmaInterventions import NonPharmaInterventions
@@ -72,7 +69,7 @@ def run( simulation_days:Type[Day],
             # modify stockpiles
 
             # simulate one step
-            #disease_model.reinitialize_events(node) # only for node->totalTransmitting() < 450
+            #
             disease_model.simulate(node, day)
 
         # Run travel model
@@ -102,38 +99,18 @@ def main():
     logger.info(f'entered main loop')
 
     # Read input properties file
-    # Can be pre-generated as template, or generated in GUI
+    # Can be pre-generated from template, or generated in GUI
     simulation_properties = InputProperties(args.input_filename)
-
-    # Get full paths
-    input_file_path = os.path.abspath(args.input_filename)
-    output_file_path = os.path.abspath(simulation_properties.output_data_file)
-    output_dir = os.path.dirname(output_file_path)
-    copied_input_path = os.path.join(output_dir, 'INPUT.json')
-
-    # Ensure output directory exists
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
-        logger.info(f'Created output directory: {output_dir}')
-
-    # Copy input file to output directory (if not already there)
-    if not os.path.exists(copied_input_path):
-        shutil.copyfile(input_file_path, copied_input_path)
-        logger.info(f'Copied input file to: {copied_input_path}')
-    else:
-        logger.info(f'Skipping copy; input file already exists at: {copied_input_path}')
-
-    # Initialize Model Parameters class instance
-    # This is a subset of the simulation properties, and contains data from a
-    # few of the input files
-    parameters = ModelParameters(simulation_properties)
-    parameters.load_data_files(simulation_properties)
-    parameters.load_contact_matrix(simulation_properties.contact_data_file)
 
     # Initialize Days class instances
     # Also used for exporting day-by-day summary information
     simulation_days = Day(args.days)
     realization_number = int(simulation_properties.number_of_realizations)
+    
+    # Initialize Model Parameters class instance
+    # This is a subset of the simulation properties, and contains data from a
+    # few of the input files
+    parameters = ModelParameters(simulation_properties)
 
     # Initialize Network class which will contain a list of Nodes
     # There is one Node for each row in the population data (e.g. one Node
@@ -154,59 +131,27 @@ def main():
                                   simulation_days.day,
                                   network.get_number_of_nodes(),
                                   parameters.number_of_age_groups
-                                  )
+                                 )
     npis.pre_process(network)
 
-    # Initialize vaccination
-    ic(simulation_properties.vaccine_adherence)
-    vaccination_model = Vaccination(simulation_properties.vaccine_wastage_factor,
-                                    simulation_properties.vaccine_pro_rata,
-                                    simulation_properties.vaccine_adherence,
-                                    simulation_properties.vaccine_effectiveness,
-                                    simulation_properties.vaccine_eff_lag_days,
-                                    simulation_properties.vaccine_stockpile
-                                    )
-    ic(vaccination_model.vaccine_adherence)
-
-    # need to add if statement for the appropriate vax strategy based on simulation_properties.vaccine_pro_rata
-    # which means it doesn't need to be passed to the initialization
-    vaccination_strategy = simulation_properties.vaccine_pro_rata
-    if vaccination_strategy == "children-stockpile":
-        vaccination_model = ProChildrenVaccineStockpileStrategy(vaccination_model, network)
-    elif vaccination_strategy == "high-risk-stockpile":
-        vaccination_model = ProHighRiskVaccineStockpileStrategy(vaccination_model, network)
-    elif vaccination_strategy == "uniform-stockpile":
-        vaccination_model = UniformVaccineStockpileStrategy(vaccination_model, network)
-    else:
-        logger.debug(f'only acceptable strategies are children-stockpile, high-risk-stockpile, and uniform-stockpile')
-
-    # Initialize base disease model with stochastic flag and set number of initial
-    # infected people in each node. Use this flag in future iterations to select
-    # different disease model here.
-
-    # default to True is is_stochastic is not in the parameter file
-    is_stochastic = simulation_properties.is_stochastic
-    disease_model = DiseaseModel(parameters, npis, is_stochastic=is_stochastic, now=0.0)
-    if is_stochastic:
-        disease_model = StochasticSEATIRD(disease_model)
-        # set_initial_conditions is inside if because we need to have an exposed compartment/model dependent
-        # TODO classic SIR would not have an exposed compartment so determine genetic way to initialize
-        disease_model.set_initial_conditions(simulation_properties.initial, network)
-    else:
-        disease_model = DeterministicSEATIRD(disease_model)
-        disease_model.set_initial_conditions(simulation_properties.initial, network)
+    # Initialize disease model
+    disease_parent = DiseaseModel(parameters,
+                                  npis,
+                                  now=0.0
+                                 )
+    disease_model = disease_parent.get_child(simulation_properties.disease_model)
+    disease_model.set_initial_conditions(simulation_properties.initial, network)
 
     # Initialize a travel model - will default to Binomial travel
-    travel_model = TravelModel()
-    if True:
-        travel_model = BinomialTravel()
-
-    # Initialize output writer
-    writer = Writer(simulation_properties.output_data_file)
+    travel_parent = TravelModel(parameters)
+    travel_model = travel_parent.get_child(simulation_properties.travel_model)
 
     # Vaccine distribution strategy
     # Vaccine schedule
     # Antiviral distribution
+
+    # Initialize output writer
+    writer = Writer(simulation_properties.output_data_file)
 
     for _ in range(realization_number):
 
