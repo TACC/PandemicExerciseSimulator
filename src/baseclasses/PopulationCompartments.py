@@ -60,7 +60,7 @@ class PopulationCompartments:
         return age_list
 
 
-    def expose_number_of_people(self, group:Type[Group], num_to_expose:int):
+    def expose_number_of_people_bulk(self, group:Type[Group], num_to_expose:int):
         """
         When entering this function, move people from Susceptible => Exposed
 
