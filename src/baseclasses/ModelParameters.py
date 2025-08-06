@@ -37,24 +37,7 @@ class ModelParameters:
         self.antiviral_stockpile      = simulation_properties.antiviral_stockpile
 
         # vaccines
-        if simulation_properties.vaccine_wastage_factor is not None:
-            self.vaccine_wastage_factor  = float(simulation_properties.vaccine_wastage_factor)
-        else:
-            self.vaccine_wastage_factor  = simulation_properties.vaccine_wastage_factor
-        self.vaccine_pro_rata        = simulation_properties.vaccine_pro_rata
-        if simulation_properties.vaccine_adherence is not None:
-            self.vaccine_adherence = [float(x) for x in simulation_properties.vaccine_adherence]
-        else:
-            self.vaccine_adherence = simulation_properties.vaccine_adherence
-        if simulation_properties.vaccine_effectiveness is not None:
-            self.vaccine_effectiveness = [float(x) for x in simulation_properties.vaccine_effectiveness]
-        else:
-            self.vaccine_effectiveness = simulation_properties.vaccine_effectiveness
-        if simulation_properties.vaccine_eff_lag_days is not None:
-            self.vaccine_eff_lag_days  = float(simulation_properties.vaccine_eff_lag_days)
-        else:
-            self.vaccine_eff_lag_days  = simulation_properties.vaccine_eff_lag_days
-        self.vaccine_stockpile       = simulation_properties.vaccine_stockpile
+        self.vaccine_parameters = simulation_properties.vaccine_parameters
 
         # some things assigned later
         self.number_of_age_groups = 0
@@ -74,8 +57,7 @@ class ModelParameters:
         return( f'disease_parameters={self.disease_parameters}\n'
                 f'travel_parameters={self.travel_parameters}\n'
                 f'non_pharma_interventions={self.non_pharma_interventions}\n'
-                f'vaccine_effectiveness = {self.vaccine_effectiveness}\n'
-                f'vaccine_adherence = {self.vaccine_adherence}\n'
+                f'vaccine_parameters = {self.vaccine_parameters}\n'
                 f'high_risk_ratios = {self.high_risk_ratios}\n'
                 f'number_of_age_groups = {self.number_of_age_groups}\n'
                 f'model parameter-associated contact matrix=\n{self.np_contact_matrix}\n'
@@ -99,9 +81,6 @@ class ModelParameters:
             raise Exception(f'Could not open {simulation_properties.contact_data_file}') from e
 
         self._set_age_group_size()
-
-        if not self.vaccine_effectiveness:
-            self.vaccine_effectiveness = [0]*len(self.high_risk_ratios)
 
         return
 
