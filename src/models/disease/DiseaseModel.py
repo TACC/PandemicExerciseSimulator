@@ -6,6 +6,7 @@ from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.Node import Node
 from baseclasses.Group import Group, RiskGroup, VaccineGroup
+from baseclasses.PopulationCompartments import PopulationCompartments
 import numpy.typing as npt
 import numpy as np
 from models.treatments.NonPharmaInterventions import NonPharmaInterventions
@@ -44,7 +45,7 @@ class DiseaseModel:
         return
 
 
-    def set_initial_conditions(self, initial: list, network: Type[Network]):
+    def set_initial_conditions(self, initial: list, network: Type[Network], vaccine_model:Type[Vaccination]):
         """
         This method is invoked from the main simulator block. Read in the list of initial infected
         per location per age group, and expose
@@ -68,7 +69,7 @@ class DiseaseModel:
 
             for node in network.nodes:
                 if node.node_id == this_node_id:
-                    self.expose_number_of_people(node, group, this_infected)
+                    self.expose_number_of_people(node, group, this_infected, vaccine_model)
         
         return
 
