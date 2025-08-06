@@ -9,6 +9,7 @@ from baseclasses.Group import Group, RiskGroup, VaccineGroup
 import numpy.typing as npt
 import numpy as np
 from models.treatments.NonPharmaInterventions import NonPharmaInterventions
+from models.treatments.Vaccination import Vaccination
 
 
 logger = logging.getLogger(__name__)
