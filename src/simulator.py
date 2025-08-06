@@ -13,15 +13,11 @@ from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
-from models.disease.DiseaseModel import DiseaseModel
-#from models.travel.BinomialTravel import BinomialTravel
-from models.travel.TravelModel import TravelModel
 
+from models.disease.DiseaseModel import DiseaseModel
+from models.travel.TravelModel import TravelModel
 from models.treatments.NonPharmaInterventions import NonPharmaInterventions
 from models.treatments.Vaccination import Vaccination
-from models.treatments.ProChildrenVaccineStockpileStrategy import ProChildrenVaccineStockpileStrategy
-from models.treatments.ProHighRiskVaccineStockpileStrategy import ProHighRiskVaccineStockpileStrategy
-from models.treatments.UniformVaccineStockpileStrategy import UniformVaccineStockpileStrategy
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNING',
@@ -40,9 +36,9 @@ logger = logging.getLogger(__name__)
 def run( simulation_days:Type[Day],
          parameters:Type[ModelParameters],
          network:Type[Network],
+         vaccine_model:Type[Vaccination],
          disease_model: Type[DiseaseModel],
          travel_model:Type[TravelModel],
-         vaccine_model:Type[Vaccination],
          writer:Type[Writer]
        ):
     """
@@ -152,23 +148,25 @@ def main():
                                  )
     npis.pre_process(network)
 
+    # Initialize antiviral model
+
+    # Initialize vaccine model
+    vaccine_parent = Vaccination(parameters)
+    vaccine_model  = vaccine_parent.get_child(simulation_properties.vaccine_model, network)
+
+
     # Initialize disease model
     disease_parent = DiseaseModel(parameters,
                                   npis,
                                   now=0.0
                                  )
     disease_model  = disease_parent.get_child(simulation_properties.disease_model)
-    disease_model.set_initial_conditions(simulation_properties.initial, network)
+    # The Gillespie algorithm needs vaccine effectiveness
+    disease_model.set_initial_conditions(simulation_properties.initial, network, vaccine_model)
 
     # Initialize a travel model - will default to Binomial travel
     travel_parent = TravelModel(parameters)
     travel_model  = travel_parent.get_child(simulation_properties.travel_model)
-
-    # Initialize antiviral model
-
-    # Initialize vaccine model
-    vaccine_parent = Vaccination(parameters)
-    vaccine_model  = vaccine_parent.get_child(simulation_properties.vaccine_model, network)
 
     # Initialize output writer
     writer = Writer(simulation_properties.output_data_file)
@@ -178,9 +176,9 @@ def main():
         run( simulation_days,
              parameters,
              network,
+             vaccine_model,
              disease_model,
              travel_model,
-             vaccine_model,
              writer
            )
         
