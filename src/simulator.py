@@ -37,12 +37,12 @@ logging.basicConfig(level=args.loglevel, format=format_str)
 logger = logging.getLogger(__name__)
 
 
-def run( simulation_days:Type[Day], 
-         network:Type[Network],
-         vaccination_model:Type[Vaccination],
-         disease_model:Type[DiseaseModel],
-         travel_model:Type[TravelModel],
+def run( simulation_days:Type[Day],
          parameters:Type[ModelParameters],
+         network:Type[Network],
+         disease_model: Type[DiseaseModel],
+         travel_model:Type[TravelModel],
+         vaccine_model:Type[Vaccination],
          writer:Type[Writer]
        ):
     """
@@ -57,23 +57,23 @@ def run( simulation_days:Type[Day],
 
     # Iterate over each day, each node...
     for day in range(1, simulation_days.day+1):
+        # Run distributions, treatments, stockpiles, and simulation for each node
         for node in network.nodes:
-            # Run distributions, treatments, stockpiles, and simulation for each node
-            if day==1:
-                # Only on the first day check if any day 0 vaccines must be distributed
-                vaccination_model.distribute_vaccines(node, day=0)
 
-            # handle distributions
-            vaccination_model.distribute_vaccines(node, day)
+            # Distribute any day 0 vaccines on the beginning first day
+            if day == 1:
+                vaccine_model.distribute_vaccines(node, day=0)
+            # Then distribute current day's vaccines
+            vaccine_model.distribute_vaccines(node, day)
+
             # apply treatments
             # modify stockpiles
 
             # simulate one step
-            #
-            disease_model.simulate(node, day)
+            disease_model.simulate(node, day, vaccine_model)
 
         # Run travel model
-        travel_model.travel(network, disease_model, parameters, day)
+        travel_model.travel(network, disease_model, parameters, day, vaccine_model)
 
         # write output
         writer.write(day, network)
@@ -101,6 +101,24 @@ def main():
     # Read input properties file
     # Can be pre-generated from template, or generated in GUI
     simulation_properties = InputProperties(args.input_filename)
+
+    # Get full paths
+    input_file_path   = os.path.abspath(args.input_filename)
+    output_file_path  = os.path.abspath(simulation_properties.output_data_file)
+    output_dir        = os.path.dirname(output_file_path)
+    copied_input_path = os.path.join(output_dir, 'INPUT.json')
+
+    # Ensure output directory exists
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+        logger.info(f'Created output directory: {output_dir}')
+
+    # Copy input file to output directory (if not already there), to remember which file generated output
+    if not os.path.exists(copied_input_path):
+        shutil.copyfile(input_file_path, copied_input_path)
+        logger.info(f'Copied input file to: {copied_input_path}')
+    else:
+        logger.info(f'Skipping copy; input file already exists at: {copied_input_path}')
 
     # Initialize Days class instances
     # Also used for exporting day-by-day summary information
@@ -139,16 +157,18 @@ def main():
                                   npis,
                                   now=0.0
                                  )
-    disease_model = disease_parent.get_child(simulation_properties.disease_model)
+    disease_model  = disease_parent.get_child(simulation_properties.disease_model)
     disease_model.set_initial_conditions(simulation_properties.initial, network)
 
     # Initialize a travel model - will default to Binomial travel
     travel_parent = TravelModel(parameters)
-    travel_model = travel_parent.get_child(simulation_properties.travel_model)
+    travel_model  = travel_parent.get_child(simulation_properties.travel_model)
 
-    # Vaccine distribution strategy
-    # Vaccine schedule
-    # Antiviral distribution
+    # Initialize antiviral model
+
+    # Initialize vaccine model
+    vaccine_parent = Vaccination(parameters)
+    vaccine_model  = vaccine_parent.get_child(simulation_properties.vaccine_model, network)
 
     # Initialize output writer
     writer = Writer(simulation_properties.output_data_file)
@@ -156,11 +176,11 @@ def main():
     for _ in range(realization_number):
 
         run( simulation_days,
+             parameters,
              network,
-             vaccination_model,
              disease_model,
              travel_model,
-             parameters,
+             vaccine_model,
              writer
            )
         
