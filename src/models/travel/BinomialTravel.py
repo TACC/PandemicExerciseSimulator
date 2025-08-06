@@ -11,6 +11,7 @@ from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.Node import Node
 from utils.RNGMath import rand_binomial
+from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,8 @@ class BinomialTravel(TravelModel):
         return
 
 
-    def travel(self, network:Type[Network], disease_model:Type[DiseaseModel], parameters:Type[ModelParameters], time:int):
+    def travel(self, network:Type[Network], disease_model:Type[DiseaseModel], parameters:Type[ModelParameters], time:int,
+               vaccine_model:Type[Vaccination]):
         """
         Simulate travel between nodes. "Sink" refers to the Node where people travel to; "Source"
         refers to the Node where people travel from.
@@ -53,7 +55,7 @@ class BinomialTravel(TravelModel):
                                                      disease_model)
                     logging.debug(f'probabilities = {probabilities}')
 
-            self._expose_from_travel(parameters, node_sink, probabilities, disease_model)
+            self._expose_from_travel(parameters, node_sink, probabilities, disease_model, vaccine_model)
         return
 
 
@@ -117,7 +119,8 @@ class BinomialTravel(TravelModel):
 
 
     def _expose_from_travel(self, parameters:Type[ModelParameters], node_sink:Type[Node], 
-                            probabilities:list, disease_model:Type[DiseaseModel]):
+                            probabilities:list, disease_model:Type[DiseaseModel],
+                            vaccine_model:Type[Vaccination]):
         """
         For each age group, risk group, and vaccine group in the sink Node, use a binomial function
         to determine the actual number of exposures in the Susceptible compartments. Expose those
@@ -132,7 +135,7 @@ class BinomialTravel(TravelModel):
         for ag in range(parameters.number_of_age_groups):
             for rg in range(len(RiskGroup)):
                 for vg in range(len(VaccineGroup)):
-                    prob = ((1-parameters.vaccine_effectiveness[ag]) * probabilities[ag]) \
+                    prob = ((1-vaccine_model.vaccine_effectiveness[ag]) * probabilities[ag]) \
                         if vg == VaccineGroup.V.value else probabilities[ag]
                     
                     # TODO what is this continuity correction (+ 0.5)?
