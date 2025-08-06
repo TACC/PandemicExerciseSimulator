@@ -147,7 +147,7 @@ class BinomialTravel(TravelModel):
                                       f'number_of_exposures = {number_of_exposures}')
                         
                     group = Group(ag, rg, vg)
-                    disease_model.expose_number_of_people(node_sink, group, number_of_exposures)
+                    disease_model.expose_number_of_people(node_sink, group, number_of_exposures, vaccine_model)
         return
 
     
