@@ -4,40 +4,53 @@ from typing import Type
 from icecream import ic
 ic.disable()
 
-from baseclasses.Group import Group, VaccineGroup, Compartments
-from baseclasses.Node import Node
+from .Vaccination import Vaccination
 from baseclasses.Network import Network
+from baseclasses.Node import Node
+from baseclasses.Group import Group, VaccineGroup, Compartments
 
+logger = logging.getLogger(__name__)
 
-class UniformVaccineStockpileStrategy:
-    def __init__(self, vaccination, network):
+class UniformVaccineStockpileStrategy(Vaccination):
+    def __init__(self, vaccine_model:Type[Vaccination], network:Type[Network]):
         """
         Args:
-            vaccination (Vaccination): An instance of the Vaccination class
+            vaccine_model (Vaccination):
             network (Network): Network object with all nodes
         """
-        self.vaccination = vaccination
+        self.parameters    = vaccine_model.parameters
+
+        # need to re-name, it is int days of vaccine half life (60 days)
+        self.vaccine_wastage_factor = float(self.parameters.vaccine_parameters.get('vaccine_wastage_factor', 0))
+        self.vaccine_adherence      = [ # age specific float 0.0 to 1.0, but need by any county/risk/breakout
+            float(x) for x in self.parameters.vaccine_parameters.get('vaccine_adherence', []) ]
+
+        # non-negative int of when vax is effective (14 days)
+        input_vax_lag               = self.parameters.vaccine_parameters.get('vaccine_eff_lag_days', 0)
+        self.vaccine_eff_lag_days   = max(int(input_vax_lag), 0)
+        # list of dictionaries but in non-stockpile strategy will be CSV file with re-name from "stockpile" to vax given
+        self.vaccine_stockpile      = self.parameters.vaccine_parameters.get('vaccine_stockpile', [])
 
         # Convert list of dicts to {day: amount}
         # Leaving in child class in case we want to take in proportions, but leaning toward count only intake
         self.stockpile_by_day = {}
         day_collision_tracker = {}
-        for entry in self.vaccination.vaccine_stockpile:
+        for entry in self.vaccine_stockpile:
             stockpile_day = int(entry["day"])
             amount = float(entry["amount"])
 
             # Shift by effectiveness lag
-            effective_day = stockpile_day + self.vaccination.vaccine_eff_lag_days
+            effective_day = stockpile_day + self.vaccine_eff_lag_days
 
             # Set any negative effective days to day 0, allows for easy shifting of vax release date
             if effective_day < 0:
-                logging.warning(
+                logger.warning(
                     f"Effective day {effective_day} is negative (stockpile day {stockpile_day}); reassigning to day 0")
                 effective_day = 0
 
             # Check if this day already has an entry
             if effective_day in self.stockpile_by_day:
-                logging.warning(
+                logger.warning(
                     f"Multiple vaccine stockpile entries assigned to day {effective_day}; combining amounts.")
                 day_collision_tracker.setdefault(effective_day, []).append(stockpile_day)
 
@@ -46,7 +59,7 @@ class UniformVaccineStockpileStrategy:
 
         # Optionally log all combined day mappings at once
         for day, original_days in day_collision_tracker.items():
-            logging.info(f"Day {day} combines stockpile from original days: {original_days}")
+            logger.debug(f"Day {day} combines stockpile from original days: {original_days}")
 
         # Total population across all nodes
         self.total_population = sum(node.total_population() for node in network.nodes)
@@ -65,7 +78,7 @@ class UniformVaccineStockpileStrategy:
             return
 
         if self.total_population == 0:
-            logging.warning("Total population is 0; skipping vaccination.")
+            logger.warning("Total population is 0; skipping vaccination.")
             return
 
         stockpile_today = self.stockpile_by_day[day]
@@ -86,16 +99,17 @@ class UniformVaccineStockpileStrategy:
         node_share = min(node_share, self.stockpile_by_day[day])
         self.stockpile_by_day[day] -= node_share
 
-        logging.debug(f"Day {day} — Node {node.node_id} gets {node_share} vaccines; "
+        logger.debug(f"Day {day} — Node {node.node_id} gets {node_share} vaccines; "
                     f"{self.stockpile_by_day[day]:.0f} remaining")
 
         # Allocate vaccines released on day
         leftover_vax = self._allocate_within_node(node, node_share)
+        ic(leftover_vax)
         # If any vaccines remain after trying to distribute them all then save to next day
         if leftover_vax > 0:
             self.stockpile_by_day.setdefault(day + 1, 0.0)
             self.stockpile_by_day[day + 1] += leftover_vax
-            logging.info(f"Day {day}: {leftover_vax} leftover vaccines rolled over to day {day + 1}.")
+            logger.debug(f"Day {day}: {leftover_vax} leftover vaccines rolled over to day {day + 1}.")
 
     def _allocate_within_node(self, node, available_vaccines):
         # Prepare a snapshot of today's compartment state so we aren't using updated values mid-loop
@@ -113,7 +127,8 @@ class UniformVaccineStockpileStrategy:
         ic(total_sus_unvax)
         # If there are no eligible people or no vaccines, skip
         if total_sus_unvax == 0 or available_vaccines <= 0:
-            return
+            # still need vaccines_left to be an integer on return
+            return 0
 
         # Create a list of all unvaccinated groups with susceptibles.
         # Each item is a tuple: (age, risk, susceptible count)
@@ -133,7 +148,7 @@ class UniformVaccineStockpileStrategy:
             ic(age)
             ic(risk)
             
-            adherence = float(self.vaccination.vaccine_adherence[age])
+            adherence = float(self.vaccine_adherence[age])
             ic(adherence)
 
             # Compute this group’s "share" of the total eligible population
@@ -166,7 +181,7 @@ class UniformVaccineStockpileStrategy:
             vax_group = Group(age=age, risk_group=risk, vaccine_group=VaccineGroup.V.value)
 
             # Actually move the people between compartments
-            self.vaccination.vaccinate_number_of_people(
+            self.vaccinate_number_of_people(
                 node, unvax_group, vax_group, num_to_vaccinate
             )
 
