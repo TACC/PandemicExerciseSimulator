@@ -7,6 +7,7 @@ from .DiseaseModel import DiseaseModel
 from baseclasses.Group import Group, RiskGroup, VaccineGroup
 from baseclasses.Network import Network
 from baseclasses.Node import Node
+from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ def SEATIRD_model(y, transmission_rate, tau, kappa, chi, gamma, nu):
 
 class DeterministicSEATIRD(DiseaseModel):
 
-    def __init__(self, disease_model:Type[DiseaseModel]):
+    def __init__(self, disease_model:Type[DiseaseModel]): # add antiviral_model
         #self.is_stochastic = disease_model.is_stochastic
         self.now = disease_model.now
         self.parameters = disease_model.parameters
@@ -77,6 +78,7 @@ class DeterministicSEATIRD(DiseaseModel):
         self.relative_susceptibility = []
         self.relative_susceptibility = [float(x) for x in self.parameters.disease_parameters['sigma']]
 
+        # this isn't used, bc _calculate_beta_w_npi uses the schedule
         self.npis_schedule = disease_model.npis_schedule
 
         logger.info(f'instantiated DeterministicSEATIRD object')
@@ -87,7 +89,7 @@ class DeterministicSEATIRD(DiseaseModel):
         node.compartments.expose_number_of_people(group, num_to_expose)
         return
 
-    def simulate(self, node: Type[Node], time: int):
+    def simulate(self, node:Type[Node], time: int, vaccine_model:Type[Vaccination]):
         """
         Main simulation logic for deterministic SEATIRD model.
         Each group (age, risk, vaccine) is simulated separately via ODE.
@@ -138,7 +140,7 @@ class DeterministicSEATIRD(DiseaseModel):
 
                 # 1 is vaccinated subgroup, 0 unvaccinated subgroup
                 if contacted_group.vaccine == 1: # vaccinated then get effectiveness by age group
-                    vaccine_effectiveness = self.parameters.vaccine_effectiveness[contacted_group.age]
+                    vaccine_effectiveness = vaccine_model.vaccine_effectiveness[contacted_group.age]
                 else: # if you're not vaccinated, it has no effectiveness
                     vaccine_effectiveness = 0
                 sigma              = float(self.relative_susceptibility[contacted_group.age])
