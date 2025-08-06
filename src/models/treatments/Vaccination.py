@@ -2,20 +2,47 @@ import logging
 import warnings
 from typing import Type
 
+from baseclasses.ModelParameters import ModelParameters
+from baseclasses.Network import Network
 from baseclasses.Node import Node
 from baseclasses.Group import Group
 from baseclasses.PopulationCompartments import Compartments
 
+logger = logging.getLogger(__name__)
+
 class Vaccination:
 
-    def __init__(self, vaccine_wastage_factor, vaccine_pro_rata, vaccine_adherence, vaccine_effectiveness, 
-                 vaccine_eff_lag_days, vaccine_stockpile):
-        self.vaccine_wastage_factor  = vaccine_wastage_factor # need to re-name, it is int days of vaccine half life (60 days)
-        self.vaccine_pro_rata        = vaccine_pro_rata # name of strategy for vaccine distribution
-        self.vaccine_adherence       = vaccine_adherence # age specific float 0.0 to 1.0, but need by any county/risk/breakout
-        self.vaccine_effectiveness   = vaccine_effectiveness # float 0.0 to 1.0
-        self.vaccine_eff_lag_days    = vaccine_eff_lag_days # non-negative int of when vax is effective (14 days)
-        self.vaccine_stockpile       = vaccine_stockpile # dictionary but need csv file option, should re-name from "stockpile" to vax given
+    def __init__(self, parameters:Type[ModelParameters]):
+        self.vaccine_model_str = 'parent'
+        self.parameters = parameters
+
+        num_age_grps = parameters.number_of_age_groups
+
+        # VE is used in travel model and disease model
+        self.vaccine_effectiveness  = [ # float 0.0 to 1.0
+            float(x) for x in self.parameters.vaccine_parameters.get('vaccine_effectiveness', []) ]
+        if not self.vaccine_effectiveness:
+            self.vaccine_effectiveness = [0.0] * num_age_grps
+
+        logger.info(f'Instantiated VaccineModel object with model={self.vaccine_model_str}')
+        logger.debug(f'Vaccination.parameters = {self.parameters}')
+
+
+    def get_child(self, vaccine_model_str:str, network:Type[Network]):
+        """
+        vaccine_model_str (str): Name of vaccine_model from input file
+        Choose vaccination strategy if not "None"
+        """
+        if vaccine_model_str is None:
+            logger.info("No vaccine strategy specified; using base Vaccination class.")
+            return self  # still has effectiveness, but no distribution behavior
+
+        if vaccine_model_str == "uniform-stockpile":
+            from .UniformVaccineStockpileStrategy import UniformVaccineStockpileStrategy
+            return UniformVaccineStockpileStrategy(self, network)
+        else:
+            raise Exception(f'Vaccination model "{vaccine_model_str}" not recognized')
+        return
 
     # Taking in the unvax and vax groups in case we ever want more than 2 compartments, e.g. boosters, multiple vaccines
     def vaccinate_number_of_people(self, node: Type[Node], unvax_group: Type[Group], vax_group: Type[Group], num_to_vaccinate: int):
