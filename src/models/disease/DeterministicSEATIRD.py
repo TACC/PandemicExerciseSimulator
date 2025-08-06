@@ -85,8 +85,9 @@ class DeterministicSEATIRD(DiseaseModel):
         logger.debug(f'{self.parameters}')
         return
 
-    def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int):
-        node.compartments.expose_number_of_people(group, num_to_expose)
+    def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int, vaccine_model:Type[Vaccination]):
+        # this is a bulk transfer of people to move from S to E by group
+        node.compartments.expose_number_of_people_bulk(group, num_to_expose)
         return
 
     def simulate(self, node:Type[Node], time: int, vaccine_model:Type[Vaccination]):
