@@ -22,21 +22,25 @@ class UniformVaccineStockpileStrategy(Vaccination):
         # VE defined in parent class as it's needed by travel and disease model even with no vaccination, i.e. VE=0
         self.vaccine_effectiveness = vaccine_model.vaccine_effectiveness
 
-        # need to re-name, it is int days of vaccine half life (60 days)
-        self.vaccine_wastage_factor = float(self.parameters.vaccine_parameters.get('vaccine_wastage_factor', 0))
+        # Vaccine half life in days, typically 60
+        self.vaccine_half_life_days = self.parameters.vaccine_parameters.get('vaccine_half_life_days', None)
+        if self.vaccine_half_life_days is not None:
+            self.daily_vaccine_wastage  = 0.5 ** (1 / self.vaccine_half_life_days)
+        else:
+            self.daily_vaccine_wastage = None
+        # 0.0 to 1.0 fraction of the population that can be vaccinated per day, default no limit
+        self.vaccine_capacity       = float(self.parameters.vaccine_parameters.get("vaccine_capacity_proportion", 1.0))
         self.vaccine_adherence      = [ # age specific float 0.0 to 1.0, but need by any county/risk/breakout
             float(x) for x in self.parameters.vaccine_parameters.get('vaccine_adherence', []) ]
-
         # non-negative int of when vax is effective (14 days)
         input_vax_lag               = self.parameters.vaccine_parameters.get('vaccine_eff_lag_days', 0)
         self.vaccine_eff_lag_days   = max(int(input_vax_lag), 0)
-
         # list of dictionaries but in non-stockpile strategy will be CSV file with re-name from "stockpile" to vax given
         self.vaccine_stockpile      = self.parameters.vaccine_parameters.get('vaccine_stockpile', [])
 
         # Convert list of dicts to {day: amount}
         # Leaving in child class in case we want to take in proportions, but leaning toward count only intake
-        self.stockpile_by_day = {}
+        self.network_stockpile_by_day = {}
         day_collision_tracker = {}
         for entry in self.vaccine_stockpile:
             stockpile_day = int(entry["day"])
@@ -52,23 +56,85 @@ class UniformVaccineStockpileStrategy(Vaccination):
                 effective_day = 0
 
             # Check if this day already has an entry
-            if effective_day in self.stockpile_by_day:
+            if effective_day in self.network_stockpile_by_day:
                 logger.warning(
                     f"Multiple vaccine stockpile entries assigned to day {effective_day}; combining amounts.")
                 day_collision_tracker.setdefault(effective_day, []).append(stockpile_day)
 
-            self.stockpile_by_day.setdefault(effective_day, 0.0)
-            self.stockpile_by_day[effective_day] += amount
+            self.network_stockpile_by_day.setdefault(effective_day, 0.0)
+            self.network_stockpile_by_day[effective_day] += amount
 
-        # Optionally log all combined day mappings at once
+        # Log all combined day mappings in as warning
         for day, original_days in day_collision_tracker.items():
-            logger.debug(f"Day {day} combines stockpile from original days: {original_days}")
+            logger.warning(f"Day {day} combines stockpile from original days: {original_days}")
+
+        # Create node specific stockpile dictionaries
+        self.node_stockpile_by_day = {node.node_id: {} for node in network.nodes}
 
         # Total population across all nodes
-        self.total_population = sum(node.total_population() for node in network.nodes)
+        self.network_population = sum(node.total_population() for node in network.nodes)
 
     # Uniform vaccination strategy only considers proportion of total population in each node
-    def distribute_vaccines(self, node, day):
+    def distribute_vaccines_to_nodes(self, network, day):
+        """
+        Called from simulate.py once per day.
+        Allocates stockpile amount to nodes in network.
+
+        Args:
+            network (Network): The network to distribute vaccines to
+            day (int): Current day in simulation
+        """
+        if day not in self.network_stockpile_by_day:
+            return
+
+        stockpile_today = float(self.network_stockpile_by_day[day])
+        if stockpile_today <= 0:
+            return
+
+        if self.network_population == 0:
+            logger.warning("Total population in network is 0, define a population to continue.")
+            return
+
+        # Proportional allocation of vaccines to nodes
+        node_allocs = []  # list of dicts
+        total_floor = 0
+        for node in network.nodes:
+            node_population = node.total_population()
+            fractional_share = stockpile_today * (node_population / self.network_population)
+            floor_alloc = int(fractional_share)  # keep your int() rounding
+            remainder = fractional_share - floor_alloc
+            node_allocs.append({
+                "node": node.node_id,
+                "alloc": floor_alloc,
+                "remainder": remainder
+            })
+            total_floor += floor_alloc
+
+        # Distribute leftover vaccines by largest remainder
+        leftover_vax = int(round(stockpile_today - total_floor))
+        if leftover_vax > 0:
+            node_allocs.sort(key=lambda x: x["remainder"], reverse=True)
+            # Extra protection but leftover_vax should always be <= total nodes
+            for i in range(min(leftover_vax, len(node_allocs))):
+                node_allocs[i]["alloc"] += 1
+
+        ic(node_allocs)
+
+        # Update node-specific stockpiles
+        for n in node_allocs:
+            alloc = int(n["alloc"])
+            if alloc <= 0:
+                continue
+            node_id = n["node"]
+            self.node_stockpile_by_day[node_id].setdefault(day, 0.0)
+            self.node_stockpile_by_day[node_id][day] += alloc
+
+        # Stockpile today in network should be 0 as all vaccines are allocated to some node in network
+        leftover_check = sum(n["alloc"] for n in node_allocs)
+        self.network_stockpile_by_day[day] -= leftover_check
+        ic(self.network_stockpile_by_day[day])
+
+    def distribute_vaccines_to_population(self, node, day):
         """
         Called from simulate.py once per day per node.
         Allocates stockpile amount to the node and distributes among its age/risk groups.
@@ -77,45 +143,41 @@ class UniformVaccineStockpileStrategy(Vaccination):
             node (Node): The node receiving vaccine
             day (int): Current day in simulation
         """
-        if day not in self.stockpile_by_day:
+        # If no more vaccines in stockpile skip
+        vaccines_in_stockpile = float(self.node_stockpile_by_day[node.node_id].get(day, 0.0))
+        ic(vaccines_in_stockpile)
+        if vaccines_in_stockpile <= 0: # shouldn't be less than 0
             return
 
-        if self.total_population == 0:
-            logger.warning("Total population is 0; skipping vaccination.")
-            return
+        # Do half life check
+        if self.daily_vaccine_wastage is not None:
+            vaccines_in_stockpile *= self.daily_vaccine_wastage
+            self.node_stockpile_by_day[node.node_id][day] = vaccines_in_stockpile
+            ic(f"New Stockpile count after decay: {vaccines_in_stockpile}")
 
-        stockpile_today = self.stockpile_by_day[day]
-
-        # Proportional allocation
-        node_population = node.total_population()
-        if node_population == 0:
-            return
-
-        # Calculate ideal share, round down to integer
-        fractional_share = stockpile_today * (node_population / self.total_population)
-        node_share = round(fractional_share, 0)  # round to whole doses
-
-        if node_share == 0.0:
-            return  # skip this node if its share is <1
-
-        # Cap node share if stockpile doesn't have enough left
-        node_share = min(node_share, self.stockpile_by_day[day])
-        self.stockpile_by_day[day] -= node_share
-
-        logger.debug(f"Day {day} — Node {node.node_id} gets {node_share} vaccines; "
-                    f"{self.stockpile_by_day[day]:.0f} remaining")
-        ic(f"Day {day} — Node {node.node_id} gets {node_share} vaccines; "
-                    f"{self.stockpile_by_day[day]:.0f} remaining")
+        # Cap the fraction of pop that can be vaccinated
+        # This could be better as a property of the node like node.max_vax_per_day()
+        # Might not be correct given age specific adherence, but doing this for now
+        max_vax_per_day = np.floor(self.vaccine_capacity * node.total_population())
+        vax_given_today = min(max_vax_per_day, vaccines_in_stockpile)
+        ic(vax_given_today)
+        # when stockpile less than max given the remaining will zero out, even for non-integer doses
+        # i.e. any dose < 1 due to decay will be lost and not rolled over
+        remaining_stockpile = vaccines_in_stockpile - vax_given_today
+        ic(remaining_stockpile)
 
         # Allocate vaccines released on day
-        leftover_vax = self._allocate_within_node(node, node_share)
-        ic(leftover_vax)
+        leftover_vax_not_distributed = self._allocate_within_node(node, vax_given_today)
+        ic(leftover_vax_not_distributed)
+        total_vax_to_rollover = remaining_stockpile + leftover_vax_not_distributed
+        ic(total_vax_to_rollover)
         # If any vaccines remain after trying to distribute them all then save to next day
-        if leftover_vax > 0:
-            self.stockpile_by_day.setdefault(day + 1, 0.0)
-            self.stockpile_by_day[day + 1] += leftover_vax
-            logger.debug(f"Day {day}: {leftover_vax} leftover vaccines rolled over to day {day + 1}.")
-            ic(f"Day {day}: {leftover_vax} leftover vaccines rolled over to day {day + 1}.")
+        if total_vax_to_rollover > 0:
+            self.node_stockpile_by_day[node.node_id].setdefault(day + 1, 0.0)
+            self.node_stockpile_by_day[node.node_id][day + 1] += total_vax_to_rollover
+            logger.debug(f"Day {day}: {total_vax_to_rollover} leftover vaccines rolled over to day {day + 1}.")
+            ic(f"Day {day}: {total_vax_to_rollover} leftover vaccines rolled over to day {day + 1}.")
+
 
     def _allocate_within_node(self, node, available_vaccines):
         # Prepare a snapshot of today's compartment state so we aren't using updated values mid-loop
@@ -123,6 +185,14 @@ class UniformVaccineStockpileStrategy(Vaccination):
             (group.age, group.risk, group.vaccine): np.array(node.compartments.get_compartment_vector_for(group))
             for group in node.compartments.get_all_groups()
         }
+
+        # Create a list of all unvaccinated groups with susceptibles.
+        # Each item is a tuple: (age, risk, susceptible count)
+        eligible_groups = [
+            (age, risk, comp[Compartments.S.value])
+            for (age, risk, vaccine), comp in compartments_today.items()
+            if vaccine == VaccineGroup.U.value and comp[Compartments.S.value] > 0
+        ]
 
         # Calculate total susceptible *unvaccinated* population across all age/risk groups in the node
         total_sus_unvax = sum(
@@ -136,67 +206,43 @@ class UniformVaccineStockpileStrategy(Vaccination):
             # still need vaccines_left to be an integer on return
             return 0
 
-        # Create a list of all unvaccinated groups with susceptibles.
-        # Each item is a tuple: (age, risk, susceptible count)
-        eligible_groups = [
-            (age, risk, comp[Compartments.S.value])
-            for (age, risk, vaccine), comp in compartments_today.items()
-            if vaccine == VaccineGroup.U.value and comp[Compartments.S.value] > 0
-        ]
-
-        # Track remaining vaccines to give out as we loop
-        vaccines_left = available_vaccines
-        ic(vaccines_left)
-        # Loop through all eligible age/risk groups to distribute vaccines
-        for i, (age, risk, sus_unvax) in enumerate(eligible_groups):
-
-            # Get adherence for this age group (what fraction will accept a vaccine)
-            ic(age)
-            ic(risk)
-            
-            adherence = float(self.vaccine_adherence[age])
-            ic(adherence)
-
-            # Compute this group’s "share" of the total eligible population
+        group_allocs = []
+        for (age, risk, sus_unvax) in eligible_groups:
             proportion = sus_unvax / total_sus_unvax
-            ic(sus_unvax)
-            ic(total_sus_unvax)
-            ic(proportion)
+            adherence = float(self.vaccine_adherence[age])
+            expected = available_vaccines * proportion * adherence
+            floor_alloc = min(np.floor(expected), sus_unvax)
+            remainder = expected - floor_alloc
+            group_allocs.append({
+                "group": Group(age, risk, VaccineGroup.U.value),
+                "vax_group": Group(age, risk, VaccineGroup.V.value),
+                "sus": sus_unvax,
+                "alloc": floor_alloc,
+                "remainder": remainder
+            })
 
-            # Debating this, may just keep all the same and stick with rollover
-            '''
-            # If this is the LAST group in the list, give them ALL the remaining doses
-            if i == len(eligible_groups) - 1:
-                num_to_vaccinate = vaccines_left
-            else:
-            '''
-            # Compute expected vaccines for this group (share * adherence)
-            num_to_vaccinate = round((vaccines_left * proportion * adherence), 0)
-            ic("First calc:", num_to_vaccinate)
-            # Safety: don't assign more than what's left
-            num_to_vaccinate = round(min(num_to_vaccinate, vaccines_left), 0)
-            ic("Vaccines left cap:", num_to_vaccinate)
+        # Distribute leftover vaccines
+        vaccines_given = sum(g["alloc"] for g in group_allocs)
+        leftover_node_vax = int(available_vaccines - vaccines_given)
+        ic(leftover_node_vax)
+        group_allocs.sort(key=lambda x: x["remainder"], reverse=True) # Sort by who had the biggest leftover (remainder)
+        for i in range(min(leftover_node_vax, len(group_allocs))):
+            g = group_allocs[i]
+            if g["alloc"] < g["sus"]:  # still susceptibles to vaccinate
+                g["alloc"] += 1
 
-            # Cap at the number of susceptible people in this group (can't vaccinate more than exist)
-            num_to_vaccinate = round(min(num_to_vaccinate, sus_unvax), 0)
-            ic("Sus Unvax cap:", num_to_vaccinate)
+        ic(group_allocs)
 
-            ic(VaccineGroup.U.value) # 0 as this is the unvax group
-            ic(VaccineGroup.V.value) # 1 as it's vaccinated group
-            # Build the group descriptors
-            unvax_group = Group(age=age, risk_group=risk, vaccine_group=VaccineGroup.U.value)
-            vax_group   = Group(age=age, risk_group=risk, vaccine_group=VaccineGroup.V.value)
-
-            # Actually move the people between compartments
+        # Update compartments
+        for g in group_allocs:
             self.vaccinate_number_of_people(
-                node, unvax_group, vax_group, num_to_vaccinate
+                node,
+                g["group"],  # unvaccinated group
+                g["vax_group"],  # vaccinated group
+                g["alloc"]
             )
 
-            # Subtract used vaccines from the remaining pool
-            vaccines_left -= num_to_vaccinate
-            ic(vaccines_left)
-            # If we’ve used up all vaccines, stop early
-            if vaccines_left <= 0:
-                break
+        # Return any remaining vaccines (if none could be used)
+        final_given = sum(g["alloc"] for g in group_allocs)
+        return int(available_vaccines - final_given)
 
-        return vaccines_left
