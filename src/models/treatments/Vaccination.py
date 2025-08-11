@@ -81,5 +81,8 @@ class Vaccination:
 
         return
 
-    def distribute_vaccines(self, node: Type[Node], day: int):
+    def distribute_vaccines_to_nodes(self, network: Type[Network], day: int):
+        pass
+
+    def distribute_vaccines_to_population(self, node: Type[Node], day: int):
         pass
