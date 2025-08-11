@@ -127,6 +127,12 @@ class DeterministicSEATIRD(DiseaseModel):
             # Get nu as scalar needed for the model based on age and risk group
             nu = float(self.nu_values[focal_group.age][focal_group.risk]) # nu is vector of values
 
+            # Determine vaccine effect on focal group susceptibility
+            if focal_group.vaccine == 1:
+                vaccine_effectiveness = vaccine_model.vaccine_effectiveness[focal_group.age]
+            else:
+                vaccine_effectiveness = 0.0
+
             #### Get force of infection from each interaction subgroup ####
             # This is constant in time if we don't have an NPI schedule hitting beta each day
             transmission_rate = 0
@@ -140,23 +146,25 @@ class DeterministicSEATIRD(DiseaseModel):
                 infectious_contacted = A + T + I
 
                 # 1 is vaccinated subgroup, 0 unvaccinated subgroup
-                if contacted_group.vaccine == 1: # vaccinated then get effectiveness by age group
-                    vaccine_effectiveness = vaccine_model.vaccine_effectiveness[contacted_group.age]
-                else: # if you're not vaccinated, it has no effectiveness
-                    vaccine_effectiveness = 0
+                #if contacted_group.vaccine == 1: # vaccinated then get effectiveness by age group
+                #    vaccine_effectiveness = vaccine_model.vaccine_effectiveness[contacted_group.age]
+                #else: # if you're not vaccinated, it has no effectiveness
+                #    vaccine_effectiveness = 0
                 sigma              = float(self.relative_susceptibility[contacted_group.age])
                 # infectious_contacted/total_node_pop this captures the fraction of population we need to move from S -> E
-                transmission_rate += (1.0 - vaccine_effectiveness) * beta_vector[contacted_group.age] * contact_rate \
+                transmission_rate += beta_vector[contacted_group.age] * contact_rate \
                                     * sigma * (infectious_contacted/total_node_pop)
-            # Can't have negative transmission_rate
-            transmission_rate = max(transmission_rate, 0)
+            # Apply VE to the susceptible group (focal group)
+            transmission_rate *= (1.0 - vaccine_effectiveness)
+            transmission_rate = max(transmission_rate, 0) # Can't have negative transmission_rate
+            #print(f"Transmission rate, non-zero: {transmission_rate}")
 
             model_parameters = (
                 transmission_rate,     # S => E
-                self.tau,   # E => A
-                self.kappa, # A => T
-                self.chi,   # T => I
-                self.gamma, # A/T/I => R
+                self.tau,              # E => A
+                self.kappa,            # A => T
+                self.chi,              # T => I
+                self.gamma,            # A/T/I => R
                 nu                     # A/T/I => D
             )
 
