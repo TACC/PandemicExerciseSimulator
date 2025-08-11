@@ -48,6 +48,8 @@ class Group:
     def __str__(self) -> str:
         return(f'Group object: age={self.age}, risk={self.risk}, vaccine={self.vaccine}')
 
+    def __repr__(self):
+        return self.__str__()
 
     def __eq__(self, other) -> bool:
         return ( self.age == other.age and 
