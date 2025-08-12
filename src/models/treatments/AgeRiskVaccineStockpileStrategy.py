@@ -11,7 +11,7 @@ from baseclasses.Group import Group, VaccineGroup, Compartments
 
 logger = logging.getLogger(__name__)
 
-class UniformVaccineStockpileStrategy(Vaccination):
+class AgeRiskVaccineStockpileStrategy(Vaccination):
     def __init__(self, vaccine_model:Type[Vaccination], network:Type[Network]):
         """
         Args:
