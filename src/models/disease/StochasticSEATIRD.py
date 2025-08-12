@@ -309,12 +309,9 @@ class StochasticSEATIRD(DiseaseModel):
                     # group_cache is weighting the force of infection
                     transmission_rate = (1.0 - vaccine_effectiveness) * beta[ag] * contact_rate \
                                         * sigma * group_cache[ag][rg][vg]
-                    """
-                    if node.node_id == 113:
-                        print(f"{group} \
-                        ve={vaccine_effectiveness:.2f}, beta={beta[ag]}, contact={contact_rate:.2f} \
-                        sigma={sigma:.2f}, tx_rate={transmission_rate:.4f}")
-                    """
+                    # if the rate is zero (VE=1 or other reasons), do not schedule contacts
+                    if transmission_rate <= 0.0:
+                        continue
 
                     Tc_init = schedule.Ta()
                     Tc = rand_exp_min1(transmission_rate) + Tc_init
