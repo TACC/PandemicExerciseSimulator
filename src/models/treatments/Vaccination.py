@@ -37,9 +37,9 @@ class Vaccination:
             logger.info("No vaccine strategy specified; using base Vaccination class.")
             return self  # still has effectiveness, but no distribution behavior
 
-        if vaccine_model_str == "uniform-stockpile":
-            from .UniformVaccineStockpileStrategy import UniformVaccineStockpileStrategy
-            return UniformVaccineStockpileStrategy(self, network)
+        if vaccine_model_str == "stockpile-age-risk":
+            from .AgeRiskVaccineStockpileStrategy import AgeRiskVaccineStockpileStrategy
+            return AgeRiskVaccineStockpileStrategy(self, network)
         else:
             raise Exception(f'Vaccination model "{vaccine_model_str}" not recognized')
         return
