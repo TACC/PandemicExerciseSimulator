@@ -51,18 +51,19 @@ def run( simulation_days:Type[Day],
     writer.write(0, network)
     simulation_days.snapshot(network)
 
+    # Distribute any day 0 or less vaccines to nodes and within populations
+    vaccine_model.distribute_vaccines_to_nodes(network, day=0)
+    for node in network.nodes:
+        vaccine_model.distribute_vaccines_to_population(node, day=0)
+
     # Iterate over each day, each node...
     for day in range(1, simulation_days.day+1):
         # Distribute vaccines from network stockpile to individual nodes and zero-out
-        if day == 1: # Distribute any day 0 or less vaccines to nodes
-            vaccine_model.distribute_vaccines_to_nodes(network, day=0)
         vaccine_model.distribute_vaccines_to_nodes(network, day)
 
         # Run distributions, treatments, stockpiles, and disease simulation for each node
         for node in network.nodes:
-            if day == 1:
-                vaccine_model.distribute_vaccines_to_population(node, day=0)
-            # Then distribute current day's vaccines and modify node stockpiles
+            # Distribute current day's vaccines and modify node stockpiles
             vaccine_model.distribute_vaccines_to_population(node, day)
 
             # apply antivirals
