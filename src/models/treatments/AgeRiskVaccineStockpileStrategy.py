@@ -165,7 +165,7 @@ class AgeRiskVaccineStockpileStrategy(Vaccination):
         if vaccines_in_stockpile <= 0: # shouldn't be less than 0
             return
         else:
-            ic(f">>>>>>>>>>>>>>>>>>>> Day {day} for {node.node_id} <<<<<<<<<<<<<<<<<<<<<<")
+            ic(f">>>>>>>>>>>>>>>>>>>> Day {day} for Node {node.node_id} <<<<<<<<<<<<<<<<<<<<<<")
             ic(vaccines_in_stockpile)
 
         # Do half life daily decay if there is one
