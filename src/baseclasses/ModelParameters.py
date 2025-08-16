@@ -42,10 +42,6 @@ class ModelParameters:
         # some things assigned later
         self.number_of_age_groups = 0
 
-        # TODO some parameters still need to be set
-        ## self.max_child_age_group = 1
-        ## self.children_range = [0, 1]
-
         self._load_data_files(simulation_properties)
 
         logger.info(f'instantiated ModelParameters object')
