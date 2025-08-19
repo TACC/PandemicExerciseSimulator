@@ -2,19 +2,91 @@ import pytest
 import warnings
 import numpy as np
 from types import SimpleNamespace
-from icecream import ic
 
-from baseclasses.PopulationCompartments import PopulationCompartments, Compartments
-from baseclasses.Node import Node
-from baseclasses.Group import Group
+from src.baseclasses.PopulationCompartments import PopulationCompartments
+from src.baseclasses.Group import RiskGroup, VaccineGroup, Compartments, Group
+from src.baseclasses.Node import Node
 from src.models.treatments.Vaccination import Vaccination  # Adjust import based on your structure
 
 # still requires calling with printing more than stdout to the screen to see these debug messages
-# poetry run pytest -s test/test_Vaccination.py
+# poetry run pytest -s test/test_AgeRiskVaccineStockpileStrategy.py
 
+# Multiple node test
+def test_distribute_vaccines_to_nodes_only_moves_stock():
+    # Two nodes, 60 & 40 people
+    n1 = Node(0, 0, 0, PopulationCompartments([60], [0.0]))
+    n2 = Node(1, 1, 0, PopulationCompartments([40], [0.0]))
+    net = type("MockNet", (), {"nodes": [n1, n2]})
+
+    params = SimpleNamespace(
+        number_of_age_groups=1,
+        vaccine_model="stockpile-age-risk",
+        vaccine_parameters={
+            "vaccine_half_life_days": None,
+            "vaccine_adherence": ["1"],
+            "vaccine_effectiveness": ["1"],
+            "vaccine_eff_lag_days": "0",
+            "vaccine_stockpile": [{"day": "0", "amount": "100"}]
+        })
+    strat = Vaccination(parameters=params).get_child(params.vaccine_model, network=net)
+
+    # Before: no per-node stock
+    assert 0 not in strat.node_stockpile_by_day.get(0, {})
+    assert 0 not in strat.node_stockpile_by_day.get(1, {})
+
+    # Act: distribute to nodes for day 0; no one is vaccinated yet
+    strat.distribute_vaccines_to_nodes(network=net, day=0)
+
+    # After: all 100 left the network pool and are in node pools (split rule depends on impl)
+    total_node_day0 = sum(
+        strat.node_stockpile_by_day[i][0] for i in (0, 1)
+    )
+    assert total_node_day0 == 100.0
+
+    # Compartment counts untouched (population moves only in distribute_vaccines_to_population)
+    assert n1.compartments.get_compartment_vector_for(Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 60
+    assert n2.compartments.get_compartment_vector_for(Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 40
+
+
+# Make a single node for tests below
 def make_node_with_population(pop=100):
     pc = PopulationCompartments(groups=[pop], high_risk_ratios=[0.0])
     return Node(node_index=0, node_id=0, fips_id=0, compartments=pc)
+
+def test_adherence_ceiling_caps_usage_and_rolls_over():
+    # One node, one age, low-risk only; total_grp_pop = 100
+    node = make_node_with_population()  # builds Node with PopulationCompartments([100], [0.0])
+    net  = type("Net", (), {"nodes": [node]})
+
+    params = SimpleNamespace(
+        number_of_age_groups=1,
+        vaccine_model="stockpile-age-risk",
+        vaccine_parameters={
+            "vaccine_half_life_days": None,
+            "vaccine_adherence": ["0.5"],      # ceiling: at most 50% ever vaccinated
+            "vaccine_effectiveness": ["1"],
+            "vaccine_eff_lag_days": "0",
+            "vaccine_stockpile": [{"day": "0", "amount": "60"}]  # capacity not limiting
+        })
+    strat = Vaccination(parameters=params).get_child(params.vaccine_model, network=net)
+    strat.distribute_vaccines_to_nodes(network=net, day=0)  # Move day-0 stock from network to node
+    strat.distribute_vaccines_to_population(node, day=0) # Vaccinate within the node using adherence ceiling
+
+    # Check: cumulative vaccinated (sum over all compartments in vax group) = 50
+    vax_vec = node.compartments.compartment_data[0][0][1][Compartments.S.value]
+    assert float(vax_vec) == 50.0
+
+    # Unvaccinated susceptibles should drop to 50
+    unvax_vec = node.compartments.compartment_data[0][0][0][Compartments.S.value]
+    assert float(unvax_vec) == 50.0
+
+    # Leftover stock should roll to next day: 60 given 50 -> 10 rolls to day 1
+    assert strat.node_stockpile_by_day[node.node_id][1] == 10.0
+
+    # Fraction vaccinated now = 50/100 = 0.5 (hits adherence ceiling exactly)
+    frac_vax = float(np.sum(vax_vec)) / 100.0
+    assert abs(frac_vax - 0.5) < 1e-9
+
 
 def test_stockpile_combines_negative_and_day0():
     params = SimpleNamespace(
@@ -29,9 +101,7 @@ def test_stockpile_combines_negative_and_day0():
                 {"day": "-80", "amount": "50"},   # -> effective day = -66 → update to 0
                 {"day": "-14", "amount": "100"},  # -> effective day = 0   → stays as 0
                 {"day": "0", "amount": "25"}      # -> effective day = 14  → too late, skip for this test
-            ]
-        }
-    )
+            ]})
     node = make_node_with_population(pop=100)
     vaccine_parent = Vaccination(parameters=params)
     strategy = vaccine_parent.get_child(params.vaccine_model, network=type("MockNet", (), {"nodes": [node]}))
@@ -61,9 +131,7 @@ def test_stockpile_combines_duplicate_days():
                 {"day": "1", "amount": "30"},
                 {"day": "1", "amount": "40"},
                 {"day": "1", "amount": "30"}
-            ]
-        }
-    )
+            ]})
     node = make_node_with_population(pop=90) # population less than total vaccines to distribute
     vaccine_parent = Vaccination(parameters=params)
     strategy = vaccine_parent.get_child(params.vaccine_model, network=type("MockNet", (), {"nodes": [node]}))
@@ -80,6 +148,8 @@ def test_stockpile_combines_duplicate_days():
 def test_rollover_unused_vaccines_to_next_day():
     # Day 0: 50 vaccines available, only 30 people in the population
     # Expect 20 leftover to roll to day 1, where 40 more people are eligible
+    # Day 1: 20 vaccines available, vaccinate 20 people (now 50 total), 20 ppl unvax
+    # Day 2: Should not exist in dict as 0 vax rolled over
     params = SimpleNamespace(
         number_of_age_groups=1,
         vaccine_model="stockpile-age-risk",
@@ -91,9 +161,7 @@ def test_rollover_unused_vaccines_to_next_day():
             "vaccine_stockpile": [ # 3 entries that all collapse to day 0
                 {"day": "0", "amount": "50"}
                 #{"day": "1", "amount": "0"},  # Day 1 should be created by the function when rolling over
-            ]
-        }
-    )
+            ]})
     node = make_node_with_population(pop=30) # population less than total vaccines to distribute
     vaccine_parent = Vaccination(parameters=params)
     strategy = vaccine_parent.get_child(params.vaccine_model, network=type("MockNet", (), {"nodes": [node]}))
@@ -116,3 +184,44 @@ def test_rollover_unused_vaccines_to_next_day():
 
     # Verify no doses remain in the stockpile to be rolled over to day 2
     assert 2 not in strategy.node_stockpile_by_day[0], "Day 2 unexpectedly found in stockpile"
+
+def test_capacity_limits_day0_when_less_than_one():
+    node = make_node_with_population()
+    net  = type("MockNet", (), {"nodes": [node]})
+    params = SimpleNamespace(
+        number_of_age_groups=1,
+        vaccine_model="stockpile-age-risk",
+        vaccine_parameters={
+            "vaccine_capacity_proportion": 0.3,   # cap 30/day at most
+            "vaccine_adherence": ["1"],
+            "vaccine_effectiveness": ["1"],
+            "vaccine_eff_lag_days": "0",
+            "vaccine_stockpile": [{"day": "0", "amount": "100"}]
+        })
+    strat = Vaccination(parameters=params).get_child(params.vaccine_model, network=net)
+    strat.distribute_vaccines_to_nodes(net, day=0)
+    strat.distribute_vaccines_to_population(node, day=0)
+    total_vax = node.compartments.get_compartment_vector_for(Group(0, RiskGroup.L.value, VaccineGroup.V.value))
+    assert float(sum(total_vax)) == 30.0  # capped at 30% of total pop on day 0
+
+def test_half_life_applies_only_after_day0_and_subinteger_loss():
+    node = make_node_with_population(pop=5)
+    net  = type("MockNet", (), {"nodes": [node]})
+    params = SimpleNamespace(
+        number_of_age_groups=1,
+        vaccine_model="stockpile-age-risk",
+        vaccine_parameters={
+            "vaccine_half_life_days": 1,  # 50% per day
+            "vaccine_adherence": ["1"],
+            "vaccine_effectiveness": ["1"],
+            "vaccine_eff_lag_days": "0",
+            "vaccine_stockpile": [{"day": "1", "amount": "1"}]
+        })
+    strat = Vaccination(parameters=params).get_child(params.vaccine_model, network=net)
+    strat.distribute_vaccines_to_nodes(net, day=1)
+    # day=1: decay happens => 0.5 dose → floor to 0 used, and comment says <1 is lost (not rolled)
+    strat.distribute_vaccines_to_population(node, day=1)
+    # no vaccination should occur; and no day 2 rollover created by a sub-integer
+    total_vax = node.compartments.get_compartment_vector_for(Group(0, RiskGroup.L.value, VaccineGroup.V.value))
+    assert float(sum(total_vax)) == 0.0
+    assert 2 not in strat.node_stockpile_by_day[0]
