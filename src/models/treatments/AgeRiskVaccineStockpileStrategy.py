@@ -110,8 +110,7 @@ class AgeRiskVaccineStockpileStrategy(Vaccination):
         total_floor = 0
         for node in network.nodes:
             node_population = node.compartments.vaccine_eligible_population(
-                self.age_risk_priority_groups,
-                only_unvaccinated=False, only_susceptible=False)
+                self.age_risk_priority_groups, only_unvaccinated=False, only_susceptible=False)
             if node_population <= 0:
                 # still append so largest-remainder logic can run deterministically
                 node_allocs.append({"node": node.node_id, "alloc": 0, "remainder": 0.0})
@@ -168,17 +167,20 @@ class AgeRiskVaccineStockpileStrategy(Vaccination):
             ic(f">>>>>>>>>>>>>>>>>>>> Day {day} for Node {node.node_id} <<<<<<<<<<<<<<<<<<<<<<")
             ic(vaccines_in_stockpile)
 
-        # Do half life daily decay if there is one
-        if self.daily_vaccine_wastage is not None:
+        # Do half life daily decay if there is one for stockpile release beyond day 0
+        # Day 0 is meant to be a hard N number people vaccinated before epidemic, not real time effects
+        if self.daily_vaccine_wastage is not None and day > 0:
             vaccines_in_stockpile *= self.daily_vaccine_wastage
             self.node_stockpile_by_day[node.node_id][day] = vaccines_in_stockpile
             ic(f"New Stockpile count after decay: {vaccines_in_stockpile}")
 
         # Cap the fraction of pop that can be vaccinated
-        # This could be better as a property of the node like node.max_vax_per_day()
-        # Might not be correct given age specific adherence, but doing this for now
-        max_vax_per_day = np.floor(self.vaccine_capacity * node.total_population())
-        vax_given_today = min(max_vax_per_day, vaccines_in_stockpile)
+        # This could be better as a property of the node like node.max_vax_per_day() if we get node specific
+        if day > 0 or self.vaccine_capacity < 1.0:
+            max_vax_per_day = np.floor(self.vaccine_capacity * node.total_population())
+            vax_given_today = min(max_vax_per_day, vaccines_in_stockpile)
+        else:
+            vax_given_today = min(node.total_population(), vaccines_in_stockpile)
         ic(vax_given_today)
         # when stockpile less than max given the remaining will zero out, even for non-integer doses
         # i.e. any dose < 1 due to decay will be lost and not rolled over
@@ -207,6 +209,7 @@ class AgeRiskVaccineStockpileStrategy(Vaccination):
         total_eligible_s = node.compartments.vaccine_eligible_population(
             self.age_risk_priority_groups,
             only_unvaccinated=True, only_susceptible=True)
+        ic(total_eligible_s)
         if total_eligible_s <= 0:
             # nobody eligible in this node today; roll everything over
             return available_vaccines
@@ -215,44 +218,93 @@ class AgeRiskVaccineStockpileStrategy(Vaccination):
         eligible_groups = node.compartments.vaccine_eligible_by_group(
             self.age_risk_priority_groups,
             only_unvaccinated=True, only_susceptible=True)
+        ic(eligible_groups)
 
+        EPS = 1e-9 # epsilon precision error to check numbers very close to 0
         group_allocs = []
+        total_headroom = 0.0
         for (age, risk, sus_unvax) in eligible_groups:
-            proportion = sus_unvax / total_eligible_s
+            # Per-age adherence ceiling in [0,1]
             adherence = float(self.vaccine_adherence[age])
-            expected = available_vaccines * proportion * adherence
-            floor_alloc = min(np.floor(expected), sus_unvax)
-            remainder = expected - floor_alloc
+
+            # Current unvax and vax vectors
+            unvax_vec = node.compartments.get_compartment_vector_for(
+                Group(age=age, risk_group=risk, vaccine_group=VaccineGroup.U.value)
+            )
+            vax_vec = node.compartments.get_compartment_vector_for(
+                Group(age=age, risk_group=risk, vaccine_group=VaccineGroup.V.value)
+            )
+            cum_vax = float(np.sum(vax_vec))  # ever vaccinated so far (all compartments in V group)
+            # Calculating total pop every time in case we ever have models with birth/death changing S in time
+            total_grp_pop = float(np.sum(unvax_vec) + cum_vax)
+
+            # Remaining ceiling and eligibility headroom today
+            cap_remaining = max(0.0, adherence * total_grp_pop - cum_vax)
+            eligible_headrm = max(0.0, min(float(sus_unvax), cap_remaining))
+            total_headroom += eligible_headrm
+
             group_allocs.append({
-                "group": Group(age, risk, VaccineGroup.U.value),
+                "age": age,
+                "risk": risk,
+                "unvax_group": Group(age, risk, VaccineGroup.U.value),
                 "vax_group": Group(age, risk, VaccineGroup.V.value),
-                "sus": sus_unvax,
-                "alloc": floor_alloc,
-                "remainder": remainder
+                "sus": float(sus_unvax),
+                "adherence": adherence,
+                "total_grp_pop": total_grp_pop,
+                "cum_vax": cum_vax,
+                "cap_remaining": cap_remaining,
+                "eligible_headroom": eligible_headrm,
+                # will fill expected/alloc/remainder below
             })
 
-        # Distribute leftover vaccines
-        vaccines_given = sum(g["alloc"] for g in group_allocs)
-        leftover_node_vax = int(available_vaccines - vaccines_given)
-        ic(leftover_node_vax)
-        group_allocs.sort(key=lambda x: x["remainder"], reverse=True) # Sort by who had the biggest leftover (remainder)
-        for i in range(min(leftover_node_vax, len(group_allocs))):
-            g = group_allocs[i]
-            if g["alloc"] < g["sus"]:  # still susceptibles to vaccinate
-                g["alloc"] += 1
+        # If no one has headroom under adherence, roll everything
+        if total_headroom <= EPS:
+            return available_vaccines
+
+        # Vax proportions by adherence-aware headroom (not raw susceptibles remaining)
+        for g in group_allocs:
+            share = g["eligible_headroom"] / total_headroom if total_headroom > 0 else 0.0
+            expected = available_vaccines * share
+            # Bound by headroom
+            alloc_float = min(expected, g["eligible_headroom"])
+            floor_alloc = np.floor(alloc_float + EPS)
+
+            # Remainder for fair leftover distribution (based on expected share)
+            remainder = expected - np.floor(expected + EPS)
+
+            # How many more doses this group can still take after flooring (respecting both sus & cap)
+            max_extra = max(0.0, g["eligible_headroom"] - floor_alloc)
+            g["expected"] = float(expected)
+            g["alloc"] = float(floor_alloc)
+            g["remainder"] = float(remainder)
+            g["max_extra"] = float(max_extra)
 
         ic(group_allocs)
 
-        # Update compartments
+        # Leftovers (only if real positive remainders AND headroom exists)
+        vaccines_given = sum(g["alloc"] for g in group_allocs); ic(vaccines_given)
+        raw_leftover = available_vaccines - vaccines_given; ic(raw_leftover)
+        leftover_node_vax = int(max(0, np.floor(raw_leftover + EPS))); ic(leftover_node_vax)
+
+        if leftover_node_vax > 0:
+            candidates = [g for g in group_allocs if g["max_extra"] > EPS and g["remainder"] > EPS]
+            if candidates:
+                candidates.sort(key=lambda x: x["remainder"], reverse=True)
+                for i in range(min(leftover_node_vax, len(candidates))):
+                    candidates[i]["alloc"] += 1.0
+                    candidates[i]["max_extra"] = max(0.0, candidates[i]["max_extra"] - 1.0)
+
+        # Move people U -> V using the strategy's vaccinate function
         for g in group_allocs:
-            self.vaccinate_number_of_people(
-                node,
-                g["group"],  # unvaccinated group
-                g["vax_group"],  # vaccinated group
-                g["alloc"]
-            )
+            if g["alloc"] > 0:
+                self.vaccinate_number_of_people(
+                    node,
+                    g["unvax_group"],  # from U
+                    g["vax_group"],  # to V
+                    int(g["alloc"])
+                )
 
         # Return any remaining vaccines (if none could be used)
-        final_given = sum(g["alloc"] for g in group_allocs)
+        final_given = sum(g["alloc"] for g in group_allocs); ic(final_given)
         return int(available_vaccines - final_given)
 
