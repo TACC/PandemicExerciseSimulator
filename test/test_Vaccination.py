@@ -4,9 +4,9 @@ import numpy as np
 from icecream import ic
 from types import SimpleNamespace
 
-from baseclasses.PopulationCompartments import PopulationCompartments, Compartments
-from baseclasses.Node import Node
-from baseclasses.Group import Group
+from src.baseclasses.PopulationCompartments import PopulationCompartments, Compartments
+from src.baseclasses.Node import Node
+from src.baseclasses.Group import Group
 from src.models.treatments.Vaccination import Vaccination  # Adjust import based on your structure
 
 # still requires calling with printing more than stdout to the screen to see these debug messages
