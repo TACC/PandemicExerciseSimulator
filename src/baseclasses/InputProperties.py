@@ -14,7 +14,7 @@ class InputProperties:
         logger.info(f'loaded in config file named {input_filename}')
 
         # simulation control
-        self.output_data_file = input['output']
+        self.output_data_file       = input['output']
         self.number_of_realizations = int(input['number_of_realizations'])
 
         # data files
@@ -24,11 +24,11 @@ class InputProperties:
         self.high_risk_ratios_file        = input['data']['high_risk_ratios']
         
         # disease model
-        self.disease_model = input['disease_model']['identity']
+        self.disease_model      = input['disease_model']['identity']
         self.disease_parameters = input['disease_model']['parameters']
 
         # travel model
-        self.travel_model = input['travel_model']['identity']
+        self.travel_model      = input['travel_model']['identity']
         self.travel_parameters = input['travel_model']['parameters']
 
         # initial infected
@@ -43,11 +43,9 @@ class InputProperties:
         self.antiviral_stockpile      = input.get('antivirals').get('antiviral_stockpile', [])
         
         # vaccines (optional)
-        self.vaccine_wastage_factor   = input.get('vaccines').get('vaccine_wastage_factor', 0)
-        self.vaccine_pro_rata         = input.get('vaccines').get('vaccine_pro_rata', None)
-        self.vaccine_adherence        = input.get('vaccines').get('vaccine_adherence', [])
-        self.vaccine_effectiveness    = input.get('vaccines').get('vaccine_effectiveness', [])
-        self.vaccine_stockpile        = input.get('vaccines').get('vaccine_stockpile', [])
+        vaccine_input = input.get('vaccine_model', {})  # returns {} if not present
+        self.vaccine_model = vaccine_input.get('identity', None)
+        self.vaccine_parameters = vaccine_input.get('parameters', {})
 
         logger.info(f'instantiated InputProperties object')
         logger.debug(f'{self}')
@@ -83,11 +81,8 @@ class InputProperties:
                 f'antiviral_wastage_factor={self.antiviral_wastage_factor}\n'
                 f'antiviral_stockpile={self.antiviral_stockpile}\n'
                 f'\n## VACCINES ##\n'
-                f'vaccine_wastage_factor={self.vaccine_wastage_factor}\n'
-                f'vaccine_pro_rata={self.vaccine_pro_rata}\n'
-                f'vaccine_adherence={self.vaccine_adherence}\n'
-                f'vaccine_effectiveness={self.vaccine_effectiveness}\n'
-                f'vaccine_stockpile={self.vaccine_stockpile}\n'
+                f'vaccine_model={self.vaccine_model}\n'
+                f'vaccine_parameters={self.vaccine_parameters}\n'
               )
 
 

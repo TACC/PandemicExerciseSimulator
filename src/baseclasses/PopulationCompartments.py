@@ -60,7 +60,7 @@ class PopulationCompartments:
         return age_list
 
 
-    def expose_number_of_people(self, group:Type[Group], num_to_expose:int):
+    def expose_number_of_people_bulk(self, group:Type[Group], num_to_expose:int):
         """
         When entering this function, move people from Susceptible => Exposed
 
@@ -202,6 +202,57 @@ class PopulationCompartments:
         for i in range(len(Compartments)):
             self.compartment_data[group.age][group.risk][group.vaccine][i] = values[i]
 
+    def vaccine_eligible_by_group(self, age_risk_priority_groups,
+            only_unvaccinated: bool = True, only_susceptible: bool = True):
+        """
+        Return a list of (age, risk, value) for groups eligible for vaccination.
+        Args:
+            age_risk_priority_groups: list[float] of length = number_of_age_groups
+            only_unvaccinated: if True, include only VaccineGroup.U
+            only_susceptible: if True, count only S compartment (susceptible)
+
+        age_risk_priority_groups[a] ∈ {0, 0.5, 1}
+          0   => NOBODY in this age group is eligible
+          0.5 => only HIGH-RISK in this age group is eligible
+          1   => EVERYBODY in this age group is eligible
+
+        TODO: Function doesn't consider age-specific vaccine adherence, possibly add.
+        """
+
+        if len(age_risk_priority_groups) != self.number_of_age_groups:
+            raise ValueError(f"age_risk_priority_groups must have length {self.number_of_age_groups}")
+
+        vac_idxs = [VaccineGroup.U.value] if only_unvaccinated else [VaccineGroup.U.value, VaccineGroup.V.value]
+
+        out = []
+        for age, pri in enumerate(age_risk_priority_groups):
+            if pri == 0:
+                continue
+            elif pri == 0.5:
+                risk_list = [RiskGroup.H.value]
+            elif pri == 1:
+                risk_list = [RiskGroup.L.value, RiskGroup.H.value]
+            else:
+                raise ValueError("age_risk_priority_groups values must be 0, 0.5, or 1")
+
+            for risk in risk_list:
+                block = self.compartment_data[age, risk, vac_idxs, :]
+                val = float(block[..., Compartments.S.value].sum()) if only_susceptible else float(block.sum())
+                if val > 0:
+                    out.append((age, risk, val))
+        return out
+
+    def vaccine_eligible_population(self, age_risk_priority_groups: list,
+            only_unvaccinated: bool = False, only_susceptible: bool = False) -> float:
+        """
+        Total eligible population per flags, implemented by summing the per-group function.
+        """
+        groups = self.vaccine_eligible_by_group(
+            age_risk_priority_groups,
+            only_unvaccinated=only_unvaccinated,
+            only_susceptible=only_susceptible,
+        )
+        return float(sum(val for _, _, val in groups))
 
 # Compartment data object is a 4-dimensional array of floats. The four dimensions are:
 # [Group (N=5)] [Risk status (N=2)] [Vaccinated status (N=2)] [Compartment (N=7)]

@@ -2,35 +2,35 @@
   "output": "output/OUTPUT.json",
   "number_of_realizations": "1",
   "data": {
-    "population": "data/test/county_age_matrix.csv",
+    "population": "data/test/county_age_matrix_small.csv",
     "contact": "data/test/contact_matrix.csv",
     "flow": "data/test/travel_work_matrix.csv",
-    "high_risk_ratios": "data/test/high_risk_ratios.csv"
+    "high_risk_ratios": "data/test/high_risk_ratios_equal.csv"
   },
   "disease_model": {
     "identity": "seatird-deterministic",
     "parameters": {
-        "R0": "5",
-        "beta_scale": "10",
-        "tau": "1.2",
-        "kappa": "1.9",
-        "gamma": "10",
-        "chi": "1.0",
-        "nu": [
-          "0.0000223193", 
-          "0.0000409747",
-          "0.0000837293",
-          "0.0000618089",
-          "0.0000089781"
-        ],
-        "sigma": [
-          "1.00",
-          "0.98",
-          "0.94",
-          "0.91",
-          "0.66"
-        ]
-      }
+      "R0": "5",
+      "beta_scale": "10",
+      "tau": "1.2",
+      "kappa": "1.9",
+      "gamma": "10",
+      "chi": "1.0",
+      "nu": [
+        "0.0000223193", 
+        "0.0000409747",
+        "0.0000837293",
+        "0.0000618089",
+        "0.0000089781"
+      ],
+      "sigma": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ]
+    }
   },
   "travel_model": {
     "identity": "binomial",
@@ -48,7 +48,7 @@
   "initial_infected": [
     {
       "county": "99001",
-      "infected": "1000",
+      "infected": "1",
       "age_group": "2"
     }
   ],
@@ -99,44 +99,49 @@
       }
     ] 
   },
-  "vaccines": {
-    "vaccine_wastage_factor": "60",
-    "vaccine_pro_rata": "children",
-    "vaccine_adherence": [
-      "0.4345",
-      "0.298",
-      "0.388",
-      "0.450",
-      "0.696"
-    ],
-    "vaccine_effectiveness": [
-      "0.8",
-      "0.8",
-      "0.8",
-      "0.8",
-      "0.8"
-    ],
-    "vaccine_stockpile": [
-      {
-        "day": "203",
-        "amount": "178300"
-      },
-      {
-        "day": "210",
-        "amount": "653100"
-      },
-      {
-        "day": "217",
-        "amount": "339000"
-      },
-      {
-        "day": "224",
-        "amount": "922300"
-      },
-      {
-        "day": "231",
-        "amount": "483400"
-      }
-    ]
+  "vaccine_model": {
+    "identity": "stockpile-age-risk",
+    "parameters": {
+      "age_risk_priority_groups": ["0","0","0","1","1"],
+      "vaccine_half_life_days": null,
+      "vaccine_capacity_proportion": "1.0",
+      "vaccine_adherence": [
+      "1",
+      "1",
+      "1",
+      "1",
+      "1"
+      ],
+      "vaccine_effectiveness": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ],
+      "vaccine_eff_lag_days": 14,
+      "vaccine_stockpile": [
+        {
+          "day": "-20",
+          "amount": "100"
+        },
+        {
+          "day": "-14",
+          "amount": "100"
+        },
+        {
+          "day": "0",
+          "amount": "100"
+        },
+        {
+          "day": "4",
+          "amount": "100"
+        },
+        {
+          "day": "5",
+          "amount": "100"
+        }
+      ]
+    }
   }
 }

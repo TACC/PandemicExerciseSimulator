@@ -13,6 +13,7 @@ from baseclasses.Network import Network
 from baseclasses.Node import Node
 from baseclasses.PopulationCompartments import PopulationCompartments
 from models.treatments.NonPharmaInterventions import NonPharmaInterventions
+from models.treatments.Vaccination import Vaccination
 from utils.RNGMath import rand_exp, rand_int, rand_mt, rand_exp_min1
 
 logger = logging.getLogger(__name__)
@@ -133,7 +134,7 @@ class StochasticSEATIRD(DiseaseModel):
         return
 
 
-    def simulate(self, node:Type[Node], time:int):
+    def simulate(self, node:Type[Node], time:int, vaccine_model:Type[Vaccination]):
         """
         Main simulation logic for stochastic SEATIRD model
 
@@ -158,7 +159,7 @@ class StochasticSEATIRD(DiseaseModel):
         #        logging.debug(f'EVENT: init_time={item.init_time}, time={item.time}')
 
         while (len(node.events)) > 0 and (node.events[-1].time < t_max):
-            self._next_event(node, group_cache, initial_compartments)
+            self._next_event(node, group_cache, initial_compartments, vaccine_model)
 
         self.now = t_max
 
@@ -170,10 +171,9 @@ class StochasticSEATIRD(DiseaseModel):
         return
 
 
-    def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int):
+    def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int, vaccine_model:Type[Vaccination]):
         """
-        Initial infected are moved from 'Susceptible' into 'Exposed' compartment
-
+        Initial infected are moved from 'Susceptible' into 'Exposed' compartment and drawn their schedule of events
         Args:
             node (Node): The node where people will be exposed
             group (Group): Compartment descriptor including age group, risk group, vaccine status
@@ -184,7 +184,7 @@ class StochasticSEATIRD(DiseaseModel):
         logging.debug(f'current_susceptible={current_susceptible}')
 
         for _ in range(min(num_to_expose, current_susceptible)):
-            self._transmit_disease(node, group, group_cache)
+            self._transmit_disease(node, group, group_cache, vaccine_model)
         return
 
 
@@ -196,7 +196,7 @@ class StochasticSEATIRD(DiseaseModel):
 
 
     ###### Private Methods ######
-    def _transmit_disease(self, node:Type[Node], group:Type[Group], group_cache:npt.ArrayLike):
+    def _transmit_disease(self, node:Type[Node], group:Type[Group], group_cache:npt.ArrayLike, vaccine_model:Type[Vaccination]):
         """
         Given a node and a group, move one individual from 'Susceptible' to 'Exposed'. Then, since a
         new individual has been exposed, initialize exposed transitions and contact events
@@ -206,7 +206,7 @@ class StochasticSEATIRD(DiseaseModel):
 
         schedule = Schedule(self, self.now, group)
         self._initialize_exposed_transitions(node, group, schedule)
-        self._initialize_contact_events(node, group, schedule, group_cache)
+        self._initialize_contact_events(node, group, schedule, group_cache, vaccine_model)
         return
 
 
@@ -280,7 +280,7 @@ class StochasticSEATIRD(DiseaseModel):
 
 
     def _initialize_contact_events(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule], 
-                                   group_cache:npt.ArrayLike):
+                                   group_cache:npt.ArrayLike, vaccine_model:Type[Vaccination]):
         """
         This method is called when exposing Susceptible individuals for the first time. The exposed
         individual contacts other susceptible individuals and queues new contact events.
@@ -303,18 +303,15 @@ class StochasticSEATIRD(DiseaseModel):
                     # TODO we should really only be using vaccine_effectiveness[] in this 
                     # Cannot have vaccine effectiveness hitting beta unless in vaccinated group
                     if vg == 1:  # vaccinated then get effectiveness by age group
-                        vaccine_effectiveness = self.parameters.vaccine_effectiveness[ag]
+                        vaccine_effectiveness =  vaccine_model.vaccine_effectiveness[ag]
                     else:  # if you're not vaccinated, it has no effectiveness
                         vaccine_effectiveness = 0
                     # group_cache is weighting the force of infection
                     transmission_rate = (1.0 - vaccine_effectiveness) * beta[ag] * contact_rate \
                                         * sigma * group_cache[ag][rg][vg]
-                    """
-                    if node.node_id == 113:
-                        print(f"{group} \
-                        ve={vaccine_effectiveness:.2f}, beta={beta[ag]}, contact={contact_rate:.2f} \
-                        sigma={sigma:.2f}, tx_rate={transmission_rate:.4f}")
-                    """
+                    # if the rate is zero (VE=1 or other reasons), do not schedule contacts
+                    if transmission_rate <= 0.0:
+                        continue
 
                     Tc_init = schedule.Ta()
                     Tc = rand_exp_min1(transmission_rate) + Tc_init
@@ -325,7 +322,8 @@ class StochasticSEATIRD(DiseaseModel):
                         Tc = rand_exp_min1(transmission_rate) + Tc_init
         return
 
-    def _next_event(self, node:Type[Node], group_cache:npt.ArrayLike, initial_compartments:Type[PopulationCompartments]):
+    def _next_event(self, node:Type[Node], group_cache:npt.ArrayLike, initial_compartments:Type[PopulationCompartments],
+                    vaccine_model:Type[Vaccination]):
         """
         Grab the next event from the queue (last thing in the list) and act on it
         """
@@ -382,7 +380,7 @@ class StochasticSEATIRD(DiseaseModel):
                     contact = rand_int(1, target_pop_size)
 
                     if (self._is_susceptible(node, to, contact)):
-                        self._transmit_disease(node, to, group_cache)
+                        self._transmit_disease(node, to, group_cache, vaccine_model)
         return
 
 

@@ -31,15 +31,17 @@ class DummyInput:
         self.relative_susceptibility_file = "not_used.txt"
         self.flow_reduction_file = "not_used.txt"
         self.contact_data_file = "not_used.csv"
-        self.vaccine_effectiveness = [0.0, 0.0]
 
         # required for init but currently unused in _calculate_beta_w_npi
         self.antiviral_effectiveness = None
         self.antiviral_wastage_factor = None
         self.antiviral_stockpile = []
+        
         self.vaccine_wastage_factor = None
         self.vaccine_pro_rata = None
         self.vaccine_adherence = None
+        self.vaccine_effectiveness = [0.0, 0.0]
+        self.vaccine_eff_lag_days = None
         self.vaccine_stockpile = []
 
 def test_two_days_transmission():

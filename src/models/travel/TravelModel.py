@@ -28,7 +28,7 @@ class TravelModel:
             from .BinomialTravel import BinomialTravel
             return BinomialTravel(self)
         else:
-            raise Exception(f'Travel model "{self.disease_model}" not recognized')
+            raise Exception(f'Travel model "{self.travel_model}" not recognized')
         return
 
 

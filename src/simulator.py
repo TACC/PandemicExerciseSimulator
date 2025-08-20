@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 import argparse
 import logging
+import shutil
+import os
 from typing import Type
+from icecream import ic
 
 from baseclasses.Day import Day
 #from baseclasses.Group import Compartments, RiskGroup
@@ -10,10 +13,11 @@ from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
+
 from models.disease.DiseaseModel import DiseaseModel
-#from models.travel.BinomialTravel import BinomialTravel
 from models.travel.TravelModel import TravelModel
 from models.treatments.NonPharmaInterventions import NonPharmaInterventions
+from models.treatments.Vaccination import Vaccination
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNING',
@@ -29,11 +33,12 @@ logging.basicConfig(level=args.loglevel, format=format_str)
 logger = logging.getLogger(__name__)
 
 
-def run( simulation_days:Type[Day], 
-         network:Type[Network],
-         disease_model:Type[DiseaseModel],
-         travel_model:Type[TravelModel],
+def run( simulation_days:Type[Day],
          parameters:Type[ModelParameters],
+         network:Type[Network],
+         vaccine_model:Type[Vaccination],
+         disease_model: Type[DiseaseModel],
+         travel_model:Type[TravelModel],
          writer:Type[Writer]
        ):
     """
@@ -46,21 +51,28 @@ def run( simulation_days:Type[Day],
     writer.write(0, network)
     simulation_days.snapshot(network)
 
+    # Distribute any day 0 or less vaccines to nodes and within populations
+    vaccine_model.distribute_vaccines_to_nodes(network, day=0)
+    for node in network.nodes:
+        vaccine_model.distribute_vaccines_to_population(node, day=0)
+
     # Iterate over each day, each node...
     for day in range(1, simulation_days.day+1):
-        for node in network.nodes:
+        # Distribute vaccines from network stockpile to individual nodes and zero-out
+        vaccine_model.distribute_vaccines_to_nodes(network, day)
 
-            # Run distributions, treatments, stockpiles, and simulation for each node
-            # handle distributions
-            # apply treatments
-            # modify stockpiles
+        # Run distributions, treatments, stockpiles, and disease simulation for each node
+        for node in network.nodes:
+            # Distribute current day's vaccines and modify node stockpiles
+            vaccine_model.distribute_vaccines_to_population(node, day)
+
+            # apply antivirals
 
             # simulate one step
-            #
-            disease_model.simulate(node, day)
+            disease_model.simulate(node, day, vaccine_model)
 
         # Run travel model
-        travel_model.travel(network, disease_model, parameters, day)
+        travel_model.travel(network, disease_model, parameters, day, vaccine_model)
 
         # write output
         writer.write(day, network)
@@ -68,7 +80,7 @@ def run( simulation_days:Type[Day],
         # Early termination if no more infectious or soon to be people
         compartment_totals = simulation_days.snapshot(network)
         total_eati = sum(compartment_totals[1:5]) # Sum E, A, T, I
-        tolerance = 1e-4
+        tolerance = 1e-1
         if total_eati <= tolerance:
             logger.info(f"All E, A, T, I are below {tolerance:.1e} on day {day}, ending simulation early.")
             break
@@ -88,6 +100,24 @@ def main():
     # Read input properties file
     # Can be pre-generated from template, or generated in GUI
     simulation_properties = InputProperties(args.input_filename)
+
+    # Get full paths
+    input_file_path   = os.path.abspath(args.input_filename)
+    output_file_path  = os.path.abspath(simulation_properties.output_data_file)
+    output_dir        = os.path.dirname(output_file_path)
+    copied_input_path = os.path.join(output_dir, 'INPUT.json')
+
+    # Ensure output directory exists
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+        logger.info(f'Created output directory: {output_dir}')
+
+    # Copy input file to output directory (if not already there), to remember which file generated output
+    if not os.path.exists(copied_input_path):
+        shutil.copyfile(input_file_path, copied_input_path)
+        logger.info(f'Copied input file to: {copied_input_path}')
+    else:
+        logger.info(f'Skipping copy; input file already exists at: {copied_input_path}')
 
     # Initialize Days class instances
     # Also used for exporting day-by-day summary information
@@ -121,21 +151,25 @@ def main():
                                  )
     npis.pre_process(network)
 
+    # Initialize antiviral model
+
+    # Initialize vaccine model
+    vaccine_parent = Vaccination(parameters)
+    vaccine_model  = vaccine_parent.get_child(simulation_properties.vaccine_model, network)
+
+
     # Initialize disease model
     disease_parent = DiseaseModel(parameters,
                                   npis,
                                   now=0.0
                                  )
-    disease_model = disease_parent.get_child(simulation_properties.disease_model)
-    disease_model.set_initial_conditions(simulation_properties.initial, network)
+    disease_model  = disease_parent.get_child(simulation_properties.disease_model)
+    # The Gillespie algorithm needs vaccine effectiveness
+    disease_model.set_initial_conditions(simulation_properties.initial, network, vaccine_model)
 
     # Initialize a travel model - will default to Binomial travel
     travel_parent = TravelModel(parameters)
-    travel_model = travel_parent.get_child(simulation_properties.travel_model)
-
-    # Vaccine distribution strategy
-    # Vaccine schedule
-    # Antiviral distribution
+    travel_model  = travel_parent.get_child(simulation_properties.travel_model)
 
     # Initialize output writer
     writer = Writer(simulation_properties.output_data_file)
@@ -143,10 +177,11 @@ def main():
     for _ in range(realization_number):
 
         run( simulation_days,
+             parameters,
              network,
+             vaccine_model,
              disease_model,
              travel_model,
-             parameters,
              writer
            )
         
