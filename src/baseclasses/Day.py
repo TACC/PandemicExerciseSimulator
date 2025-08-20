@@ -2,6 +2,7 @@
 import logging
 import matplotlib.pyplot as plt
 import sys
+import os
 from typing import Type
 
 from .Group import Compartments
@@ -61,7 +62,7 @@ class Day:
         return this_summary
 
 
-    def plot(self):
+    def plot(self, output_dir_path:str):
         """
         Save a plot of all compartments over time
         """
@@ -72,7 +73,8 @@ class Day:
             values = [ row[comp.value] for row in self.summary ]
             plt.plot(days, values, label=f'Compartment={comp.name}')  
         plt.legend()
-        plt.savefig('plot.png')
+        plot_path = os.path.join(output_dir_path, "epicurve_plot.png")
+        plt.savefig(plot_path)
         return
 
 

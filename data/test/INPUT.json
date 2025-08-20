@@ -1,6 +1,6 @@
 {
-  "output": "output/OUTPUT.json",
-  "number_of_realizations": "1",
+  "output_dir_path": "seatird-deterministic",
+  "number_of_realizations": "5",
   "data": {
     "population": "data/test/county_age_matrix_small.csv",
     "contact": "data/test/contact_matrix.csv",

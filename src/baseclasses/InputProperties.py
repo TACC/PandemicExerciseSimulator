@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ class InputProperties:
         logger.info(f'loaded in config file named {input_filename}')
 
         # simulation control
-        self.output_data_file       = input['output']
+        self.output_dir_path        = input['output_dir_path']
         self.number_of_realizations = int(input['number_of_realizations'])
 
         # data files
@@ -59,7 +60,7 @@ class InputProperties:
     def __str__(self) -> str:
         return( f'\n\n'
                 f'## SIMULATION CONTROL ##\n'
-                f'output_data_file={self.output_data_file}\n'
+                f'output_dir_path={self.output_dir_path}\n'
                 f'number_of_realizations={self.number_of_realizations}\n'
                 f'\n## DATA FILES ##\n'
                 f'population_data_file={self.population_data_file}\n'
@@ -88,12 +89,9 @@ class InputProperties:
 
     def _validate_input(self) -> bool:
 
-        # create output file and verify that it is writable
-        try:
-            with open(self.output_data_file, 'w') as f:
-                pass
-        except IOError as e:
-            logger.error(f'Could not write to output file {self.output_data_file}: {e}')
+        # Check output dir was created
+        if not os.path.isdir(self.output_dir_path):
+            logger.error(f'Output directory not found: {self.output_dir_path}')
             return False
         
         # verify that all input data files exist
