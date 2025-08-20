@@ -12,8 +12,13 @@ logger = logging.getLogger(__name__)
 
 class Writer:
 
-    def __init__(self, filename:str = 'output.json'):
-        self.output_filename=filename
+    def __init__(self, output_dir_path:str = 'output', realization_index:int=0):
+        self.output_dir = os.path.join(output_dir_path, f"output_sim{realization_index}")
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        filename = 'output.json'
+        self.output_filename = os.path.join(self.output_dir, filename)
+        print(self.output_filename)
         try:
             with open(self.output_filename, 'w') as o:
                 try:
