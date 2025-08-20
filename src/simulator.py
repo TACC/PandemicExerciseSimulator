@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import copy
 import logging
 import shutil
 import os
@@ -85,7 +86,7 @@ def run( simulation_days:Type[Day],
             logger.info(f"All E, A, T, I are below {tolerance:.1e} on day {day}, ending simulation early.")
             break
 
-    simulation_days.plot()
+    simulation_days.plot(writer.output_dir)
     logger.info('completed processes in the run function')
 
     return
@@ -101,23 +102,16 @@ def main():
     # Can be pre-generated from template, or generated in GUI
     simulation_properties = InputProperties(args.input_filename)
 
-    # Get full paths
-    input_file_path   = os.path.abspath(args.input_filename)
-    output_file_path  = os.path.abspath(simulation_properties.output_data_file)
-    output_dir        = os.path.dirname(output_file_path)
-    copied_input_path = os.path.join(output_dir, 'INPUT.json')
+    # Create output directory
+    output_dir = simulation_properties.output_dir_path
+    os.makedirs(output_dir, exist_ok=True)
+    logger.info(f'Created output directory: {output_dir}')
 
-    # Ensure output directory exists
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
-        logger.info(f'Created output directory: {output_dir}')
-
-    # Copy input file to output directory (if not already there), to remember which file generated output
-    if not os.path.exists(copied_input_path):
-        shutil.copyfile(input_file_path, copied_input_path)
-        logger.info(f'Copied input file to: {copied_input_path}')
-    else:
-        logger.info(f'Skipping copy; input file already exists at: {copied_input_path}')
+    # Copy input file to output directory to remember which file generated output
+    input_file_path = os.path.abspath(args.input_filename)
+    copied_input_path = os.path.join(output_dir, 'input.json')
+    shutil.copyfile(input_file_path, copied_input_path)
+    logger.info(f'Copied input file to: {copied_input_path}')
 
     # Initialize Days class instances
     # Also used for exporting day-by-day summary information
@@ -157,12 +151,8 @@ def main():
     vaccine_parent = Vaccination(parameters)
     vaccine_model  = vaccine_parent.get_child(simulation_properties.vaccine_model, network)
 
-
     # Initialize disease model
-    disease_parent = DiseaseModel(parameters,
-                                  npis,
-                                  now=0.0
-                                 )
+    disease_parent = DiseaseModel(parameters, npis, now=0.0)
     disease_model  = disease_parent.get_child(simulation_properties.disease_model)
     # The Gillespie algorithm needs vaccine effectiveness
     disease_model.set_initial_conditions(simulation_properties.initial, network, vaccine_model)
@@ -171,14 +161,17 @@ def main():
     travel_parent = TravelModel(parameters)
     travel_model  = travel_parent.get_child(simulation_properties.travel_model)
 
-    # Initialize output writer
-    writer = Writer(simulation_properties.output_data_file)
+    for r in range(realization_number):
+        # Need to pass original network each iteration
+        network_copy = copy.deepcopy(network)
 
-    for _ in range(realization_number):
-
+        # Initialize output writer
+        writer = Writer(output_dir_path   = simulation_properties.output_dir_path,
+                        realization_index = r)
+        logger.info(f'Began Simulation {r}; {r+1} of {realization_number} ')
         run( simulation_days,
              parameters,
-             network,
+             network_copy,
              vaccine_model,
              disease_model,
              travel_model,
