@@ -101,15 +101,18 @@ class BinomialTravel(TravelModel):
                 #}
 
                 for ag2 in range(parameters.number_of_age_groups):
-                    asymptomatic = node_source.compartments.asymptomatic_population_by_age(ag2)
+                    #asymptomatic = node_source.compartments.asymptomatic_population_by_age(ag2)
                     transmitting = node_source.compartments.transmitting_population_by_age(ag2) # asymptomatic, treatable, and infectious
                     contact_rate = parameters.np_contact_matrix[ag1][ag2] # age group to age group contacts
-                    logging.debug(f'asymptomatic = {asymptomatic}, transmitting = {transmitting}, contact_rate = {contact_rate}')
+                    #logging.debug(f'asymptomatic = {asymptomatic}, transmitting = {transmitting}, contact_rate = {contact_rate}')
 
                     number_of_infectious_contacts_sink_to_source += transmitting * beta * self.rho * contact_rate \
                                                                     * this_sigma / self.flow_reduction[ag1]
-                    number_of_infectious_contacts_source_to_sink += asymptomatic * beta * self.rho * contact_rate \
+                    #number_of_infectious_contacts_source_to_sink += asymptomatic * beta * self.rho * contact_rate \
+                    #                                                * this_sigma / self.flow_reduction[ag2]
+                    number_of_infectious_contacts_source_to_sink += beta * self.rho * contact_rate \
                                                                     * this_sigma / self.flow_reduction[ag2]
+
 
                 probabilities[ag1] += flow_sink_to_source * number_of_infectious_contacts_sink_to_source \
                                                    / node_source.total_population()
