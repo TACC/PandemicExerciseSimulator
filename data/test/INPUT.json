@@ -10,6 +10,8 @@
   "disease_model": {
     "identity": "seatird-deterministic",
     "parameters": {
+      "compartments": ["S", "E", "A", "T", "I", "R", "D"],
+      "infectious_compartments": ["A", "T", "I"],
       "R0": "5",
       "beta_scale": "10",
       "tau": "1.2",
