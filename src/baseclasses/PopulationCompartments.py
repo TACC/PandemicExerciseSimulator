@@ -10,10 +10,14 @@ logger = logging.getLogger(__name__)
 
 class PopulationCompartments:
 
-    def __init__(self, groups:list, high_risk_ratios:list):
+    def __init__(self, groups:list, high_risk_ratios:list, infectious_compartments:list):
         # groups and high_risk_ratios should be two lists of the same length
         self.groups = groups     # starting population from input file
         self.high_risk_ratios = high_risk_ratios
+
+        # Map the infectious compartment list to the Compartments enumeration
+        self.comp_index = {c.name: c.value for c in Compartments}
+        self.infectious_idx = tuple(self.comp_index[name] for name in infectious_compartments)
 
         self.number_of_age_groups = len(groups)
         self.total_population = sum(groups)
@@ -106,6 +110,14 @@ class PopulationCompartments:
         """
         return sum(self.compartment_data[group.age][group.risk][group.vaccine])
 
+    def get_disease_compartment_sum(self) -> np.ndarray:
+        """
+        Return a length-[n_compartments] vector: totals across all age/risk/vax.
+        Order matches the Compartments enum order (last axis of compartment_data).
+        """
+        arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
+        return arr.sum(axis=(0, 1, 2))  # -> [comp]
+
 
     def susceptible_population(self) -> float:
         """
@@ -164,8 +176,11 @@ class PopulationCompartments:
         Return sum population of asymptomatic, treatable, and infections compartments across all
         demographic groups
         """
-        flat = self.compartment_data.sum(axis=(0,1,2))
-        return flat[Compartments.A.value] + flat[Compartments.T.value] + flat[Compartments.I.value]
+        arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
+        flat = arr.sum(axis=(0, 1, 2))  # collapse to [comp]
+        return float(flat[self.infectious_idx].sum())
+        #flat = self.compartment_data.sum(axis=(0,1,2))
+        #return flat[Compartments.I.value] #flat[Compartments.A.value] + flat[Compartments.T.value] + flat[Compartments.I.value]
 
 
     def asymptomatic_population_by_age(self, age_group:int) -> float:
@@ -181,10 +196,14 @@ class PopulationCompartments:
         Return sum population of asymptomatic, treatable, and infections compartments across all
         demographic groups
         """
-        flat = self.compartment_data.sum(axis=(1,2))
-        return flat[age_group][Compartments.A.value] + \
-               flat[age_group][Compartments.T.value] + \
-               flat[age_group][Compartments.I.value]
+        arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
+        flat = arr[age_group].sum(axis=(0, 1))  # collapse to [age][comp]
+        return float(flat[list(self.infectious_idx)].sum())
+        #flat = self.compartment_data.sum(axis=(0,1))
+        #return flat[age_group][Compartments.I.value]
+        #return flat[age_group][Compartments.A.value] + \
+               #flat[age_group][Compartments.T.value] + \
+               #flat[age_group][Compartments.I.value]
 
     # Adding helper function to get the subgroups into the deterministic compartmental model
     def get_all_groups(self):
