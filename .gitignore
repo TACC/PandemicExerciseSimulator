@@ -1,16 +1,5 @@
-manuscripts/
-simulator_og_code_base/
-
-# Output folders for sim test
-Travel_Mistry2021AllContact_HighR0/
-NoTravel_Mistry2021AllContact_HighR0/
-NoTravel_WithinAgeGrpContactOnly_HighR0/
-Travel_Mistry2021AllContact_LowR0/
-NoTravel_Mistry2021AllContact_LowR0/
-NoTravel_WithinAgeGrpContactOnly_LowR0/
-
+**/input.json
 .idea/
-R/
 OUTPUT_*/
 OUTPUT.json
 .python-version
