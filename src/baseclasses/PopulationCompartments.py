@@ -179,8 +179,6 @@ class PopulationCompartments:
         arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
         flat = arr.sum(axis=(0, 1, 2))  # collapse to [comp]
         return float(flat[self.infectious_idx].sum())
-        #flat = self.compartment_data.sum(axis=(0,1,2))
-        #return flat[Compartments.I.value] #flat[Compartments.A.value] + flat[Compartments.T.value] + flat[Compartments.I.value]
 
 
     def asymptomatic_population_by_age(self, age_group:int) -> float:
@@ -199,11 +197,6 @@ class PopulationCompartments:
         arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
         flat = arr[age_group].sum(axis=(0, 1))  # collapse to [age][comp]
         return float(flat[list(self.infectious_idx)].sum())
-        #flat = self.compartment_data.sum(axis=(0,1))
-        #return flat[age_group][Compartments.I.value]
-        #return flat[age_group][Compartments.A.value] + \
-               #flat[age_group][Compartments.T.value] + \
-               #flat[age_group][Compartments.I.value]
 
     # Adding helper function to get the subgroups into the deterministic compartmental model
     def get_all_groups(self):

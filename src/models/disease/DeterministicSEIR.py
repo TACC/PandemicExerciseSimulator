@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def SEIR_model(y, transmission_prob, sigma, gamma):
     """
-    SEATIRD compartmental model ODE function.
+    SEIR compartmental model ODE function.
     Parameters:
         y (List[float]): Current values for compartments [S, E, I, R]
         transmission_prob (float): beta modified by NPIs, vaccine effectiveness, contact rate,
@@ -47,7 +47,7 @@ class DeterministicSEIR(DiseaseModel):
         self.gamma = 1 / float(self.parameters.disease_parameters['infectious_period_days'])
 
         # beta is a required name for _calculate_beta_w_npi
-        self.beta           = self.R0 * self.gamma
+        self.beta  = self.R0 * self.gamma
 
         # Relative susceptibility required for travel model, make 1's if not specified
         num_age_grps = self.parameters.number_of_age_groups
@@ -117,7 +117,7 @@ class DeterministicSEIR(DiseaseModel):
                     continue
 
                 # contacted_group_compartments_today
-                S, E, I, R= compartments_today[(contacted_group.age, contacted_group.risk, contacted_group.vaccine)]
+                S, E, I, R = compartments_today[(contacted_group.age, contacted_group.risk, contacted_group.vaccine)]
                 infectious_contacted = I
 
                 # infectious_contacted/total_node_pop this captures the fraction of population we need to move from S -> E

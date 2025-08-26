@@ -27,7 +27,7 @@ class Network:
         else:
             Group.set_compartments(Group.get_compartments_enum())  # keep default
 
-        self.num_disease_compartments = len(compartment_labels)
+        self.num_disease_compartments = len(self.compartment_labels)
         self.infectious_compartments = infectious_compartments
         logger.info(f'instantiated Network object with {self.get_number_of_nodes()} nodes')
         return

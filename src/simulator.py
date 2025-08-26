@@ -173,9 +173,6 @@ def main():
         # Need to pass original network each iteration
         network_copy = copy.deepcopy(network)
 
-        print(">>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<")
-        print(Compartments)
-
         # Initialize output writer
         writer = Writer(output_dir_path   = simulation_properties.output_dir_path,
                         realization_index = r)
