@@ -10,22 +10,29 @@ class VaccineGroup(Enum):
     U=0 #UNVACCINATED=0
     V=1 #VACCINATED=1
 
-# 1) Your default enum (used if user doesn't override)
-_CompartmentsDefault = Enum("CompartmentsDefault", {
-    "S": 0, "E": 1, "A": 2, "T": 3, "I": 4, "R": 5, "D": 6
-})
+# Group.py
+from enum import Enum
 
-# 2) The "active" enum backing the proxy
-_active_compartments = _CompartmentsDefault
+_active_compartments = None  # not set until set_compartments() called
 
-def _make_enum_from_labels(labels, name="Compartments"):
+def _make_enum_from_labels(labels):
+    if not labels:
+        raise RuntimeError("Compartment labels required (got empty/None).")
     labels = [str(x).strip().upper() for x in labels]
     if len(labels) != len(set(labels)):
-        raise ValueError(f"Duplicate compartment labels: {labels}")
-    return Enum(name, {lbl: i for i, lbl in enumerate(labels)})
+        dupes = sorted({x for x in labels if labels.count(x) > 1})
+        raise ValueError(f"Duplicate compartment labels: {dupes}")
+    if "S" not in labels:
+        raise ValueError("Compartments must include 'S' for initialization.")
+    if "E" not in labels:
+        raise ValueError("Compartments must include 'E' for initialization.")
+    if any(not s.isidentifier() for s in labels):
+        bad = [s for s in labels if not s.isidentifier()]
+        raise ValueError(f"Invalid labels (not identifiers): {bad}")
+    return Enum("Compartments", {lbl: i for i, lbl in enumerate(labels)})
 
 def set_compartments(labels_or_enum):
-    """Call this once at startup to choose the active Compartments enum."""
+    # Called once at startup to choose the active Compartments enum
     global _active_compartments
     if isinstance(labels_or_enum, type) and issubclass(labels_or_enum, Enum):
         _active_compartments = labels_or_enum
@@ -33,22 +40,26 @@ def set_compartments(labels_or_enum):
         _active_compartments = _make_enum_from_labels(labels_or_enum)
 
 def get_compartments_enum():
-    """If you ever need the real Enum class."""
+    if _active_compartments is None:
+        raise RuntimeError("Compartments enum not set; call Group.set_compartments([...]) before use.")
     return _active_compartments
 
 class _EnumProxy:
-    """Proxy so code can keep using `Compartments.S.value`, `len(Compartments)`, etc."""
-    def __getattr__(self, name):
-        # Return the current Enum member (e.g., S/E/I/R)
-        return getattr(_active_compartments, name)
-    def __iter__(self):
-        return iter(_active_compartments)
-    def __len__(self):
-        return len(_active_compartments)
+    def _enum(self):
+        if _active_compartments is None:
+            raise RuntimeError("Compartments enum not set; cannot access members.")
+        return _active_compartments
+    def __getattr__(self, name):   # e.g., Compartments.S
+        return getattr(self._enum(), name)
+    def __iter__(self):            # for c in Compartments
+        return iter(self._enum())
+    def __len__(self):             # len(Compartments)
+        return len(self._enum())
     def __repr__(self):
-        return f"<Compartments proxy -> {_active_compartments.__name__} {list(_active_compartments)}>"
+        return "<Compartments proxy (unset)>" if _active_compartments is None \
+               else f"<Compartments proxy -> {self._enum().__name__}>"
 
-# 3) Export the proxy under the familiar name
+# Export to name used throughout codebase
 Compartments = _EnumProxy()
 
 class Group:
