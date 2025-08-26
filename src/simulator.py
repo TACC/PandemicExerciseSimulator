@@ -8,7 +8,7 @@ from typing import Type
 from icecream import ic
 
 from baseclasses.Day import Day
-#from baseclasses.Group import Compartments, RiskGroup
+from baseclasses.Group import Compartments
 from baseclasses.InputProperties import InputProperties
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
@@ -79,11 +79,15 @@ def run( simulation_days:Type[Day],
         writer.write(day, network)
 
         # Early termination if no more infectious or soon to be people
-        compartment_totals = simulation_days.snapshot(network)
-        total_eati = sum(compartment_totals[1:5]) # Sum E, A, T, I
         tolerance = 1e-1
-        if total_eati <= tolerance:
-            logger.info(f"All E, A, T, I are below {tolerance:.1e} on day {day}, ending simulation early.")
+        compartment_totals = simulation_days.snapshot(network)
+        total_exposed_plus_inf = sum(
+            compartment_totals[getattr(Compartments, nm).value]
+            for nm in ('E', *network.infectious_compartments)  # e.g., ["IP","IA","IS"]
+        )
+        if total_exposed_plus_inf <= tolerance:
+            logger.info(f"All latent and infectious compartments are below "
+                        f"{tolerance:.1e} on day {day}, ending simulation early.")
             break
 
     simulation_days.plot(writer.output_dir)
@@ -113,9 +117,8 @@ def main():
     shutil.copyfile(input_file_path, copied_input_path)
     logger.info(f'Copied input file to: {copied_input_path}')
 
-    # Initialize Days class instances
+
     # Also used for exporting day-by-day summary information
-    simulation_days = Day(args.days)
     realization_number = int(simulation_properties.number_of_realizations)
     
     # Initialize Model Parameters class instance
@@ -126,7 +129,9 @@ def main():
     # Initialize Network class which will contain a list of Nodes
     # There is one Node for each row in the population data (e.g. one Node
     # per county), and each Node contains Compartment data
-    network = Network()
+    compartment_labels = parameters.disease_parameters["compartments"]  # e.g., ["S","E","I","R"]
+    infectious_compartments = parameters.disease_parameters["infectious_compartments"]
+    network = Network(compartment_labels, infectious_compartments)
     network.load_population_file(simulation_properties.population_data_file)
     network.population_to_nodes(parameters.high_risk_ratios)
     logger.debug(f'total population is {network.get_total_population()}')
@@ -139,7 +144,7 @@ def main():
 
     # Initialize non-pharmaceutical interventions
     npis = NonPharmaInterventions(simulation_properties.non_pharma_interventions,
-                                  simulation_days.day,
+                                  args.days,
                                   network.get_number_of_nodes(),
                                   parameters.number_of_age_groups
                                  )
@@ -162,8 +167,14 @@ def main():
     travel_model  = travel_parent.get_child(simulation_properties.travel_model)
 
     for r in range(realization_number):
+        # Initialize Days class instance, resets snapshot
+        simulation_days = Day(args.days)
+
         # Need to pass original network each iteration
         network_copy = copy.deepcopy(network)
+
+        print(">>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<")
+        print(Compartments)
 
         # Initialize output writer
         writer = Writer(output_dir_path   = simulation_properties.output_dir_path,
