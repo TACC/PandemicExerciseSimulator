@@ -10,15 +10,46 @@ class VaccineGroup(Enum):
     U=0 #UNVACCINATED=0
     V=1 #VACCINATED=1
 
-class Compartments(Enum):
-    S=0 #SUSCEPTIBLE=0
-    E=1 #EXPOSED=1
-    A=2 #ASYMPTOMATIC=2
-    T=3 #TREATABLE=3
-    I=4 #INFECTIOUS=4
-    R=5 #RECOVERED=5
-    D=6 #DECEASED=6
+# 1) Your default enum (used if user doesn't override)
+_CompartmentsDefault = Enum("CompartmentsDefault", {
+    "S": 0, "E": 1, "A": 2, "T": 3, "I": 4, "R": 5, "D": 6
+})
 
+# 2) The "active" enum backing the proxy
+_active_compartments = _CompartmentsDefault
+
+def _make_enum_from_labels(labels, name="Compartments"):
+    labels = [str(x).strip().upper() for x in labels]
+    if len(labels) != len(set(labels)):
+        raise ValueError(f"Duplicate compartment labels: {labels}")
+    return Enum(name, {lbl: i for i, lbl in enumerate(labels)})
+
+def set_compartments(labels_or_enum):
+    """Call this once at startup to choose the active Compartments enum."""
+    global _active_compartments
+    if isinstance(labels_or_enum, type) and issubclass(labels_or_enum, Enum):
+        _active_compartments = labels_or_enum
+    else:
+        _active_compartments = _make_enum_from_labels(labels_or_enum)
+
+def get_compartments_enum():
+    """If you ever need the real Enum class."""
+    return _active_compartments
+
+class _EnumProxy:
+    """Proxy so code can keep using `Compartments.S.value`, `len(Compartments)`, etc."""
+    def __getattr__(self, name):
+        # Return the current Enum member (e.g., S/E/I/R)
+        return getattr(_active_compartments, name)
+    def __iter__(self):
+        return iter(_active_compartments)
+    def __len__(self):
+        return len(_active_compartments)
+    def __repr__(self):
+        return f"<Compartments proxy -> {_active_compartments.__name__} {list(_active_compartments)}>"
+
+# 3) Export the proxy under the familiar name
+Compartments = _EnumProxy()
 
 class Group:
 
