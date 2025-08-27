@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from enum import Enum
 
-
 class RiskGroup(Enum):
     L=0 #LOW=0
     H=1 #HIGH=1
@@ -10,9 +9,7 @@ class VaccineGroup(Enum):
     U=0 #UNVACCINATED=0
     V=1 #VACCINATED=1
 
-# Group.py
-from enum import Enum
-
+# Dynamic enumeration of Compartments class
 _active_compartments = None  # not set until set_compartments() called
 
 def _make_enum_from_labels(labels):
