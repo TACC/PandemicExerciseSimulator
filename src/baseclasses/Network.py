@@ -22,10 +22,7 @@ class Network:
 
         # Set the active Compartments enum globally (proxied)
         self.compartment_labels = compartment_labels
-        if self.compartment_labels:
-            Group.set_compartments(self.compartment_labels)
-        else:
-            Group.set_compartments(Group.get_compartments_enum())  # keep default
+        Group.set_compartments(self.compartment_labels)
 
         self.num_disease_compartments = len(self.compartment_labels)
         self.infectious_compartments = infectious_compartments

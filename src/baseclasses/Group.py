@@ -36,11 +36,6 @@ def set_compartments(labels_or_enum):
     else:
         _active_compartments = _make_enum_from_labels(labels_or_enum)
 
-def get_compartments_enum():
-    if _active_compartments is None:
-        raise RuntimeError("Compartments enum not set; call Group.set_compartments([...]) before use.")
-    return _active_compartments
-
 class _EnumProxy:
     def _enum(self):
         if _active_compartments is None:
