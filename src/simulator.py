@@ -8,7 +8,6 @@ from typing import Type
 from icecream import ic
 
 from baseclasses.Day import Day
-from baseclasses.Group import Compartments
 from baseclasses.InputProperties import InputProperties
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
@@ -81,9 +80,10 @@ def run( simulation_days:Type[Day],
         # Early termination if no more infectious or soon to be people
         tolerance = 1e-1
         compartment_totals = simulation_days.snapshot(network)
+        names_to_sum = ('E', *travel_model.transmit_dict.keys())
         total_exposed_plus_inf = sum(
-            compartment_totals[getattr(Compartments, nm).value]
-            for nm in ('E', *network.infectious_compartments)  # e.g., ["IP","IA","IS"]
+            compartment_totals[network.comp_index[nm]]
+            for nm in names_to_sum
         )
         if total_exposed_plus_inf <= tolerance:
             logger.info(f"All latent and infectious compartments are below "
@@ -130,8 +130,7 @@ def main():
     # There is one Node for each row in the population data (e.g. one Node
     # per county), and each Node contains Compartment data
     compartment_labels = parameters.disease_parameters["compartments"]  # e.g., ["S","E","I","R"]
-    infectious_compartments = parameters.disease_parameters["infectious_compartments"]
-    network = Network(compartment_labels, infectious_compartments)
+    network = Network(compartment_labels)
     network.load_population_file(simulation_properties.population_data_file)
     network.population_to_nodes(parameters.high_risk_ratios)
     logger.debug(f'total population is {network.get_total_population()}')
