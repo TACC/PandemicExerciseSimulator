@@ -47,14 +47,14 @@ def run( simulation_days:Type[Day],
 
     logger.info('entered the run function')
 
-    # Write initial conditions
-    writer.write(0, network)
-    simulation_days.snapshot(network)
-
     # Distribute any day 0 or less vaccines to nodes and within populations
     vaccine_model.distribute_vaccines_to_nodes(network, day=0)
     for node in network.nodes:
         vaccine_model.distribute_vaccines_to_population(node, day=0)
+
+    # Write initial conditions
+    writer.write(0, network)
+    simulation_days.snapshot(network)
 
     # Iterate over each day, each node...
     for day in range(1, simulation_days.day+1):
