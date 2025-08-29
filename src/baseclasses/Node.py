@@ -91,15 +91,16 @@ class Node:
         """
         Return dictionary representation of node object for easier printing
         """
-        data = {}
+        data               = {}
         data['node_index'] = str(self.node_index)
         data['node_id']    = str(self.node_id)
         data['fips_id']    = str(self.fips_id)
 
         # TODO collect travel exposure data for the output
-        data['travel_exposure'] = []
-        data['compartment_summary'] = {}
+        data['travel_exposure']             = []
+        data['compartment_summary']         = {}
         data['compartment_summary_percent'] = {}
+        data['compartment_subgroups']       = {}
 
         # Use enum compartment labels + totals vector
         labels = [c.name for c in Compartments]  # order must match last axis of compartment_data
@@ -117,15 +118,16 @@ class Node:
         else:
             data['compartment_summary_percent'] = {lab: 0.0 for lab in labels}
 
-        # TODO put this back in when we start to use this output data
-        #for comp in Compartments:
-        #    data['compartments'][comp.name] = { 'U':{}, 'V':{} }
+        # Subgroup specific population counts
+        for comp in Compartments:
+            data['compartment_subgroups'][comp.name] = { 'L':{}, 'H':{} }
 
-        #    for vac in VaccineGroup:
-        #        for risk in RiskGroup:
-        #            data['compartments'][comp.name][vac.name][risk.name] = \
-        #                self.compartments.return_list_by_age_group(comp.value, vac.value, risk.value)
-        return(data)
+            for risk in RiskGroup:
+                for vac in VaccineGroup:
+                    data['compartment_subgroups'][comp.name][risk.name][vac.name] = \
+                        self.compartments.return_list_by_age_group(comp.value, risk.value, vac.value)
+
+        return data
 
 
     def total_population(self) -> float:
