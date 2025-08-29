@@ -9,8 +9,8 @@ class VaccineGroup(Enum):
     U=0 #UNVACCINATED=0
     V=1 #VACCINATED=1
 
-# Dynamic enumeration of Compartments class
-_active_compartments = None  # not set until set_compartments() called
+# Dynamic enumeration of Compartments class from list provided on input
+_active_compartments = None  # not reset until set_compartments() called in Network.py
 
 def _make_enum_from_labels(labels):
     if not labels:
@@ -31,10 +31,7 @@ def _make_enum_from_labels(labels):
 def set_compartments(labels_or_enum):
     # Called once at startup to choose the active Compartments enum
     global _active_compartments
-    if isinstance(labels_or_enum, type) and issubclass(labels_or_enum, Enum):
-        _active_compartments = labels_or_enum
-    else:
-        _active_compartments = _make_enum_from_labels(labels_or_enum)
+    _active_compartments = _make_enum_from_labels(labels_or_enum)
 
 class _EnumProxy:
     def _enum(self):
@@ -48,8 +45,8 @@ class _EnumProxy:
     def __len__(self):             # len(Compartments)
         return len(self._enum())
     def __repr__(self):
-        return "<Compartments proxy (unset)>" if _active_compartments is None \
-               else f"<Compartments proxy -> {self._enum().__name__}>"
+        return "Compartments proxy not set" if _active_compartments is None \
+               else f"Compartments -> {self._enum().__name__}"
 
 # Export to name used throughout codebase
 Compartments = _EnumProxy()
