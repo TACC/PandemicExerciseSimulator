@@ -11,7 +11,6 @@
     "identity": "seatird-deterministic",
     "parameters": {
       "compartments": ["S", "E", "A", "T", "I", "R", "D"],
-      "infectious_compartments": ["A", "T", "I"],
       "R0": "5",
       "beta_scale": "10",
       "tau": "1.2",
@@ -44,7 +43,15 @@
         "1.0",
         "1.0",
         "2.0"
-      ]
+      ],
+      "traveling_compartments": {
+        "A": "1.0"
+      },
+      "transmitting_compartments": {
+        "A": "1.0", 
+        "T": "1.0", 
+        "I": "1.0"
+      }
     }
   },
   "initial_infected": [
