@@ -19,7 +19,6 @@ class Writer:
 
         filename = 'output.json'
         self.output_filename = os.path.join(self.output_dir, filename)
-        print(self.output_filename)
         try:
             with open(self.output_filename, 'w') as o:
                 try:
