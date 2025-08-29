@@ -4,7 +4,7 @@ import pandas as pd
 import sys
 from typing import Type
 from . import Group
-from .Group import RiskGroup, VaccineGroup
+from .Group import RiskGroup, VaccineGroup, Compartments
 from .Node import Node
 from .PopulationCompartments import PopulationCompartments
 from .TravelFlow import TravelFlow
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class Network:
 
-    def __init__(self, compartment_labels:list, infectious_compartments:list):
+    def __init__(self, compartment_labels:list):
         self.nodes = []
         self.travel_flow_data = None
         self.total_population = 0
@@ -24,8 +24,10 @@ class Network:
         self.compartment_labels = compartment_labels
         Group.set_compartments(self.compartment_labels)
 
+        # Get Compartments enumeration for simulator to check totals
+        self.comp_index = {c.name: c.value for c in Compartments}
+
         self.num_disease_compartments = len(self.compartment_labels)
-        self.infectious_compartments = infectious_compartments
         logger.info(f'instantiated Network object with {self.get_number_of_nodes()} nodes')
         return
 
@@ -62,7 +64,7 @@ class Network:
             this_id = row.iloc[0]
             this_fips = (48000+int(this_id)) if True else None  # this works for Texas FIPS
             this_group = list(row[1:])
-            this_compartment = PopulationCompartments(this_group, high_risk_ratios, self.infectious_compartments)
+            this_compartment = PopulationCompartments(this_group, high_risk_ratios)
             this_node = Node(this_index, this_id, this_fips, this_compartment)
             self._add_node(this_node)
 
