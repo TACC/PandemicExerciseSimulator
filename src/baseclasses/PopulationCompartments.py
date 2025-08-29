@@ -10,30 +10,30 @@ logger = logging.getLogger(__name__)
 
 class PopulationCompartments:
 
-    def __init__(self, groups:list, high_risk_ratios:list):
+    def __init__(self, age_group_pops:list, high_risk_ratios:list):
         # groups and high_risk_ratios should be two lists of the same length
-        self.groups = groups     # starting population from input file
+        self.age_group_pops = age_group_pops     # starting population from input file
         self.high_risk_ratios = high_risk_ratios
 
         # Get Compartments enumeration
         self.comp_index = {c.name: c.value for c in Compartments}
 
-        self.number_of_age_groups = len(groups)
-        self.total_population = sum(groups)
+        self.number_of_age_groups = len(age_group_pops)
+        self.total_population = sum(age_group_pops)
         logger.debug(f'instantiated a new compartments object with total_population = ' \
-                     f'{self.total_population} and groups = {self.groups}')
+                     f'{self.total_population} and groups = {self.age_group_pops}')
 
         # the compartment_data object is a 4-D array, see bottom of this file
-        self.compartment_data = np.zeros(( len(groups),
+        self.compartment_data = np.zeros(( self.number_of_age_groups,
                                            len(RiskGroup),
                                            len(VaccineGroup),
                                            len(Compartments)
                                         ))
 
-        for i in range(len(self.groups)):
+        for i in range(self.number_of_age_groups):
             low_risk_ratio = 1.0 - float(self.high_risk_ratios[i]) # convert high risk ratios to low
-            number_of_low_risk = round(self.groups[i] * low_risk_ratio) # get an integer number of low risk
-            number_of_high_risk = max((self.groups[i] - number_of_low_risk), 0.0) # diff is high risk but never negative
+            number_of_low_risk = round(self.age_group_pops[i] * low_risk_ratio) # get an integer number of low risk
+            number_of_high_risk = max((self.age_group_pops[i] - number_of_low_risk), 0.0) # diff is high risk but never negative
 
             self.compartment_data[i][RiskGroup.L.value][VaccineGroup.U.value][Compartments.S.value] = number_of_low_risk
             self.compartment_data[i][RiskGroup.H.value][VaccineGroup.U.value][Compartments.S.value] = number_of_high_risk
@@ -46,19 +46,19 @@ class PopulationCompartments:
         return(str((self.compartment_data).tolist()))
 
 
-    def return_list_by_age_group(self, comp:int, vac:int, risk:int) -> list:
+    def return_list_by_age_group(self, comp:int, risk:int, vac:int) -> list:
         """
-        Given a compartment (e.g. S), vaccination status (e.g. U), and risk level
-        (e.g. L), return a list of values 0..N (N=number of age groups) where each
+        Given a compartment (e.g. S), risk level (e.g. L), and vaccination status (e.g. U),
+        return a list of values N (N=number of age groups) where each
         value is the number of people in that compartment
 
         Args:
             comp (int): compartment key
-            vac (int): vacccine status key
             risk (int): risk group key
+            vac (int): vacccine status key
         """
         age_list = []
-        for i in range(len(self.groups)):
+        for i in range(self.number_of_age_groups):
             age_list.append(self.compartment_data[i][risk][vac][comp])
         return age_list
 
@@ -214,7 +214,7 @@ class PopulationCompartments:
         return self.compartment_data.sum(axis=(1,2))[age_group][Compartments.A.value]
     '''
 
-    def transmitting_population_by_age(self, age_group:int, transmitting_compartments:dict[str, float]) -> float:
+    def transmitting_population_by_age(self, age_group_idx:int, transmitting_compartments:dict[str, float]) -> float:
         """
         Returns weighted sum of infectious transmitting compartments for a given age group.
         The fraction of these compartments transmit disease to those visiting their node.
@@ -222,20 +222,20 @@ class PopulationCompartments:
 
         Parameters
             ----------
-            age_group : int
+            age_group_idx : int
                 Age group index to compute travelers for.
             transmitting_compartments : dict[str, float]
                 Dict of {compartment_label: fraction_infecting_visitors}.
         """
         arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
-        flat = arr[age_group].sum(axis=(0, 1))  # collapse [risk,vax] -> [age][comp]
+        flat = arr[age_group_idx].sum(axis=(0, 1))  # collapse [risk,vax] -> [age][comp]
         total = 0.0
         for label, frac in transmitting_compartments.items():
             idx = self.comp_index[label]
             total += flat[idx] * float(frac)
         return float(total)
 
-    def traveling_population_by_age(self, age_group:int, traveling_compartments:dict[str, float]) -> float:
+    def traveling_population_by_age(self, age_group_idx:int, traveling_compartments:dict[str, float]) -> float:
         """
             Returns weighted sum of infectious traveling compartments for a given age group.
             Fraction of these compartment(s) will take a trip to other nodes.
@@ -243,13 +243,13 @@ class PopulationCompartments:
 
             Parameters
             ----------
-            age_group : int
+            age_group_idx : int
                 Age group index to compute travelers for.
             traveling_compartments : dict[str, float]
                 Dict of {compartment_label: fraction_traveling}.
             """
         arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
-        flat = arr[age_group].sum(axis=(0, 1))  # collapse [risk,vax] -> [age][comp]
+        flat = arr[age_group_idx].sum(axis=(0, 1))  # collapse [risk,vax] -> [age][comp]
         total = 0.0
         for label, frac in traveling_compartments.items():
             idx = self.comp_index[label]
