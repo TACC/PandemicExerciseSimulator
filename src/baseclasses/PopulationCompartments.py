@@ -10,14 +10,13 @@ logger = logging.getLogger(__name__)
 
 class PopulationCompartments:
 
-    def __init__(self, groups:list, high_risk_ratios:list, infectious_compartments:list):
+    def __init__(self, groups:list, high_risk_ratios:list):
         # groups and high_risk_ratios should be two lists of the same length
         self.groups = groups     # starting population from input file
         self.high_risk_ratios = high_risk_ratios
 
-        # Map the infectious compartment list to the Compartments enumeration
+        # Get Compartments enumeration
         self.comp_index = {c.name: c.value for c in Compartments}
-        self.infectious_idx = tuple(self.comp_index[name] for name in infectious_compartments)
 
         self.number_of_age_groups = len(groups)
         self.total_population = sum(groups)
@@ -118,7 +117,7 @@ class PopulationCompartments:
         arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
         return arr.sum(axis=(0, 1, 2))  # -> [comp]
 
-
+    '''
     def susceptible_population(self) -> float:
         """
         Return sum population of susceptible compartments across all demographic groups
@@ -169,34 +168,93 @@ class PopulationCompartments:
         Return sum population of deceased compartments across all demographic groups
         """
         return self.compartment_data.sum(axis=(0,1,2))[Compartments.D.value]
-    
 
-    def transmitting_population(self) -> float:
+    '''
+
+    def transmitting_population(self, transmitting_compartments:dict[str, float]) -> float:
         """
-        Return sum population of asymptomatic, treatable, and infections compartments across all
-        demographic groups
+        Returns weighted sum of infectious transmitting compartments for all age/risk/vax subgroups.
+
+        Parameters
+        ----------
+        transmitting_compartments : dict[str, float]
+            Dict of {compartment_label: fraction_traveling}.
         """
         arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
         flat = arr.sum(axis=(0, 1, 2))  # collapse to [comp]
-        return float(flat[self.infectious_idx].sum())
+        total = 0.0
+        for label, frac in transmitting_compartments.items():
+            idx = self.comp_index[label]
+            total += flat[idx] * float(frac)
+        return float(total)
 
+    def traveling_population(self, traveling_compartments:dict[str, float]) -> float:
+        """
+            Returns weighted sum of infectious traveling compartments for all age/risk/vax subgroups.
 
+            Parameters
+            ----------
+            traveling_compartments : dict[str, float]
+                Dict of {compartment_label: fraction_traveling}.
+            """
+        arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
+        flat = arr.sum(axis=(0, 1, 2))  # collapse to [comp]
+        total = 0.0
+        for label, frac in traveling_compartments.items():
+            idx = self.comp_index[label]
+            total += flat[idx] * float(frac)
+        return float(total)
+
+    '''
     def asymptomatic_population_by_age(self, age_group:int) -> float:
         """
         Return sum population of asymptomatic compartments across all demographic groups
         """
         # TODO this needs to be tested
         return self.compartment_data.sum(axis=(1,2))[age_group][Compartments.A.value]
-    
+    '''
 
-    def transmitting_population_by_age(self, age_group:int) -> float:
+    def transmitting_population_by_age(self, age_group:int, transmitting_compartments:dict[str, float]) -> float:
         """
-        Return sum population of asymptomatic, treatable, and infections compartments across all
-        demographic groups
+        Returns weighted sum of infectious transmitting compartments for a given age group.
+        The fraction of these compartments transmit disease to those visiting their node.
+        e.g. 100% of Infectious may infect others, or we could assume 50% are not interacting with visitors
+
+        Parameters
+            ----------
+            age_group : int
+                Age group index to compute travelers for.
+            transmitting_compartments : dict[str, float]
+                Dict of {compartment_label: fraction_infecting_visitors}.
         """
         arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
-        flat = arr[age_group].sum(axis=(0, 1))  # collapse to [age][comp]
-        return float(flat[list(self.infectious_idx)].sum())
+        flat = arr[age_group].sum(axis=(0, 1))  # collapse [risk,vax] -> [age][comp]
+        total = 0.0
+        for label, frac in transmitting_compartments.items():
+            idx = self.comp_index[label]
+            total += flat[idx] * float(frac)
+        return float(total)
+
+    def traveling_population_by_age(self, age_group:int, traveling_compartments:dict[str, float]) -> float:
+        """
+            Returns weighted sum of infectious traveling compartments for a given age group.
+            Fraction of these compartment(s) will take a trip to other nodes.
+            e.g. 100% of Infectious Asymptomatic may travel, but only 20% of Infectious Symptomatic
+
+            Parameters
+            ----------
+            age_group : int
+                Age group index to compute travelers for.
+            traveling_compartments : dict[str, float]
+                Dict of {compartment_label: fraction_traveling}.
+            """
+        arr = np.asarray(self.compartment_data, dtype=float)  # [age][risk][vax][comp]
+        flat = arr[age_group].sum(axis=(0, 1))  # collapse [risk,vax] -> [age][comp]
+        total = 0.0
+        for label, frac in traveling_compartments.items():
+            idx = self.comp_index[label]
+            total += flat[idx] * float(frac)
+        return float(total)
 
     # Adding helper function to get the subgroups into the deterministic compartmental model
     def get_all_groups(self):
