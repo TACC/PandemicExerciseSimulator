@@ -62,7 +62,14 @@ class Network:
         for index, row in self.df_county_age_matrix.iterrows():
             this_index = index
             this_id = row.iloc[0]
-            this_fips = (48000+int(this_id)) if True else None  # this works for Texas FIPS
+            # TODO FIPS is only for census boundaries, ZIP Code/ZCTA is not a FIPS code
+            # Would be better to remove FIPS altogether and make passed id a FIPS code
+            if len(this_id) <= 3:
+                # 3-digit county code, add Texas state prefix
+                this_fips = 48000 + int(this_id)
+            else:
+                # Any other length ID we'll keep and call it a fips
+                this_fips = int(this_id)
             this_group = list(row[1:])
             this_compartment = PopulationCompartments(this_group, high_risk_ratios)
             this_node = Node(this_index, this_id, this_fips, this_compartment)
