@@ -92,22 +92,22 @@
   "vaccine_model": {
     "identity": "stockpile-age-risk",
     "parameters": {
-      "age_risk_priority_groups": ["0","0","0","1","1"],
+      "age_risk_priority_groups": ["1","1","1","1","1"],
       "vaccine_half_life_days": null,
       "vaccine_capacity_proportion": "1.0",
       "vaccine_adherence": [
-      "1",
-      "1",
-      "1",
-      "1",
-      "1"
+        "0.5",
+        "0.5",
+        "0.5",
+        "0.5",
+        "0.5"
       ],
       "vaccine_effectiveness": [
-        "1",
-        "1",
-        "1",
-        "1",
-        "1"
+        "0.5",
+        "0.5",
+        "0.5",
+        "0.5",
+        "0.5"
       ],
       "vaccine_eff_lag_days": 14,
       "vaccine_stockpile": [
