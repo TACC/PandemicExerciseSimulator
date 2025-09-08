@@ -2,15 +2,15 @@
 import logging
 from typing import Type
 
-from baseclasses.ModelParameters import ModelParameters
-from baseclasses.Network import Network
-from baseclasses.Node import Node
-from baseclasses.Group import Group, RiskGroup, VaccineGroup
-from baseclasses.PopulationCompartments import PopulationCompartments
+from src.baseclasses.ModelParameters import ModelParameters
+from src.baseclasses.Network import Network
+from src.baseclasses.Node import Node
+from src.baseclasses.Group import Group, RiskGroup, VaccineGroup
+from src.baseclasses.PopulationCompartments import PopulationCompartments
 import numpy.typing as npt
 import numpy as np
-from models.treatments.NonPharmaInterventions import NonPharmaInterventions
-from models.treatments.Vaccination import Vaccination
+from src.models.treatments.NonPharmaInterventions import NonPharmaInterventions
+from src.models.treatments.Vaccination import Vaccination
 
 
 logger = logging.getLogger(__name__)
@@ -38,8 +38,8 @@ class DiseaseModel:
             from .DeterministicSEATIRD import DeterministicSEATIRD
             return DeterministicSEATIRD(self)
         elif self.disease_model == 'seir-deterministic':
-            from .DeterministicSEIR import DeterministicSEIR
-            return DeterministicSEIR(self)
+            from .DeterministicSEIRS import DeterministicSEIRS
+            return DeterministicSEIRS(self)
         elif self.disease_model == 'seatird-stochastic':
             from .StochasticSEATIRD import StochasticSEATIRD
             return StochasticSEATIRD(self)
