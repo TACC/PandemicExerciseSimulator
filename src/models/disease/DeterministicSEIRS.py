@@ -3,17 +3,16 @@ import numpy as np
 import logging
 from typing import Type
 
-from .DiseaseModel import DiseaseModel
-from baseclasses.Group import Group, RiskGroup, VaccineGroup
-from baseclasses.Network import Network
-from baseclasses.Node import Node
-from models.treatments.Vaccination import Vaccination
+from src.models.disease.DiseaseModel import DiseaseModel
+from src.baseclasses.Group import Group, RiskGroup, VaccineGroup
+from src.baseclasses.Node import Node
+from src.models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
-def SEIR_model(y, transmission_prob, sigma, gamma):
+def SEIRS_model(y, transmission_prob, sigma, gamma, omega):
     """
-    SEIR compartmental model ODE function.
+    SEIRS compartmental model ODE function.
     Parameters:
         y (List[float]): Current values for compartments [S, E, I, R]
         transmission_prob (float): beta modified by NPIs, vaccine effectiveness, contact rate,
@@ -21,30 +20,35 @@ def SEIR_model(y, transmission_prob, sigma, gamma):
                                    Transmission rate converted to probability to keep between 0 and 1
         sigma (float): 1/Latency period in days (exposed to infectious E->I)
         gamma (float): 1/infectious period in days (infectious to recovered)
+        omega (float): 1/time to lose immunity in days (recovered to susceptible)
     Returns:
-       List[float]: Derivatives [dS/dt, dE/dt, dA/dt, dT/dt, dI/dt, dR/dt, dD/dt].
+       List[float]: Derivatives [dS/dt, dE/dt, dI/dt, dR/dt].
    """
     S, E, I, R = y
 
     # Prevent S from going negative by only removing as many people remain in the compartment
     max_new_infections = min(transmission_prob * S, S)
-    dS_dt = -max_new_infections
+    dS_dt = -max_new_infections + omega * R
     dE_dt = max_new_infections - sigma * E
     dI_dt = sigma * E - gamma * I
-    dR_dt = gamma * I
+    dR_dt = gamma * I - omega * R
 
     return np.array([dS_dt, dE_dt, dI_dt, dR_dt])
 
-class DeterministicSEIR(DiseaseModel):
+class DeterministicSEIRS(DiseaseModel):
 
     def __init__(self, disease_model:Type[DiseaseModel]): # add antiviral_model
-        #self.is_stochastic = disease_model.is_stochastic
         self.now = disease_model.now
         self.parameters = disease_model.parameters
 
         self.R0    = float(self.parameters.disease_parameters['R0'])
         self.sigma = 1 / float(self.parameters.disease_parameters['latent_period_days'])
         self.gamma = 1 / float(self.parameters.disease_parameters['infectious_period_days'])
+        immune_period = float(self.parameters.disease_parameters.get('immune_period_days', 0))
+        if immune_period == 0 or not immune_period:
+            self.omega = 0
+        else:
+            self.omega = 1 / immune_period
 
         # beta is a required name for _calculate_beta_w_npi
         self.beta  = self.R0 * self.gamma
@@ -134,11 +138,12 @@ class DeterministicSEIR(DiseaseModel):
             model_parameters = (
                 transmission_prob,     # S => E
                 self.sigma,            # E => I
-                self.gamma             # I => R
+                self.gamma,            # I => R
+                self.omega             # R => S
             )
 
             # Euler's Method solve of the system, can't do integer people
-            daily_change = SEIR_model(focal_group_compartments_today, *model_parameters)
+            daily_change = SEIRS_model(focal_group_compartments_today, *model_parameters)
             compartments_tomorrow = focal_group_compartments_today + daily_change
             node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
 
