@@ -7,17 +7,17 @@ import os
 from typing import Type
 from icecream import ic
 
-from baseclasses.Day import Day
-from baseclasses.InputProperties import InputProperties
-from baseclasses.ModelParameters import ModelParameters
-from baseclasses.Network import Network
-from baseclasses.TravelFlow import TravelFlow
-from baseclasses.Writer import Writer
+from src.baseclasses.Day import Day
+from src.baseclasses.InputProperties import InputProperties
+from src.baseclasses.ModelParameters import ModelParameters
+from src.baseclasses.Network import Network
+from src.baseclasses.TravelFlow import TravelFlow
+from src.baseclasses.Writer import Writer
 
-from models.disease.DiseaseModel import DiseaseModel
-from models.travel.TravelModel import TravelModel
-from models.treatments.NonPharmaInterventions import NonPharmaInterventions
-from models.treatments.Vaccination import Vaccination
+from src.models.disease.DiseaseModel import DiseaseModel
+from src.models.travel.TravelModel import TravelModel
+from src.models.treatments.NonPharmaInterventions import NonPharmaInterventions
+from src.models.treatments.Vaccination import Vaccination
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNING',

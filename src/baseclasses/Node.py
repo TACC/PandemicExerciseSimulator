@@ -4,9 +4,9 @@ import logging
 import numpy as np
 from typing import Type
 
-from .Event import Event, EventType
-from .Group import Group, RiskGroup, VaccineGroup, Compartments
-from .PopulationCompartments import PopulationCompartments
+from src.baseclasses.Event import Event, EventType
+from src.baseclasses.Group import Group, RiskGroup, VaccineGroup, Compartments
+from src.baseclasses.PopulationCompartments import PopulationCompartments
 
 logger = logging.getLogger(__name__)
 

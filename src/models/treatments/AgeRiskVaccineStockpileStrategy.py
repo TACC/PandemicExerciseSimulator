@@ -4,10 +4,10 @@ from typing import Type
 from icecream import ic
 ic.disable()
 
-from .Vaccination import Vaccination
-from baseclasses.Network import Network
-from baseclasses.Node import Node
-from baseclasses.Group import Group, VaccineGroup, Compartments
+from src.models.treatments.Vaccination import Vaccination
+from src.baseclasses.Network import Network
+from src.baseclasses.Node import Node
+from src.baseclasses.Group import Group, VaccineGroup, Compartments
 
 logger = logging.getLogger(__name__)
 

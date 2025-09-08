@@ -3,7 +3,7 @@ import logging
 import numpy as np
 from typing import Type
 
-from .Group import RiskGroup, VaccineGroup, Compartments, Group
+from src.baseclasses.Group import RiskGroup, VaccineGroup, Compartments, Group
 
 logger = logging.getLogger(__name__)
 

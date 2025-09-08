@@ -3,11 +3,11 @@ import numpy as np
 import logging
 from typing import Type
 
-from .DiseaseModel import DiseaseModel
-from baseclasses.Group import Group, RiskGroup, VaccineGroup
-from baseclasses.Network import Network
-from baseclasses.Node import Node
-from models.treatments.Vaccination import Vaccination
+from src.models.disease.DiseaseModel import DiseaseModel
+from src.baseclasses.Group import Group, RiskGroup, VaccineGroup
+from src.baseclasses.Network import Network
+from src.baseclasses.Node import Node
+from src.models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,6 @@ def SEATIRD_model(y, transmission_prob, tau, kappa, chi, gamma, nu):
 class DeterministicSEATIRD(DiseaseModel):
 
     def __init__(self, disease_model:Type[DiseaseModel]): # add antiviral_model
-        #self.is_stochastic = disease_model.is_stochastic
         self.now = disease_model.now
         self.parameters = disease_model.parameters
 
