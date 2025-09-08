@@ -28,10 +28,10 @@ def _make_enum_from_labels(labels):
         raise ValueError(f"Invalid labels (not identifiers): {bad}")
     return Enum("Compartments", {lbl: i for i, lbl in enumerate(labels)})
 
-def set_compartments(labels_or_enum):
+def set_compartments(labels):
     # Called once at startup to choose the active Compartments enum
     global _active_compartments
-    _active_compartments = _make_enum_from_labels(labels_or_enum)
+    _active_compartments = _make_enum_from_labels(labels)
 
 class _EnumProxy:
     def _enum(self):
