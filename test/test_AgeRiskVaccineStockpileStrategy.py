@@ -1,11 +1,15 @@
 import pytest
-import warnings
 import numpy as np
 from types import SimpleNamespace
 
+# needed to set dynamic Compartment Enum while having relative paths in headers
+import sys, importlib
+GroupModule = importlib.import_module("src.baseclasses.Group")
+# ensure any alt path points to the same module
+sys.modules.setdefault("baseclasses.Group", GroupModule)
+
 from src.baseclasses.Network import Network
 from src.baseclasses.Node import Node
-from src.baseclasses import Group # needed to set dynamic Compartment Enum
 from src.baseclasses.Group import RiskGroup, VaccineGroup, Compartments
 from src.baseclasses.PopulationCompartments import PopulationCompartments
 from src.models.treatments.Vaccination import Vaccination  # Adjust import based on your structure
@@ -49,8 +53,8 @@ def test_distribute_vaccines_to_nodes_only_moves_stock():
 
     # Compartment counts untouched (population moves only in distribute_vaccines_to_population)
     # Imported the module Group for dynamic compartments, so need to call the class Group by Group.Group
-    assert n1.compartments.get_compartment_vector_for(Group.Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 60
-    assert n2.compartments.get_compartment_vector_for(Group.Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 40
+    assert n1.compartments.get_compartment_vector_for(GroupModule.Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 60
+    assert n2.compartments.get_compartment_vector_for(GroupModule.Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 40
 
 # Make a single node for tests below
 def make_network_with_population(pop=100):
@@ -213,7 +217,7 @@ def test_capacity_limits_day0_when_less_than_one():
     strat = Vaccination(parameters=params).get_child(params.vaccine_model, network=net)
     strat.distribute_vaccines_to_nodes(net, day=0)
     strat.distribute_vaccines_to_population(node, day=0)
-    total_vax = node.compartments.get_compartment_vector_for(Group.Group(0, RiskGroup.L.value, VaccineGroup.V.value))
+    total_vax = node.compartments.get_compartment_vector_for(GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.V.value))
     assert float(sum(total_vax)) == 30.0  # capped at 30% of total pop on day 0
 
 def test_half_life_applies_only_after_day0_and_subinteger_loss():
@@ -234,6 +238,6 @@ def test_half_life_applies_only_after_day0_and_subinteger_loss():
     # day=1: decay happens => 0.5 dose → floor to 0 used, and comment says <1 is lost (not rolled)
     strat.distribute_vaccines_to_population(node, day=1)
     # no vaccination should occur; and no day 2 rollover created by a sub-integer
-    total_vax = node.compartments.get_compartment_vector_for(Group.Group(0, RiskGroup.L.value, VaccineGroup.V.value))
+    total_vax = node.compartments.get_compartment_vector_for(GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.V.value))
     assert float(sum(total_vax)) == 0.0
     assert 2 not in strat.node_stockpile_by_day[0]
