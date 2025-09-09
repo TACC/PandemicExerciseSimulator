@@ -5,11 +5,9 @@ from types import SimpleNamespace
 from src.models.disease.DiseaseModel import DiseaseModel
 from src.models.disease.DeterministicSEATIRD import SEATIRD_model, DeterministicSEATIRD
 from src.models.treatments.NonPharmaInterventions import NonPharmaInterventions
-from src.models.treatments.Vaccination import Vaccination
 from src.baseclasses.Network import Network
 from src.baseclasses.Node import Node
 from src.baseclasses.PopulationCompartments import PopulationCompartments
-from src.baseclasses.ModelParameters import ModelParameters
 from src.baseclasses.Day import Day
 
 #////////////////////

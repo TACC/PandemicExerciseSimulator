@@ -7,7 +7,6 @@ from src.baseclasses.Network import Network
 from src.baseclasses.Node import Node
 from src.baseclasses.PopulationCompartments import PopulationCompartments
 from src.baseclasses.ModelParameters import ModelParameters
-from src.baseclasses.Day import Day
 
 class DummyInput:
     def __init__(self):
