@@ -4,12 +4,12 @@ import numpy.typing as npt
 import numpy as np
 from typing import Type
 
-from src.baseclasses.ModelParameters import ModelParameters
-from src.baseclasses.Network import Network
-from src.baseclasses.Node import Node
-from src.baseclasses.Group import Group, RiskGroup, VaccineGroup
-from src.models.treatments.NonPharmaInterventions import NonPharmaInterventions
-from src.models.treatments.Vaccination import Vaccination
+from baseclasses.ModelParameters import ModelParameters
+from baseclasses.Network import Network
+from baseclasses.Node import Node
+from baseclasses.Group import Group, RiskGroup, VaccineGroup
+from models.treatments.NonPharmaInterventions import NonPharmaInterventions
+from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 

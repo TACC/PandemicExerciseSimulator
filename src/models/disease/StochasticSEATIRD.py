@@ -6,15 +6,12 @@ import numpy.typing as npt
 from typing import Type
 
 from .DiseaseModel import DiseaseModel
-from src.baseclasses.Event import EventType
-from src.baseclasses.Group import Group, RiskGroup, VaccineGroup, Compartments
-from src.baseclasses.ModelParameters import ModelParameters
-from src.baseclasses.Network import Network
-from src.baseclasses.Node import Node
-from src.baseclasses.PopulationCompartments import PopulationCompartments
-from src.models.treatments.NonPharmaInterventions import NonPharmaInterventions
-from src.models.treatments.Vaccination import Vaccination
-from src.utils.RNGMath import rand_exp, rand_int, rand_mt, rand_exp_min1
+from baseclasses.Event import EventType
+from baseclasses.Group import Group, RiskGroup, VaccineGroup, Compartments
+from baseclasses.Node import Node
+from baseclasses.PopulationCompartments import PopulationCompartments
+from models.treatments.Vaccination import Vaccination
+from utils.RNGMath import rand_exp, rand_int, rand_mt, rand_exp_min1
 
 logger = logging.getLogger(__name__)
 

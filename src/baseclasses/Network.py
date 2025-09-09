@@ -3,11 +3,11 @@ import logging
 import pandas as pd
 import sys
 from typing import Type
-from src.baseclasses import Group
-from src.baseclasses.Group import RiskGroup, VaccineGroup, Compartments
-from src.baseclasses.Node import Node
-from src.baseclasses.PopulationCompartments import PopulationCompartments
-from src.baseclasses.TravelFlow import TravelFlow
+from . import Group
+from .Group import RiskGroup, VaccineGroup, Compartments
+from .Node import Node
+from .PopulationCompartments import PopulationCompartments
+from .TravelFlow import TravelFlow
 
 logger = logging.getLogger(__name__)
 

@@ -44,6 +44,7 @@ class ModelParameters:
         return( f'disease_parameters={self.disease_parameters}\n'
                 f'travel_parameters={self.travel_parameters}\n'
                 f'non_pharma_interventions={self.non_pharma_interventions}\n'
+                f'antiviral_parameters = {self.antiviral_parameters}\n'
                 f'vaccine_parameters = {self.vaccine_parameters}\n'
                 f'high_risk_ratios = {self.high_risk_ratios}\n'
                 f'number_of_age_groups = {self.number_of_age_groups}\n'

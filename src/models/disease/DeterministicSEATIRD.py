@@ -3,10 +3,10 @@ import numpy as np
 import logging
 from typing import Type
 
-from src.models.disease.DiseaseModel import DiseaseModel
-from src.baseclasses.Group import Group, RiskGroup, VaccineGroup
-from src.baseclasses.Node import Node
-from src.models.treatments.Vaccination import Vaccination
+from .DiseaseModel import DiseaseModel
+from baseclasses.Group import Group, RiskGroup, VaccineGroup
+from baseclasses.Node import Node
+from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 

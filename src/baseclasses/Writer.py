@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import sys
-import numpy as np
 from typing import Type
 
 from .Network import Network

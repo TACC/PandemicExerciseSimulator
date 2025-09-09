@@ -3,7 +3,7 @@ from enum import Enum
 import logging
 from typing import Type
 
-from baseclasses.Group import Group
+from .Group import Group
 
 logger = logging.getLogger(__name__)
 

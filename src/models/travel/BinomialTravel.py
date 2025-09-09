@@ -5,13 +5,13 @@ import numpy as np
 from typing import Type
 
 from .TravelModel import TravelModel
-from src.models.disease.DiseaseModel import DiseaseModel
-from src.baseclasses.Group import RiskGroup, VaccineGroup, Compartments, Group
-from src.baseclasses.ModelParameters import ModelParameters
-from src.baseclasses.Network import Network
-from src.baseclasses.Node import Node
-from src.utils.RNGMath import rand_binomial
-from src.models.treatments.Vaccination import Vaccination
+from models.disease.DiseaseModel import DiseaseModel
+from baseclasses.Group import RiskGroup, VaccineGroup, Compartments, Group
+from baseclasses.ModelParameters import ModelParameters
+from baseclasses.Network import Network
+from baseclasses.Node import Node
+from utils.RNGMath import rand_binomial
+from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
