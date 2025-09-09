@@ -8,7 +8,7 @@
     "high_risk_ratios": "data/test/high_risk_ratios_equal.csv"
   },
   "disease_model": {
-    "identity": "seir-deterministic",
+    "identity": "seirs-deterministic",
     "parameters": {
       "compartments": ["S", "E", "I", "R"],
       "R0": "3",

@@ -35,7 +35,7 @@ class DiseaseModel:
         if self.disease_model == 'seatird-deterministic':
             from .DeterministicSEATIRD import DeterministicSEATIRD
             return DeterministicSEATIRD(self)
-        elif self.disease_model == 'seir-deterministic':
+        elif self.disease_model == 'seirs-deterministic':
             from .DeterministicSEIRS import DeterministicSEIRS
             return DeterministicSEIRS(self)
         elif self.disease_model == 'seatird-stochastic':
