@@ -5,7 +5,6 @@ from typing import Type
 
 from src.models.disease.DiseaseModel import DiseaseModel
 from src.baseclasses.Group import Group, RiskGroup, VaccineGroup
-from src.baseclasses.Network import Network
 from src.baseclasses.Node import Node
 from src.models.treatments.Vaccination import Vaccination
 

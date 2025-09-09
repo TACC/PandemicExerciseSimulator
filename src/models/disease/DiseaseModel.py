@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 import logging
+import numpy.typing as npt
+import numpy as np
 from typing import Type
 
 from src.baseclasses.ModelParameters import ModelParameters
 from src.baseclasses.Network import Network
 from src.baseclasses.Node import Node
 from src.baseclasses.Group import Group, RiskGroup, VaccineGroup
-from src.baseclasses.PopulationCompartments import PopulationCompartments
-import numpy.typing as npt
-import numpy as np
 from src.models.treatments.NonPharmaInterventions import NonPharmaInterventions
 from src.models.treatments.Vaccination import Vaccination
-
 
 logger = logging.getLogger(__name__)
 
