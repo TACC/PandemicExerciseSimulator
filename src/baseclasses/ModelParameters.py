@@ -20,21 +20,12 @@ class ModelParameters:
 
         # data files
         self.high_risk_ratios        = []
-        #self.flow_reduction          = []       # moved to travel model
 
         # non-pharmaceutical interventions
         self.non_pharma_interventions = simulation_properties.non_pharma_interventions
         
         # antivirals
-        if simulation_properties.antiviral_effectiveness is not None:
-            self.antiviral_effectiveness  = float(simulation_properties.antiviral_effectiveness)
-        else:
-            self.antiviral_effectiveness  = simulation_properties.antiviral_effectiveness
-        if simulation_properties.antiviral_wastage_factor is not None:
-            self.antiviral_wastage_factor = float(simulation_properties.antiviral_wastage_factor)
-        else:
-            self.antiviral_wastage_factor = simulation_properties.antiviral_wastage_factor
-        self.antiviral_stockpile      = simulation_properties.antiviral_stockpile
+        self.antiviral_parameters = simulation_properties.antiviral_parameters
 
         # vaccines
         self.vaccine_parameters = simulation_properties.vaccine_parameters

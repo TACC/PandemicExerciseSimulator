@@ -1,5 +1,5 @@
 {
-  "output_dir_path": "seatird-deterministic",
+  "output_dir_path": "seatird-stochastic",
   "number_of_realizations": "5",
   "data": {
     "population": "data/test/county_age_matrix_small.csv",
@@ -8,7 +8,7 @@
     "high_risk_ratios": "data/test/high_risk_ratios_equal.csv"
   },
   "disease_model": {
-    "identity": "seatird-deterministic",
+    "identity": "seatird-stochastic",
     "parameters": {
       "compartments": ["S", "E", "A", "T", "I", "R", "D"],
       "R0": "5",
@@ -76,37 +76,40 @@
       ]
     }
   ],
-  "antivirals": {
-    "antiviral_effectiveness": "1.5",
-    "antiviral_wastage_factor": "60",
-    "antiviral_stockpile": [
-      {
-        "antiviral_effectiveness": "1.5",
-        "antiviral_wastage_factor": "60",
-        "day": "103",
-        "amount": "17830"
-      },
-      {
-        "antiviral_effectiveness": "1.5",
-        "antiviral_wastage_factor": "60",
-        "day": "110",
-        "amount": "65310"
-      },
-      {
-        "antiviral_effectiveness": "1.5",
-        "antiviral_wastage_factor": "60",
-        "day": "117",
-        "amount": "33900"
-      },
-      {
-        "day": "124",
-        "amount": "92230"
-      },
-      {
-        "day": "131",
-        "amount": "48340"
-      }
-    ] 
+  "antiviral_model": {
+    "identity": "not-set-yet",
+    "parameters": {
+      "antiviral_effectiveness": "1.5",
+      "antiviral_wastage_factor": "60",
+      "antiviral_stockpile": [
+        {
+          "antiviral_effectiveness": "1.5",
+          "antiviral_wastage_factor": "60",
+          "day": "103",
+          "amount": "17830"
+        },
+        {
+          "antiviral_effectiveness": "1.5",
+          "antiviral_wastage_factor": "60",
+          "day": "110",
+          "amount": "65310"
+        },
+        {
+          "antiviral_effectiveness": "1.5",
+          "antiviral_wastage_factor": "60",
+          "day": "117",
+          "amount": "33900"
+        },
+        {
+          "day": "124",
+          "amount": "92230"
+        },
+        {
+          "day": "131",
+          "amount": "48340"
+        }
+      ]
+    } 
   },
   "vaccine_model": {
     "identity": "stockpile-age-risk",
