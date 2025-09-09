@@ -52,9 +52,8 @@ def test_distribute_vaccines_to_nodes_only_moves_stock():
     assert n1.compartments.get_compartment_vector_for(Group.Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 60
     assert n2.compartments.get_compartment_vector_for(Group.Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 40
 
-
 # Make a single node for tests below
-def make_node_with_population(pop=100):
+def make_network_with_population(pop=100):
     compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
     net = Network(compartment_labels)
     pc   = PopulationCompartments(age_group_pops=[pop], high_risk_ratios=[0.0])
@@ -64,7 +63,7 @@ def make_node_with_population(pop=100):
 
 def test_adherence_ceiling_caps_usage_and_rolls_over():
     # One node, one age, low-risk only; total_grp_pop = 100
-    net = make_node_with_population()
+    net = make_network_with_population()
     node = net.nodes[0]
 
     params = SimpleNamespace(
@@ -112,7 +111,7 @@ def test_stockpile_combines_negative_and_day0():
                 {"day": "0", "amount": "25"}      # -> effective day = 14  → too late, skip for this test
             ]})
     compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
-    net = make_node_with_population()
+    net = make_network_with_population()
     node = net.nodes[0]
     vaccine_parent = Vaccination(parameters=params)
     strategy = vaccine_parent.get_child(params.vaccine_model, network=net)
@@ -143,7 +142,7 @@ def test_stockpile_combines_duplicate_days():
                 {"day": "1", "amount": "40"},
                 {"day": "1", "amount": "30"}
             ]})
-    net = make_node_with_population(pop=90) # population less than total vaccines to distribute
+    net = make_network_with_population(pop=90) # population less than total vaccines to distribute
     node = net.nodes[0]
     vaccine_parent = Vaccination(parameters=params)
     strategy = vaccine_parent.get_child(params.vaccine_model, network=net)
@@ -174,7 +173,7 @@ def test_rollover_unused_vaccines_to_next_day():
                 {"day": "0", "amount": "50"}
                 #{"day": "1", "amount": "0"},  # Day 1 should be created by the function when rolling over
             ]})
-    net = make_node_with_population(pop=30) # population less than total vaccines to distribute
+    net = make_network_with_population(pop=30) # population less than total vaccines to distribute
     node = net.nodes[0]
     vaccine_parent = Vaccination(parameters=params)
     strategy = vaccine_parent.get_child(params.vaccine_model, network=net)
@@ -199,7 +198,7 @@ def test_rollover_unused_vaccines_to_next_day():
     assert 2 not in strategy.node_stockpile_by_day[0], "Day 2 unexpectedly found in stockpile"
 
 def test_capacity_limits_day0_when_less_than_one():
-    net = make_node_with_population()
+    net = make_network_with_population()
     node = net.nodes[0]
     params = SimpleNamespace(
         number_of_age_groups=1,
@@ -218,7 +217,7 @@ def test_capacity_limits_day0_when_less_than_one():
     assert float(sum(total_vax)) == 30.0  # capped at 30% of total pop on day 0
 
 def test_half_life_applies_only_after_day0_and_subinteger_loss():
-    net = make_node_with_population(pop=5)
+    net = make_network_with_population(pop=5)
     node = net.nodes[0]
     params = SimpleNamespace(
         number_of_age_groups=1,
