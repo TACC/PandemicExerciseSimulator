@@ -4,7 +4,7 @@ from typing import Type
 from icecream import ic
 ic.disable()
 
-from .Vaccination import Vaccination
+from models.treatments.Vaccination import Vaccination
 from baseclasses.Network import Network
 from baseclasses.Node import Node
 from baseclasses.Group import Group, VaccineGroup, Compartments

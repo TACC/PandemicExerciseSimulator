@@ -2,11 +2,10 @@ import logging
 import warnings
 from typing import Type
 
-from baseclasses.ModelParameters import ModelParameters
+from baseclasses.ModelParameters import ModelParameters # baseclasses
 from baseclasses.Network import Network
 from baseclasses.Node import Node
-from baseclasses.Group import Group
-from baseclasses.PopulationCompartments import Compartments
+from baseclasses.Group import Group, Compartments
 
 logger = logging.getLogger(__name__)
 

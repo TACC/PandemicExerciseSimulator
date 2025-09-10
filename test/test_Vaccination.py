@@ -4,9 +4,10 @@ import numpy as np
 from icecream import ic
 from types import SimpleNamespace
 
-from src.baseclasses.PopulationCompartments import PopulationCompartments, Compartments
+from src.baseclasses.PopulationCompartments import PopulationCompartments
 from src.baseclasses.Node import Node
-from src.baseclasses.Group import Group
+from src.baseclasses import Group # needed to set dynamic Compartment Enum
+from src.baseclasses.Group import Compartments
 from src.models.treatments.Vaccination import Vaccination  # Adjust import based on your structure
 
 # still requires calling with printing more than stdout to the screen to see these debug messages

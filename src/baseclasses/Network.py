@@ -3,8 +3,8 @@ import logging
 import pandas as pd
 import sys
 from typing import Type
-
-from .Group import RiskGroup, VaccineGroup
+from . import Group
+from .Group import RiskGroup, VaccineGroup, Compartments
 from .Node import Node
 from .PopulationCompartments import PopulationCompartments
 from .TravelFlow import TravelFlow
@@ -14,11 +14,21 @@ logger = logging.getLogger(__name__)
 
 class Network:
 
-    def __init__(self):
+    def __init__(self, compartment_labels:list):
         self.nodes = []
         self.travel_flow_data = None
         self.total_population = 0
         self.df_county_age_matrix = []
+
+        # Set the active Compartments enum globally (proxied)
+        self.compartment_labels = compartment_labels
+        Group.set_compartments(self.compartment_labels)
+
+        # Get Compartments enumeration for simulator to check totals
+        self.comp_index = {c.name: c.value for c in Compartments}
+
+        self.num_disease_compartments = len(self.compartment_labels)
+        # Will be 0 nodes so may be a more useful logger statement here
         logger.info(f'instantiated Network object with {self.get_number_of_nodes()} nodes')
         return
 
@@ -53,7 +63,14 @@ class Network:
         for index, row in self.df_county_age_matrix.iterrows():
             this_index = index
             this_id = row.iloc[0]
-            this_fips = (48000+int(this_id)) if True else None  # this works for Texas FIPS
+            # TODO FIPS is only for census boundaries, ZIP Code/ZCTA is not a FIPS code
+            # Would be better to remove FIPS altogether and make passed id a FIPS code
+            if len(str(this_id)) <= 3:
+                # 3-digit county code, add Texas state prefix
+                this_fips = 48000 + int(this_id)
+            else:
+                # Any other length ID we'll keep and call it a fips
+                this_fips = int(this_id)
             this_group = list(row[1:])
             this_compartment = PopulationCompartments(this_group, high_risk_ratios)
             this_node = Node(this_index, this_id, this_fips, this_compartment)

@@ -8,11 +8,8 @@ from typing import Type
 from .DiseaseModel import DiseaseModel
 from baseclasses.Event import EventType
 from baseclasses.Group import Group, RiskGroup, VaccineGroup, Compartments
-from baseclasses.ModelParameters import ModelParameters
-from baseclasses.Network import Network
 from baseclasses.Node import Node
 from baseclasses.PopulationCompartments import PopulationCompartments
-from models.treatments.NonPharmaInterventions import NonPharmaInterventions
 from models.treatments.Vaccination import Vaccination
 from utils.RNGMath import rand_exp, rand_int, rand_mt, rand_exp_min1
 

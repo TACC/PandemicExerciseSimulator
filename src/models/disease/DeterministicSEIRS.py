@@ -3,74 +3,62 @@ import numpy as np
 import logging
 from typing import Type
 
-from .DiseaseModel import DiseaseModel
 from baseclasses.Group import Group, RiskGroup, VaccineGroup
 from baseclasses.Node import Node
+from models.disease.DiseaseModel import DiseaseModel
 from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
-def SEATIRD_model(y, transmission_prob, tau, kappa, chi, gamma, nu):
+def SEIRS_model(y, transmission_prob, sigma, gamma, omega):
     """
-    SEATIRD compartmental model ODE function.
+    SEIRS compartmental model ODE function.
     Parameters:
-        y (List[float]): Current values for compartments [S, E, A, T, I, R, D]
-        transmission_prob (float): beta modified by NPIs, vaccine effectiveness, contact rate, relative susceptibility (sigma),
-                                   has (A+T+I)/N hidden in it to do node based proportion of population infectious
+        y (List[float]): Current values for compartments [S, E, I, R]
+        transmission_prob (float): beta modified by NPIs, vaccine effectiveness, contact rate,
+                                   has I/N hidden in it to do node based proportion of population infectious
                                    Transmission rate converted to probability to keep between 0 and 1
-        tau (float): 1/Latency period in days (exposed to asymptomatic)
-        kappa (float): 1/Asymptomatic infectious period in days (asymptomatic to treatable)
-        chi (float): 1/Treatable infectious period in days (treatable to infectious)
-        gamma (float): 1/symptomatic infectious period in days (asymptomatic/treatable/infectious to recovered)
-        nu (float): Mortality rate in 1/days (asymptomatic/treatable/infectious to deceased)
+        sigma (float): 1/Latency period in days (exposed to infectious E->I)
+        gamma (float): 1/infectious period in days (infectious to recovered)
+        omega (float): 1/time to lose immunity in days (recovered to susceptible)
     Returns:
-       List[float]: Derivatives [dS/dt, dE/dt, dA/dt, dT/dt, dI/dt, dR/dt, dD/dt].
+       List[float]: Derivatives [dS/dt, dE/dt, dI/dt, dR/dt].
    """
-    S, E, A, T, I, R, D = y
+    S, E, I, R = y
 
     # Prevent S from going negative by only removing as many people remain in the compartment
     max_new_infections = min(transmission_prob * S, S)
-    dS_dt = -max_new_infections
-    dE_dt = max_new_infections - (tau) * E
+    dS_dt = -max_new_infections + omega * R
+    dE_dt = max_new_infections - sigma * E
+    dI_dt = sigma * E - gamma * I
+    dR_dt = gamma * I - omega * R
 
-    dA_dt = (tau) * E - (kappa + gamma + nu) * A
-    dT_dt = (kappa) * A - (chi + gamma + nu) * T
-    dI_dt = (chi) * T - (gamma + nu) * I
+    return np.array([dS_dt, dE_dt, dI_dt, dR_dt])
 
-    dR_dt = gamma * (A + T + I)
-    dD_dt = nu * (A + T + I)
-
-    return np.array([dS_dt, dE_dt, dA_dt, dT_dt, dI_dt, dR_dt, dD_dt])
-
-class DeterministicSEATIRD(DiseaseModel):
+class DeterministicSEIRS(DiseaseModel):
 
     def __init__(self, disease_model:Type[DiseaseModel]): # add antiviral_model
         self.now = disease_model.now
         self.parameters = disease_model.parameters
 
-        self.R0             = float(self.parameters.disease_parameters['R0'])
-        self.beta_scale     = float(self.parameters.disease_parameters['beta_scale'] )   # "R0CorrectionFactor"
-        self.beta           = self.R0 / self.beta_scale
+        self.R0    = float(self.parameters.disease_parameters['R0'])
+        self.sigma = 1 / float(self.parameters.disease_parameters['latent_period_days'])
+        self.gamma = 1 / float(self.parameters.disease_parameters['infectious_period_days'])
+        immune_period = float(self.parameters.disease_parameters.get('immune_period_days', 0))
+        if immune_period == 0 or not immune_period:
+            self.omega = 0
+        else:
+            self.omega = 1 / immune_period
 
-        # the following four parameters are provided by users as periods (units = days),
-        # but then stored here as rates (units = 1/days)
-        self.tau            = 1/float(self.parameters.disease_parameters['tau'])
-        self.kappa          = 1/float(self.parameters.disease_parameters['kappa'])
-        self.gamma          = 1/float(self.parameters.disease_parameters['gamma'])
-        self.chi            = 1/float(self.parameters.disease_parameters['chi'])
+        # beta is a required name for _calculate_beta_w_npi
+        self.beta  = self.R0 * self.gamma
 
-        # the user enters one nu value for each age group, assumed to be low risk
-        # population. use multiplier 9x to derive values for high risk population
-        self.nu_values      = [[],[]]
-        self.nu_values[0]   = [float(x)   for x in self.parameters.disease_parameters['nu']]
-        self.nu_values[1]   = [float(x)*9 for x in self.parameters.disease_parameters['nu']]
-
-        # transpose nu_values so that we can access values in the order we are used to
-        #   e.g.:    nu_values[age][risk]
-        self.nu_values = np.array(self.nu_values).transpose().tolist()
-
-        self.relative_susceptibility = []
-        self.relative_susceptibility = [float(x) for x in self.parameters.disease_parameters['sigma']]
+        # Relative susceptibility required for travel model, make 1's if not specified
+        num_age_grps = self.parameters.number_of_age_groups
+        self.relative_susceptibility = [
+            float(x) for x in self.parameters.disease_parameters.get(
+                "relative_susceptibility", [1.0] * num_age_grps
+            )]
 
         # this isn't used, bc _calculate_beta_w_npi uses the schedule
         self.npis_schedule = disease_model.npis_schedule
@@ -86,11 +74,10 @@ class DeterministicSEATIRD(DiseaseModel):
 
     def simulate(self, node:Type[Node], time: int, vaccine_model:Type[Vaccination]):
         """
-        Main simulation logic for deterministic SEATIRD model.
+        Main simulation logic for deterministic SEIR model.
         Each group (age, risk, vaccine) is simulated separately via ODE.
 
-        S = Susceptible, E = Exposed, A = Asymptomatic infectious,
-        T = Treated, I = Infectious symptomatic, R = Recovered, D = Deceased
+        S = Susceptible, E = Exposed, I = Infectious, R = Recovered
         """
 
         logger.debug(f'node={node}, time={time}')
@@ -118,9 +105,6 @@ class DeterministicSEATIRD(DiseaseModel):
             if sum(focal_group_compartments_today) == 0:
                 continue  # skip empty groups
 
-            # Get nu as scalar needed for the model based on age and risk group
-            nu = float(self.nu_values[focal_group.age][focal_group.risk]) # nu is vector of values
-
             # Determine vaccine effect on focal group susceptibility
             # 1 is vaccinated subgroup, 0 unvaccinated subgroup
             if focal_group.vaccine == 1:
@@ -137,8 +121,8 @@ class DeterministicSEATIRD(DiseaseModel):
                     continue
 
                 # contacted_group_compartments_today
-                S, E, A, T, I, R, D = compartments_today[(contacted_group.age, contacted_group.risk, contacted_group.vaccine)]
-                infectious_contacted = A + T + I
+                S, E, I, R = compartments_today[(contacted_group.age, contacted_group.risk, contacted_group.vaccine)]
+                infectious_contacted = I
 
                 # infectious_contacted/total_node_pop this captures the fraction of population we need to move from S -> E
                 # NOTE: Maybe an under-weighting if we should be doing age group specific: infectious_age/total_age_pop
@@ -153,15 +137,13 @@ class DeterministicSEATIRD(DiseaseModel):
 
             model_parameters = (
                 transmission_prob,     # S => E
-                self.tau,              # E => A
-                self.kappa,            # A => T
-                self.chi,              # T => I
-                self.gamma,            # A/T/I => R
-                nu                     # A/T/I => D
+                self.sigma,            # E => I
+                self.gamma,            # I => R
+                self.omega             # R => S
             )
 
             # Euler's Method solve of the system, can't do integer people
-            daily_change = SEATIRD_model(focal_group_compartments_today, *model_parameters)
+            daily_change = SEIRS_model(focal_group_compartments_today, *model_parameters)
             compartments_tomorrow = focal_group_compartments_today + daily_change
             node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
 

@@ -1,11 +1,17 @@
 import pytest
-import warnings
 import numpy as np
 from types import SimpleNamespace
 
-from src.baseclasses.PopulationCompartments import PopulationCompartments
-from src.baseclasses.Group import RiskGroup, VaccineGroup, Compartments, Group
+# needed to set dynamic Compartment Enum while having relative paths in headers
+import sys, importlib
+GroupModule = importlib.import_module("src.baseclasses.Group")
+# ensure any alt path points to the same module
+sys.modules.setdefault("baseclasses.Group", GroupModule)
+
+from src.baseclasses.Network import Network
 from src.baseclasses.Node import Node
+from src.baseclasses.Group import RiskGroup, VaccineGroup, Compartments
+from src.baseclasses.PopulationCompartments import PopulationCompartments
 from src.models.treatments.Vaccination import Vaccination  # Adjust import based on your structure
 
 # still requires calling with printing more than stdout to the screen to see these debug messages
@@ -13,11 +19,6 @@ from src.models.treatments.Vaccination import Vaccination  # Adjust import based
 
 # Multiple node test
 def test_distribute_vaccines_to_nodes_only_moves_stock():
-    # Two nodes, 60 & 40 people
-    n1 = Node(0, 0, 0, PopulationCompartments([60], [0.0]))
-    n2 = Node(1, 1, 0, PopulationCompartments([40], [0.0]))
-    net = type("MockNet", (), {"nodes": [n1, n2]})
-
     params = SimpleNamespace(
         number_of_age_groups=1,
         vaccine_model="stockpile-age-risk",
@@ -28,6 +29,13 @@ def test_distribute_vaccines_to_nodes_only_moves_stock():
             "vaccine_eff_lag_days": "0",
             "vaccine_stockpile": [{"day": "0", "amount": "100"}]
         })
+    compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
+    net = Network(compartment_labels) #type("MockNet", (), {"nodes": [n1, n2]})
+    # Two nodes, 60 & 40 people
+    n1 = Node(0, 0, 0, PopulationCompartments([60], [0.0]))
+    n2 = Node(1, 1, 0, PopulationCompartments([40], [0.0]))
+    net._add_node(n1)
+    net._add_node(n2)
     strat = Vaccination(parameters=params).get_child(params.vaccine_model, network=net)
 
     # Before: no per-node stock
@@ -44,19 +52,23 @@ def test_distribute_vaccines_to_nodes_only_moves_stock():
     assert total_node_day0 == 100.0
 
     # Compartment counts untouched (population moves only in distribute_vaccines_to_population)
-    assert n1.compartments.get_compartment_vector_for(Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 60
-    assert n2.compartments.get_compartment_vector_for(Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 40
-
+    # Imported the module Group for dynamic compartments, so need to call the class Group by Group.Group
+    assert n1.compartments.get_compartment_vector_for(GroupModule.Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 60
+    assert n2.compartments.get_compartment_vector_for(GroupModule.Group(age=0, risk_group=RiskGroup.L.value, vaccine_group=VaccineGroup.U.value))[0] == 40
 
 # Make a single node for tests below
-def make_node_with_population(pop=100):
-    pc = PopulationCompartments(groups=[pop], high_risk_ratios=[0.0])
-    return Node(node_index=0, node_id=0, fips_id=0, compartments=pc)
+def make_network_with_population(pop=100):
+    compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
+    net = Network(compartment_labels)
+    pc   = PopulationCompartments(age_group_pops=[pop], high_risk_ratios=[0.0])
+    node = Node(node_index=0, node_id=0, fips_id=0, compartments=pc)
+    net._add_node(node)
+    return net
 
 def test_adherence_ceiling_caps_usage_and_rolls_over():
     # One node, one age, low-risk only; total_grp_pop = 100
-    node = make_node_with_population()  # builds Node with PopulationCompartments([100], [0.0])
-    net  = type("Net", (), {"nodes": [node]})
+    net = make_network_with_population()
+    node = net.nodes[0]
 
     params = SimpleNamespace(
         number_of_age_groups=1,
@@ -102,16 +114,18 @@ def test_stockpile_combines_negative_and_day0():
                 {"day": "-14", "amount": "100"},  # -> effective day = 0   → stays as 0
                 {"day": "0", "amount": "25"}      # -> effective day = 14  → too late, skip for this test
             ]})
-    node = make_node_with_population(pop=100)
+    compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
+    net = make_network_with_population()
+    node = net.nodes[0]
     vaccine_parent = Vaccination(parameters=params)
-    strategy = vaccine_parent.get_child(params.vaccine_model, network=type("MockNet", (), {"nodes": [node]}))
+    strategy = vaccine_parent.get_child(params.vaccine_model, network=net)
 
     # Only day 0 should exist in the dictionary
     assert 0 in strategy.network_stockpile_by_day, "Expected effective day 0 in stockpile_by_day"
     assert strategy.network_stockpile_by_day[0] == 150.0, f"Expected total of 150 at day 0, got {strategy.stockpile_by_day[0]}"
 
     # Run distribution
-    strategy.distribute_vaccines_to_nodes(network=type("MockNet", (), {"nodes": [node]}), day=0)
+    strategy.distribute_vaccines_to_nodes(network=net, day=0)
     strategy.distribute_vaccines_to_population(node, day=0)
 
     # Check that exactly 150 people were vaccinated
@@ -132,15 +146,16 @@ def test_stockpile_combines_duplicate_days():
                 {"day": "1", "amount": "40"},
                 {"day": "1", "amount": "30"}
             ]})
-    node = make_node_with_population(pop=90) # population less than total vaccines to distribute
+    net = make_network_with_population(pop=90) # population less than total vaccines to distribute
+    node = net.nodes[0]
     vaccine_parent = Vaccination(parameters=params)
-    strategy = vaccine_parent.get_child(params.vaccine_model, network=type("MockNet", (), {"nodes": [node]}))
+    strategy = vaccine_parent.get_child(params.vaccine_model, network=net)
 
     # Expect day 1 to have all 3 amounts combined
     assert strategy.network_stockpile_by_day[1] == 100.0, f"Expected 100 vaccines at day 1, got {strategy.network_stockpile_by_day[1]}"
 
     # Run distribution of 100 vaccines to 90 people
-    strategy.distribute_vaccines_to_nodes(network=type("MockNet", (), {"nodes": [node]}), day=1)
+    strategy.distribute_vaccines_to_nodes(network=net, day=1)
     strategy.distribute_vaccines_to_population(node, day=1)
     vaccinated = node.compartments.compartment_data[0][0][1][Compartments.S.value]
     assert vaccinated == 90, f"Expected all 90 people vaccinated, got {vaccinated}"
@@ -162,12 +177,13 @@ def test_rollover_unused_vaccines_to_next_day():
                 {"day": "0", "amount": "50"}
                 #{"day": "1", "amount": "0"},  # Day 1 should be created by the function when rolling over
             ]})
-    node = make_node_with_population(pop=30) # population less than total vaccines to distribute
+    net = make_network_with_population(pop=30) # population less than total vaccines to distribute
+    node = net.nodes[0]
     vaccine_parent = Vaccination(parameters=params)
-    strategy = vaccine_parent.get_child(params.vaccine_model, network=type("MockNet", (), {"nodes": [node]}))
+    strategy = vaccine_parent.get_child(params.vaccine_model, network=net)
 
     # Day 0: 50 vaccines, only 30 people → 20 leftover
-    strategy.distribute_vaccines_to_nodes(network=type("MockNet", (), {"nodes": [node]}), day=0)
+    strategy.distribute_vaccines_to_nodes(network=net, day=0)
     strategy.distribute_vaccines_to_population(node, day=0)
     vaccinated_day0 = node.compartments.compartment_data[0][0][1][Compartments.S.value]
     assert vaccinated_day0 == 30, f"Expected 30 vaccinated on day 0, got {vaccinated_day0}"
@@ -177,7 +193,7 @@ def test_rollover_unused_vaccines_to_next_day():
 
     # Day 1: expect 20 leftover vaccines from day 0 to be used
     assert strategy.node_stockpile_by_day[0][1] == 20.0, f"Expected 20 vaccines left on day 1, got {strategy.node_stockpile_by_day[0][1]}"
-    strategy.distribute_vaccines_to_nodes(network=type("MockNet", (), {"nodes": [node]}), day=1)
+    strategy.distribute_vaccines_to_nodes(network=net, day=1)
     strategy.distribute_vaccines_to_population(node, day=1)
     vaccinated_total = node.compartments.compartment_data[0][0][1][Compartments.S.value]
     assert vaccinated_total == 50, f"Expected 50 total vaccinated after day 1, got {vaccinated_total}"
@@ -186,8 +202,8 @@ def test_rollover_unused_vaccines_to_next_day():
     assert 2 not in strategy.node_stockpile_by_day[0], "Day 2 unexpectedly found in stockpile"
 
 def test_capacity_limits_day0_when_less_than_one():
-    node = make_node_with_population()
-    net  = type("MockNet", (), {"nodes": [node]})
+    net = make_network_with_population()
+    node = net.nodes[0]
     params = SimpleNamespace(
         number_of_age_groups=1,
         vaccine_model="stockpile-age-risk",
@@ -201,12 +217,12 @@ def test_capacity_limits_day0_when_less_than_one():
     strat = Vaccination(parameters=params).get_child(params.vaccine_model, network=net)
     strat.distribute_vaccines_to_nodes(net, day=0)
     strat.distribute_vaccines_to_population(node, day=0)
-    total_vax = node.compartments.get_compartment_vector_for(Group(0, RiskGroup.L.value, VaccineGroup.V.value))
+    total_vax = node.compartments.get_compartment_vector_for(GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.V.value))
     assert float(sum(total_vax)) == 30.0  # capped at 30% of total pop on day 0
 
 def test_half_life_applies_only_after_day0_and_subinteger_loss():
-    node = make_node_with_population(pop=5)
-    net  = type("MockNet", (), {"nodes": [node]})
+    net = make_network_with_population(pop=5)
+    node = net.nodes[0]
     params = SimpleNamespace(
         number_of_age_groups=1,
         vaccine_model="stockpile-age-risk",
@@ -222,6 +238,6 @@ def test_half_life_applies_only_after_day0_and_subinteger_loss():
     # day=1: decay happens => 0.5 dose → floor to 0 used, and comment says <1 is lost (not rolled)
     strat.distribute_vaccines_to_population(node, day=1)
     # no vaccination should occur; and no day 2 rollover created by a sub-integer
-    total_vax = node.compartments.get_compartment_vector_for(Group(0, RiskGroup.L.value, VaccineGroup.V.value))
+    total_vax = node.compartments.get_compartment_vector_for(GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.V.value))
     assert float(sum(total_vax)) == 0.0
     assert 2 not in strat.node_stockpile_by_day[0]

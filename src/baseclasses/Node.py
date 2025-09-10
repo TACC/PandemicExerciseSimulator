@@ -91,41 +91,43 @@ class Node:
         """
         Return dictionary representation of node object for easier printing
         """
-        data={}
+        data               = {}
         data['node_index'] = str(self.node_index)
-        data['node_id'] = str(self.node_id)
-        data['fips_id'] = str(self.fips_id)
+        data['node_id']    = str(self.node_id)
+        data['fips_id']    = str(self.fips_id)
 
         # TODO collect travel exposure data for the output
-        data['travel_exposure'] = []
-        data['compartment_summary'] = {}
+        data['travel_exposure']             = []
+        data['compartment_summary']         = {}
         data['compartment_summary_percent'] = {}
-        # TODO put this back in when we start to use this output data
-        #data['compartments'] = {}
+        data['compartment_subgroups']       = {}
 
-        # TODO this is done elsewhere too, should be a function
-        data['compartment_summary']['S'] = self.compartments.susceptible_population()
-        data['compartment_summary']['E'] = self.compartments.exposed_population()
-        data['compartment_summary']['A'] = self.compartments.asymptomatic_population()
-        data['compartment_summary']['T'] = self.compartments.treatable_population()
-        data['compartment_summary']['I'] = self.compartments.infectious_population()
-        data['compartment_summary']['R'] = self.compartments.recovered_population()
-        data['compartment_summary']['D'] = self.compartments.deceased_population()
+        # Use enum compartment labels + totals vector
+        labels = [c.name for c in Compartments]  # order must match last axis of compartment_data
+        vec = np.asarray(self.compartments.get_disease_compartment_sum(), dtype=float)  # shape: [comp]
 
-        total = sum(data['compartment_summary'].values())
+        # Per-node totals, keyed by compartment name
+        data['compartment_summary'] = {lab: float(val) for lab, val in zip(labels, vec)}
+
+        # Percent by compartment
+        total = float(vec.sum())
+        if total > 0.0:
+            data['compartment_summary_percent'] = {
+                lab: round(data['compartment_summary'][lab] / total * 100.0, 2) for lab in labels
+            }
+        else:
+            data['compartment_summary_percent'] = {lab: 0.0 for lab in labels}
+
+        # Subgroup specific population counts
         for comp in Compartments:
-            data['compartment_summary_percent'][comp.name] = \
-                round(data['compartment_summary'][comp.name] / total * 100, 2)
+            data['compartment_subgroups'][comp.name] = { 'L':{}, 'H':{} }
 
-        # TODO put this back in when we start to use this output data
-        #for comp in Compartments:
-        #    data['compartments'][comp.name] = { 'U':{}, 'V':{} }
+            for risk in RiskGroup:
+                for vac in VaccineGroup:
+                    data['compartment_subgroups'][comp.name][risk.name][vac.name] = \
+                        self.compartments.return_list_by_age_group(comp.value, risk.value, vac.value)
 
-        #    for vac in VaccineGroup:
-        #        for risk in RiskGroup:
-        #            data['compartments'][comp.name][vac.name][risk.name] = \
-        #                self.compartments.return_list_by_age_group(comp.value, vac.value, risk.value)
-        return(data)
+        return data
 
 
     def total_population(self) -> float:

@@ -18,7 +18,6 @@ class Writer:
 
         filename = 'output.json'
         self.output_filename = os.path.join(self.output_dir, filename)
-        print(self.output_filename)
         try:
             with open(self.output_filename, 'w') as o:
                 try:
@@ -47,29 +46,14 @@ class Writer:
             day (int): simulation day
             network (Network): Network object with list of nodes
         """
-        # TODO collect daily reports of important events for the output, perhaps in
-        # the Day object
+        # TODO collect daily reports of important events for the output, perhaps in the Day object
+        # TODO Vaccines wasted/decayed or remaining in stockpile also good for report
         data = {'day': day, 'reports': [], 'data': [], 'total_summary': {}}
-        for each_node in network.nodes[:]:
-            data['data'].append(each_node.return_dict())
-
-        # TODO make this more efficient
-        data['total_summary']['S'] = 0
-        data['total_summary']['E'] = 0
-        data['total_summary']['A'] = 0
-        data['total_summary']['T'] = 0
-        data['total_summary']['I'] = 0
-        data['total_summary']['R'] = 0
-        data['total_summary']['D'] = 0
-
         for node in network.nodes:
-            data['total_summary']['S'] += node.compartments.susceptible_population()
-            data['total_summary']['E'] += node.compartments.exposed_population()
-            data['total_summary']['A'] += node.compartments.asymptomatic_population()
-            data['total_summary']['T'] += node.compartments.treatable_population()
-            data['total_summary']['I'] += node.compartments.infectious_population()
-            data['total_summary']['R'] += node.compartments.recovered_population()
-            data['total_summary']['D'] += node.compartments.deceased_population()
+            nd = node.return_dict()  # includes named compartment_summary
+            data['data'].append(nd)
+            for c, v in nd['compartment_summary'].items():
+                data['total_summary'][c] = float(data['total_summary'].get(c, 0.0) + float(v))
 
         with open(f'{self.output_filename[:-5]}_{day}.json', 'w') as o:
             o.write(json.dumps(data, indent=2))

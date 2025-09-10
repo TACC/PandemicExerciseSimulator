@@ -1,7 +1,8 @@
 import pytest
 
 from src.baseclasses.PopulationCompartments import PopulationCompartments
-from src.baseclasses.Group import RiskGroup, VaccineGroup, Compartments, Group
+from src.baseclasses import Group # needed to set dynamic Compartment Enum
+from src.baseclasses.Group import RiskGroup, VaccineGroup, Compartments
 
 @pytest.fixture
 def pc_2_node():
