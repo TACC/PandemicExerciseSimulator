@@ -39,8 +39,8 @@ class InputProperties:
         self.non_pharma_interventions = input.get('non_pharma_interventions', [])
 
         # antivirals (optional)
-        self.antiviral_model = input['antiviral_model']['identity']
-        self.antiviral_parameters = input['antiviral_model']['parameters']
+        #self.antiviral_model = input['antiviral_model']['identity']
+        #self.antiviral_parameters = input['antiviral_model']['parameters']
         
         # vaccines (optional)
         vaccine_input = input.get('vaccine_model', {})  # returns {} if not present
@@ -77,8 +77,8 @@ class InputProperties:
                 f'\n## NON-PHARMACEUTICAL INTERVENTIONS ##\n'
                 f'non_pharma_interventions={self.non_pharma_interventions}\n'
                 f'\n## ANTIVIRALS ##\n'
-                f'antiviral_model={self.vaccine_model}\n'
-                f'antiviral_parameters={self.vaccine_parameters}\n'
+                #f'antiviral_model={self.antiviral_model}\n'
+                #f'antiviral_parameters={self.antiviral_parameters}\n'
                 f'\n## VACCINES ##\n'
                 f'vaccine_model={self.vaccine_model}\n'
                 f'vaccine_parameters={self.vaccine_parameters}\n'
