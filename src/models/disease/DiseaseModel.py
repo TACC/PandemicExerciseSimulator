@@ -115,9 +115,18 @@ class DiseaseModel:
         logging.debug(f'beta_baseline = {beta_baseline}, beta = {beta}')
         return beta
 
-
-    #def expose_number_of_people(self):
-    #    pass
+    @staticmethod
+    def spectral_radius(K: np.ndarray) -> float:
+        """
+        R0 = spectral radius (rho) of K (dominant eigenvalue).
+        K = beta * S * C * diag(w), S=susceptibility, C=contact, w=weight of infection duration
+        if infection duration, d, same for all ages then diag(w) = d*I
+        Susceptibility is usually identity matrix I as well so for simple SEIR model we have
+        R0 = beta * d * rho(C) => beta = R0 * gamma / rho(C)
+        """
+        eigvals = np.linalg.eigvals(K)
+        # Numerical noise can introduce tiny imaginary parts; take real component.
+        return float(np.max(eigvals.real))
 
     def simulate(self):
         pass

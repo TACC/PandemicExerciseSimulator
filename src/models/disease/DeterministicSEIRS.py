@@ -51,7 +51,7 @@ class DeterministicSEIRS(DiseaseModel):
             self.omega = 1 / immune_period
 
         # beta is a required name for _calculate_beta_w_npi
-        self.beta  = self.R0 * self.gamma
+        self.beta  = self.R0 * self.gamma / DiseaseModel.spectral_radius(self.parameters.np_contact_matrix)
 
         # Relative susceptibility required for travel model, make 1's if not specified
         num_age_grps = self.parameters.number_of_age_groups
