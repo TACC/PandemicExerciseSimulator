@@ -44,6 +44,7 @@ def adjust_two_way_split_proportion(
     corrected_fraction = (desired_realized_fraction * competing_rate) / denom
 
     return corrected_fraction
+
 #### Estimate the generation time based only on input parameters
 def compute_generation_time(
         E_out_rate, IP_to_IS_rate, IS_to_H_rate, IS_to_R_rate, IA_to_R_rate,

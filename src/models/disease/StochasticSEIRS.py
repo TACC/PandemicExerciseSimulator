@@ -73,6 +73,9 @@ class StochasticSEIRS(DiseaseModel):
                 "relative_susceptibility", [1.0] * num_age_grps
             )]
 
+        # this isn't used, bc _calculate_beta_w_npi uses the schedule, but has to be initialized
+        self.npis_schedule = disease_model.npis_schedule
+
         logger.info(f'instantiated StochasticSEIRS object')
         logger.debug(f'{self.parameters}')
         return
