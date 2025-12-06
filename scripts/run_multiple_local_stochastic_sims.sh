@@ -3,21 +3,21 @@
 # Initialize CSV file with header: model type, sim number, elapsed seconds
 echo "model,sim,time_sec" > sim_runtime_stats.csv
 
-run_days=500
+run_days=180
 for i in {1..10}
 do
    # Capture start time
    start_time=$(date +%s)
 
    # Define the full sim subdirectory path
-   init_sim_dir="OUTPUT_small_stochastic_min1/OUTPUT_small_stochastic_min1_sim0"
-   sim_dir="OUTPUT_small_stochastic_min1/OUTPUT_small_stochastic_min1_sim${i}"
+   init_sim_dir="seir-deterministic"
+   sim_dir="seir-deterministic-loop/sim${i}"
 
    # Create the sim directory if it doesn't exist
    mkdir -p "${sim_dir}"
 
    # Copy the original input JSON to a temp file
-   cp data/texas/INPUT_small.json tmp_input.json
+   cp data/test/INPUT_SEIRS.json tmp_input.json
 
    # Replace only the sim subfolder name using the sim_dir variable
    sed -i '' "s|${init_sim_dir}|${sim_dir}|" tmp_input.json
