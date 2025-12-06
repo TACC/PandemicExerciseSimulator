@@ -21,6 +21,7 @@ class AgeRiskVaccineStockpileStrategy(Vaccination):
         self.parameters    = vaccine_model.parameters
         # VE defined in parent class as it's needed by travel and disease model even with no vaccination, i.e. VE=0
         self.vaccine_effectiveness = vaccine_model.vaccine_effectiveness
+        self.vaccine_effectiveness_hosp = vaccine_model.vaccine_effectiveness_hosp
 
         # If no age-risk priority groups provided then everyone is eligible for vaccination
         num_age_grps = self.parameters.number_of_age_groups

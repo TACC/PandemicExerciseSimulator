@@ -17,13 +17,21 @@ class Vaccination:
 
         num_age_grps = parameters.number_of_age_groups
 
-        # VE is used in travel model and disease model
+        # VE against infection is used in travel model and disease model
         self.vaccine_effectiveness  = [ # float 0.0 to 1.0
             float(x) for x in self.parameters.vaccine_parameters.get('vaccine_effectiveness', []) ]
         if not self.vaccine_effectiveness:
             self.vaccine_effectiveness = [0.0] * num_age_grps
         assert all(0.0 <= ve <= 1.0 for ve in self.vaccine_effectiveness), \
             f"Found invalid VE values: {self.vaccine_effectiveness}"
+
+        # VE against hospitalization is an option in the SEIHRD model
+        self.vaccine_effectiveness_hosp  = [ # float 0.0 to 1.0
+            float(x) for x in self.parameters.vaccine_parameters.get('vaccine_effectiveness_hosp', []) ]
+        if not self.vaccine_effectiveness_hosp:
+            self.vaccine_effectiveness_hosp = [0.0] * num_age_grps
+        assert all(0.0 <= ve <= 1.0 for ve in self.vaccine_effectiveness_hosp), \
+            f"Found invalid VE values: {self.vaccine_effectiveness_hosp}"
 
         logger.info(f'Instantiated VaccineModel object with model={self.vaccine_model_str}')
         logger.debug(f'Vaccination.parameters = {self.parameters}')
