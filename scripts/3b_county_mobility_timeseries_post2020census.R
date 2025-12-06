@@ -144,6 +144,7 @@ if(file.exists(us_flow_file)){
     paste0(mob_output_dir, "US_flow_diff_timeseries.csv"),
     row.names = F
   )
+  print("Finished translating 2019 mobility to 2023+ geometries")
 } # end if files already exist
 
 #//////////////////////

@@ -62,6 +62,7 @@ source("3a_ct_ak_crosswalks.R")
 #'  Resulting files named 2019 mobility because that is the year of data collected
 #'   they have been translated to 2023+ spatial geometries with some round error
 #'   of ~40-50 more people introduced per county in CT and AK only
+#'  First time running pipeline will take ~2sec per day to clean
 source("3b_county_mobility_timeseries_post2020census.R")
 
 #///////////////////////////////////////////////////////////////////////////
@@ -76,6 +77,8 @@ if(!file.exists("../data/Wyoming/state_Wyoming_high-risk-ratios-flu-only.csv")){
   end_time = Sys.time()
   elapsed_time = end_time - start_time
   print(as.numeric(elapsed_time, units = "mins"))
+}else{
+  print("State-level high risk ratios already exist")
 } # end if need to make state-level BRFSS/NSCH data
 
 
