@@ -119,9 +119,9 @@ if(file.exists(us_flow_file)){
       ungroup() %>%
       # Convert to proportion of pop traveling based on population or total outflow
       left_join(acs_county_geo_2023, by=c("geoid_o" = "GEOID")) %>%
-      mutate(flow_greater_than_pop = ifelse(total_pop_flow > estimate, T, F) ) %>%
+      mutate(flow_greater_than_pop = ifelse(total_pop_flow > POP_ACS2023, T, F) ) %>%
       rowwise() %>%
-      mutate(prop_flow = ifelse(flow_greater_than_pop, pop_flows/total_pop_flow, pop_flows/estimate)) %>%
+      mutate(prop_flow = ifelse(flow_greater_than_pop, pop_flows/total_pop_flow, pop_flows/POP_ACS2023)) %>%
       ungroup() 
     
     write.csv(
