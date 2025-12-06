@@ -21,10 +21,11 @@ library(tidyverse)
 dir.create("../figures/")
 
 #### Data Sources ####
-# CDC PLACES 2025 release based on 2022 (Tennessee) and 2023 data sets with 2019-2023 ACS
+# CDC PLACES 2025 release based on 2023 (Tennessee) and 2024 data sets with 2019-2023 ACS
 # Weirdly Pennsylvania and Kentucky are missing even in the online interactive dashboard 
 #  => downloaded on Dec 5 release day so maybe an error that will be corrected???
 # In BRFSS: Kentucky (21) and Pennsylvania (42) did not collect enough data for 2023 survey so required 2022 data...
+#  but the 2024 BRFSS has decent sample sizes for theses states
 places_file_path_2025 = list.files(path="../data/PLACES/", 
                               pattern="^PLACES__Local_Data_for_Better_Health,_County_Data,_2025_release",
                               full.names = T)

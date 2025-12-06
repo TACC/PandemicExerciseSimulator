@@ -79,11 +79,15 @@ dir.create("../figures/")
 #   dplyr::filter(`_STATE` %in% c(21, 42))
 
 # This code uses 2023 and 2024 data because Tennessee (47) did not meet the requirements to submit data in 2024
+#  i.e. FIPS 47 is not present in LLCP2024.XPT
 brfss_2023 = haven::read_xpt("../data/BRFSS/LLCP2023.XPT") %>%
   dplyr::filter(`_STATE` %in% c(47))
 brfss = haven::read_xpt("../data/BRFSS/LLCP2024.XPT") %>% # .XPT is the SAS transport file
   bind_rows(brfss_2023) %>%
   dplyr::filter(`_STATE` < 60) # Remove territories
+
+# possibly make supplemental table, of the sample sizes per state per year
+#table(brfss$`_STATE`, brfss$IYEAR)
 
 #//////////////////
 #### NSCH DATA ####
