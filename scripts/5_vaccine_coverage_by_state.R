@@ -14,6 +14,12 @@
 
 options(scipen=999) #  disable scientific notation
 
+#/////////////////////////////////////////
+#### Define key parameter assumptions ####
+pediatric_VE = 0.51
+adult_VE = 0.36
+day0 = as.Date("2024-10-01") # day epidemic starts in simulation
+
 # Need pop by age to determine total doses as fraction of vaccine coverage and effectiveness
 state_pop_by_age = read_csv("../data/POPULATION/all_US_county_pop_by_age_2019-2023ACS.csv") %>%
   mutate(
@@ -25,7 +31,8 @@ state_pop_by_age = read_csv("../data/POPULATION/all_US_county_pop_by_age_2019-20
   summarise(total_pop = sum(pop), .groups = "drop") %>%
   rename(State = STATE_NAME)
 
-# Ped VC
+#///////////////
+#### Ped VC ####
 ped_file = list.files(path = "../data/VACCINATION", pattern = "Children_6_Months-17_Years", full.names = T)
 ped_flu_vc = 
   read_csv(ped_file) %>%
@@ -33,16 +40,17 @@ ped_flu_vc =
   dplyr::filter(influenza_season == "2024-2025") %>%
   dplyr::select(`Geographic Name`, Estimate, Current_Season_Week_Ending_Label) %>%
   transmute(
-    State       = `Geographic Name`,
+    State   = `Geographic Name`,
     VaxCov  = Estimate,
-    WeekEnd  = as.Date(Current_Season_Week_Ending_Label)  # already <date>
+    WeekEnd = as.Date(Current_Season_Week_Ending_Label)  # already <date>
   ) %>%
   mutate(
     AgeGroup = "Pediatric",
-    VE_Inpatient = 0.51
+    VE_Inpatient = pediatric_VE
     )
 
-# Adult VC
+#/////////////////
+#### Adult VC ####
 adult_file = list.files(path="../data/VACCINATION", pattern ="Among_Adults_18_Years_and_Older", full.names = T)
 adult_flu_vc = 
   read_csv(adult_file) %>%
@@ -52,16 +60,18 @@ adult_flu_vc =
   dplyr::select(`Geographic Name`, Estimates, Current_Season_Week_Ending) %>%
   # harmonize names + parse the week label string into Date
   transmute(
-    State      = `Geographic Name`,
-    VaxCov = Estimates,
+    State   = `Geographic Name`,
+    VaxCov  = Estimates,
     WeekEnd = as.Date(strptime(Current_Season_Week_Ending, "%Y %b %d %I:%M:%S %p"))
   ) %>%
   arrange(State, WeekEnd) %>%
   mutate(
     AgeGroup = "Adult",
-    VE_Inpatient = 0.36
+    VE_Inpatient = adult_VE
   ) 
 
+#/////////////////////////
+#### Vax doses weekly ####
 # Join Peds & Adults to get the total vaccines consumed per week
 all_age_df = adult_flu_vc %>%
   bind_rows(ped_flu_vc) %>%
@@ -83,8 +93,9 @@ write.csv(
   row.names = FALSE, quote = FALSE
 )
 
+#//////////////////////////////
+#### Convert dates to days ####
 # Make weeks into integer days in simulation to release vaccines from stockpile
-day0 = as.Date("2024-10-01")
 weekly_ts = all_age_df %>%
   group_by(State, WeekEnd) %>%
   summarise(TotalWeeklyNewFullProtect = sum(WeeklyNewFullProtect), .groups = "drop") %>%
