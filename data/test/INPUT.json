@@ -5,7 +5,7 @@
     "population": "data/test/county_age_matrix_small.csv",
     "contact": "data/test/contact_matrix.csv",
     "flow": "data/test/travel_work_matrix.csv",
-    "high_risk_ratios": "data/test/high_risk_ratios_equal.csv"
+    "high_risk_ratios": "data/test/county_high_risk_ratios.csv"
   },
   "disease_model": {
     "identity": "seatird-stochastic",

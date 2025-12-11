@@ -59,7 +59,8 @@ class ModelParameters:
         """
         logger.info(f'opening file: {simulation_properties.high_risk_ratios_file}')
         with open(simulation_properties.high_risk_ratios_file, 'r') as f:
-            self.high_risk_ratios = [ float(line.rstrip()) for line in f ]
+            self.high_risk_ratios = [ line.rstrip() for line in f ]
+
 
         logger.info(f'opening file: {simulation_properties.contact_data_file}')
         try:
