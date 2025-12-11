@@ -5,7 +5,11 @@ import logging
 import shutil
 import os
 from typing import Type
-from icecream import ic
+import time
+import csv
+from pathlib import Path
+from secrets import token_bytes
+from numpy.random import SeedSequence, default_rng
 
 from baseclasses.Day import Day
 from baseclasses.InputProperties import InputProperties
@@ -53,7 +57,7 @@ def run( simulation_days:Type[Day],
         vaccine_model.distribute_vaccines_to_population(node, day=0)
 
     # Write initial conditions
-    writer.write(0, network)
+    writer.write_csv(0, network) if writer.total_sims > 1 else writer.write_json(0, network)
     simulation_days.snapshot(network)
 
     # Iterate over each day, each node...
@@ -75,7 +79,7 @@ def run( simulation_days:Type[Day],
         travel_model.travel(network, disease_model, parameters, day, vaccine_model)
 
         # write output
-        writer.write(day, network)
+        writer.write_csv(day, network) if writer.total_sims > 1 else writer.write_json(day, network)
 
         # Early termination if no more infectious or soon to be people
         tolerance = 1e-1
@@ -90,7 +94,8 @@ def run( simulation_days:Type[Day],
                         f"{tolerance:.1e} on day {day}, ending simulation early.")
             break
 
-    simulation_days.plot(writer.output_dir)
+    if writer.total_sims == 1:
+        simulation_days.plot(writer.output_dir)
     logger.info('completed processes in the run function')
 
     return
@@ -117,9 +122,10 @@ def main():
     shutil.copyfile(input_file_path, copied_input_path)
     logger.info(f'Copied input file to: {copied_input_path}')
 
-
     # Also used for exporting day-by-day summary information
-    realization_number = int(simulation_properties.number_of_realizations)
+    realization_indices = simulation_properties.realization_indices
+    realization_number = int(len(realization_indices))
+    batch_num = int(simulation_properties.batch_num)
     
     # Initialize Model Parameters class instance
     # This is a subset of the simulation properties, and contains data from a
@@ -165,17 +171,29 @@ def main():
     travel_parent = TravelModel(parameters)
     travel_model  = travel_parent.get_child(simulation_properties.travel_model)
 
-    for r in range(realization_number):
+    # New random seed per realization num
+    base_seed = int.from_bytes(token_bytes(16), "little")  # 128-bit
+    parent_seedseq = SeedSequence(base_seed)
+    child_seedseq = parent_seedseq.spawn(realization_number)
+
+    # Run time output file
+    csv_time_path = Path(simulation_properties.output_dir_path) / f"simulation_times_batch-{batch_num}.csv"
+    for i, r in enumerate(realization_indices):
+        start_time = time.perf_counter()
         # Initialize Days class instance, resets snapshot
         simulation_days = Day(args.days)
+
+        # Set the random number generator seed for this realization num
+        disease_model.set_seed(child_seedseq[i])
 
         # Need to pass original network each iteration
         network_copy = copy.deepcopy(network)
 
         # Initialize output writer
         writer = Writer(output_dir_path   = simulation_properties.output_dir_path,
-                        realization_index = r)
-        logger.info(f'Began Simulation {r}; {r+1} of {realization_number} ')
+                        realization_index = r, total_sims = realization_number,
+                        batch_num = batch_num)
+        logger.info(f'Began Simulation {r}; {i+1} of {realization_number} ')
         run( simulation_days,
              parameters,
              network_copy,
@@ -184,7 +202,17 @@ def main():
              travel_model,
              writer
            )
-        
+        # capture elapsed time
+        elapsed = time.perf_counter() - start_time
+
+        # Write a time results as soon as sim completes to handle unfinished jobs
+        with open(csv_time_path, "a", newline="") as f:
+            fieldnames = ["sim_num", "time_seconds"]
+            csv_writer = csv.DictWriter(f, fieldnames=fieldnames)
+            # write header if file is empty
+            if f.tell() == 0:
+                csv_writer.writeheader()
+            csv_writer.writerow({"sim_num": r, "time_seconds": elapsed})
     return
 
 

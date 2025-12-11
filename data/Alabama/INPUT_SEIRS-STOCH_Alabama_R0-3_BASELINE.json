@@ -1,0 +1,50 @@
+{
+ "output_dir_path": "SEIRS-STOCH-Alabama_BASELINE",
+  "realization_range": ["0", "99"],
+  "batch_num": "0",
+  "data": {
+    "population": "../data/Alabama/county_pop_by_age_Alabama_2019-2023ACS.csv",
+    "contact": "../data/Alabama/contact_matrix_Alabama_Mistry2021_all.csv",
+    "flow": "../data/Alabama/Alabama_Q4-2019_mobility-matrix.csv",
+    "high_risk_ratios": "../data/Alabama/state_Alabama_high-risk-ratios-flu-only.csv"
+  },
+  "disease_model": {
+    "identity": "seirs-stochastic",
+    "parameters": {
+      "compartments": ["S", "E", "I", "R"],
+      "R0": "3",
+      "latent_period_days": "7",
+      "infectious_period_days": "14",
+      "immune_period_days": "120"
+    }
+  },
+  "travel_model": {
+    "identity": "binomial",
+    "parameters":{
+      "rho": "1",
+      "flow_reduction": [
+        "1.0",
+        "1.0",
+        "1.0",
+        "1.0",
+        "1.0"
+      ],
+      "traveling_compartments": {
+        "I": "0.2"
+      },
+      "transmitting_compartments": {
+        "I": "1.0"
+      }
+    }
+  },
+  "initial_infected": [
+    {
+      "county": "01073",
+      "infected": "6",
+      "age_group": "2"
+    }
+  ],
+  "non_pharma_interventions": [],
+  "antiviral_model": {},
+  "vaccine_model": {}
+}

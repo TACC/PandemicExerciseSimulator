@@ -1,0 +1,241 @@
+{
+  "output_dir_path": "Pennsylvania_VAX",
+  "realization_range": [
+    "0",
+    "99"
+  ],
+  "batch_num": "0",
+  "data": {
+    "population": "../data/Pennsylvania/county_pop_by_age_Pennsylvania_2019-2023ACS.csv",
+    "contact": "../data/Pennsylvania/contact_matrix_Pennsylvania_Mistry2021_all.csv",
+    "flow": "../data/Pennsylvania/Pennsylvania_Q4-2019_mobility-matrix.csv",
+    "high_risk_ratios": "../data/Pennsylvania/state_Pennsylvania_high-risk-ratios-flu-only.csv"
+  },
+  "disease_model": {
+    "identity": "seihrd-stochastic",
+    "parameters": {
+      "compartments": [
+        "S",
+        "E",
+        "IA",
+        "IP",
+        "IS",
+        "H",
+        "R",
+        "D"
+      ],
+      "R0": "2.2",
+      "E_to_IPandIA_days": "0.7",
+      "IP_to_IS_days": "0.9",
+      "IS_to_H_days": "3.74",
+      "H_to_D_days": "5.9",
+      "H_to_R_days": [
+        "4.7",
+        "4.8",
+        "6.2",
+        "6.8",
+        "6.55"
+      ],
+      "IS_to_R_days": "2.0",
+      "IA_to_R_days": "2.3",
+      "prop_E_to_IA": [
+        "0.25",
+        "0.25",
+        "0.3",
+        "0.3",
+        "0.3"
+      ],
+      "prop_IS_to_H_lowrisk": [
+        "0.0132",
+        "0.0099",
+        "0.0295",
+        "0.0594",
+        "0.0802"
+      ],
+      "prop_H_to_D": [
+        "0.00697",
+        "0.00274",
+        "0.00561",
+        "0.0106",
+        "0.0909"
+      ],
+      "highrisk_hosp_multiplier": "3.0",
+      "rel_inf_IP_to_IS": "0.45",
+      "rel_inf_IA_to_IS": "0.97"
+    }
+  },
+  "travel_model": {
+    "identity": "binomial",
+    "parameters": {
+      "rho": "1",
+      "flow_reduction": [
+        "1.0",
+        "1.0",
+        "1.0",
+        "1.0",
+        "1.0"
+      ],
+      "traveling_compartments": {
+        "IA": "0.97",
+        "IP": "0.45"
+      },
+      "transmitting_compartments": {
+        "IA": "0.97",
+        "IP": "0.45",
+        "IS": "1.0"
+      }
+    }
+  },
+  "initial_infected": [
+    {
+      "county": "42101",
+      "infected": "13",
+      "age_group": "2"
+    }
+  ],
+  "non_pharma_interventions": [],
+  "antiviral_model": {},
+  "vaccine_model": {
+    "identity": "stockpile-age-risk",
+    "parameters": {
+      "age_risk_priority_groups": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ],
+      "vaccine_half_life_days": null,
+      "vaccine_capacity_proportion": "1.0",
+      "vaccine_adherence": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ],
+      "vaccine_effectiveness": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ],
+      "vaccine_eff_lag_days": 14,
+      "vaccine_stockpile": [
+        {
+          "day": "-38",
+          "amount": "115090"
+        },
+        {
+          "day": "-31",
+          "amount": "14850"
+        },
+        {
+          "day": "-17",
+          "amount": "48264"
+        },
+        {
+          "day": "-10",
+          "amount": "159640"
+        },
+        {
+          "day": "-3",
+          "amount": "74252"
+        },
+        {
+          "day": "4",
+          "amount": "436637"
+        },
+        {
+          "day": "11",
+          "amount": "178675"
+        },
+        {
+          "day": "18",
+          "amount": "219531"
+        },
+        {
+          "day": "25",
+          "amount": "157935"
+        },
+        {
+          "day": "32",
+          "amount": "360186"
+        },
+        {
+          "day": "39",
+          "amount": "59771"
+        },
+        {
+          "day": "46",
+          "amount": "70979"
+        },
+        {
+          "day": "53",
+          "amount": "77380"
+        },
+        {
+          "day": "60",
+          "amount": "35334"
+        },
+        {
+          "day": "67",
+          "amount": "214369"
+        },
+        {
+          "day": "74",
+          "amount": "48930"
+        },
+        {
+          "day": "81",
+          "amount": "55395"
+        },
+        {
+          "day": "95",
+          "amount": "66129"
+        },
+        {
+          "day": "102",
+          "amount": "14851"
+        },
+        {
+          "day": "109",
+          "amount": "18854"
+        },
+        {
+          "day": "123",
+          "amount": "74786"
+        },
+        {
+          "day": "130",
+          "amount": "7781"
+        },
+        {
+          "day": "137",
+          "amount": "216"
+        },
+        {
+          "day": "144",
+          "amount": "3713"
+        },
+        {
+          "day": "151",
+          "amount": "59655"
+        },
+        {
+          "day": "158",
+          "amount": "7581"
+        },
+        {
+          "day": "186",
+          "amount": "18563"
+        },
+        {
+          "day": "200",
+          "amount": "3712"
+        }
+      ]
+    }
+  }
+}

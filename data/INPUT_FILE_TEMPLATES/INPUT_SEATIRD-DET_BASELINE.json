@@ -1,0 +1,68 @@
+{
+  "output_dir_path": "SEATIRD-DET-STATE_BASELINE",
+  "realization_range": ["0", "99"],
+  "batch_num": "0",
+  "data": {
+    "population": "../data/STATE/county_pop_by_age_STATE_2019-2023ACS.csv",
+    "contact": "../data/STATE/contact_matrix_STATE_Mistry2021_all.csv",
+    "flow": "../data/STATE/STATE_Q4-2019_mobility-matrix.csv",
+    "high_risk_ratios": "../data/STATE/state_STATE_high-risk-ratios-flu-only.csv"
+  },
+  "disease_model": {
+    "identity": "seatird-deterministic",
+    "parameters": {
+      "compartments": ["S", "E", "A", "T", "I", "R", "D"],
+      "R0": "3",
+      "beta_scale": "14",
+      "tau": "7",
+      "kappa": "2",
+      "gamma": "14.0281",
+      "chi": "3",
+      "nu": [
+        "0.002", 
+        "0.002", 
+        "0.002", 
+        "0.002", 
+        "0.002"
+      ],
+      "sigma": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ]
+    }
+  },
+  "travel_model": {
+    "identity": "binomial",
+    "parameters":{
+      "rho": "1",
+      "flow_reduction": [
+        "1.0",
+        "1.0",
+        "1.0",
+        "1.0",
+        "1.0"
+      ],
+      "traveling_compartments": {
+        "A": "1.0"
+      },
+      "transmitting_compartments": {
+        "A": "1.0", 
+        "T": "1.0", 
+        "I": "1.0"
+      }
+    }
+  },
+  "initial_infected": [
+    {
+      "county": "99999",
+      "infected": "1",
+      "age_group": "2"
+    }
+  ],
+  "non_pharma_interventions": [],
+  "antiviral_model": {},
+  "vaccine_model": {}
+}

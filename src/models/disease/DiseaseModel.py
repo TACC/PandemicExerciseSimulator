@@ -3,6 +3,7 @@ import logging
 import numpy.typing as npt
 import numpy as np
 from typing import Type
+from numpy.random import default_rng, SeedSequence, Generator
 
 from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
@@ -21,6 +22,7 @@ class DiseaseModel:
         self.parameters = parameters
         self.now = now
         self.npis_schedule = npis.schedule
+        self._rng: Generator | None = None
 
         logger.info(f'instantiated DiseaseModel object with model={self.disease_model}, now={self.now}')
         logger.debug(f'DiseaseModel.parameters = {self.parameters}')
@@ -29,18 +31,33 @@ class DiseaseModel:
     def __str__(self) -> str:
         return(f'DiseaseModel:Model={self.disease_model}')
 
+    def set_seed(self, sim_seed: SeedSequence ):
+        self._rng = default_rng(sim_seed)
+        return self._rng
+
+    @property
+    def rng(self) -> Generator:
+        if self._rng is None:
+            raise RuntimeError("RNG not set; call DiseaseModel set_seed first.")
+        return self._rng
 
     def get_child(self, disease_model:str):
         self.disease_model = disease_model
         if self.disease_model == 'seatird-deterministic':
             from .DeterministicSEATIRD import DeterministicSEATIRD
             return DeterministicSEATIRD(self)
-        elif self.disease_model == 'seirs-deterministic':
-            from .DeterministicSEIRS import DeterministicSEIRS
-            return DeterministicSEIRS(self)
         elif self.disease_model == 'seatird-stochastic':
             from .StochasticSEATIRD import StochasticSEATIRD
             return StochasticSEATIRD(self)
+        elif self.disease_model == 'seirs-deterministic':
+            from .DeterministicSEIRS import DeterministicSEIRS
+            return DeterministicSEIRS(self)
+        elif self.disease_model == 'seirs-stochastic':
+            from .StochasticSEIRS import StochasticSEIRS
+            return StochasticSEIRS(self)
+        elif self.disease_model == 'seihrd-stochastic':
+            from .StochasticSEIHRD import StochasticSEIHRD
+            return StochasticSEIHRD(self)
         else:
             raise Exception(f'Disease model "{self.disease_model}" not recognized')
         return
@@ -115,9 +132,18 @@ class DiseaseModel:
         logging.debug(f'beta_baseline = {beta_baseline}, beta = {beta}')
         return beta
 
-
-    #def expose_number_of_people(self):
-    #    pass
+    @staticmethod
+    def spectral_radius(K: np.ndarray) -> float:
+        """
+        R0 = spectral radius (rho) of K (dominant eigenvalue).
+        K = beta * S * C * diag(w), S=susceptibility, C=contact, w=weight of infection duration
+        if infection duration, d, same for all ages then diag(w) = d*I
+        Susceptibility is usually identity matrix I as well so for simple SEIR model we have
+        R0 = beta * d * rho(C) => beta = R0 * gamma / rho(C)
+        """
+        eigvals = np.linalg.eigvals(K)
+        # Numerical noise can introduce tiny imaginary parts; take real component.
+        return float(np.max(eigvals.real))
 
     def simulate(self):
         pass

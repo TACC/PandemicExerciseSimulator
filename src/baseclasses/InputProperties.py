@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,38 @@ class InputProperties:
 
         # simulation control
         self.output_dir_path        = input['output_dir_path']
-        self.number_of_realizations = int(input['number_of_realizations'])
+        if "realization_range" in input:
+            rr = input['realization_range']
+            self.batch_num = input['batch_num']
+            # convert strings like "0","49" → ints
+            if (not isinstance(rr, (list, tuple))) or len(rr) != 2:
+                raise ValueError("realization_range must be a 2-element list like [start, end].")
+
+            start, end = int(rr[0]), int(rr[1])
+            if start < 0 or end < 0:
+                raise ValueError("realization_range values must be non-negative.")
+            if end < start:
+                raise ValueError("realization_range end must be >= start.")
+
+            self.realization_start = start
+            self.realization_end = end
+            self.realization_indices: List[int] = list(range(start, end + 1))
+
+        elif "number_of_realizations" in input:
+            self.batch_num = 0
+            n = int(input["number_of_realizations"])
+            if n <= 0:
+                raise ValueError("number_of_realizations must be a positive integer.")
+
+            self.realization_start = 0
+            self.realization_end = n - 1
+            self.realization_indices = list(range(n))
+
+        else:
+            raise ValueError("Must provide either 'realization_range' or 'number_of_realizations'.")
+
+        # legacy convenience: total number of realizations/simulations to do
+        self.number_of_realizations = len(self.realization_indices)
 
         # data files
         self.population_data_file         = input['data']['population']
@@ -77,8 +109,8 @@ class InputProperties:
                 f'\n## NON-PHARMACEUTICAL INTERVENTIONS ##\n'
                 f'non_pharma_interventions={self.non_pharma_interventions}\n'
                 f'\n## ANTIVIRALS ##\n'
-                #f'antiviral_model={self.antiviral_model}\n'
-                #f'antiviral_parameters={self.antiviral_parameters}\n'
+                #f'antiviral_model={self.vaccine_model}\n'
+                #f'antiviral_parameters={self.vaccine_parameters}\n'
                 f'\n## VACCINES ##\n'
                 f'vaccine_model={self.vaccine_model}\n'
                 f'vaccine_parameters={self.vaccine_parameters}\n'
