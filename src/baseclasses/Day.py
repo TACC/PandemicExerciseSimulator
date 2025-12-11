@@ -2,6 +2,7 @@
 import logging
 import matplotlib.pyplot as plt
 import sys
+import os
 from typing import Type
 
 from .Group import Compartments
@@ -47,21 +48,16 @@ class Day:
         """
         Store summary information for each day
         """
-        this_summary = [0.0] * 7
+
+        this_summary = [0.0] * int(network.num_disease_compartments)
         for node in network.nodes:
-            this_summary[Compartments.S.value] += node.compartments.susceptible_population()
-            this_summary[Compartments.E.value] += node.compartments.exposed_population()
-            this_summary[Compartments.A.value] += node.compartments.asymptomatic_population()
-            this_summary[Compartments.T.value] += node.compartments.treatable_population()
-            this_summary[Compartments.I.value] += node.compartments.infectious_population()
-            this_summary[Compartments.R.value] += node.compartments.recovered_population()
-            this_summary[Compartments.D.value] += node.compartments.deceased_population()
+            this_summary += node.compartments.get_disease_compartment_sum()
         self.summary.append(this_summary)
-        logging.info(f'summary information for day {len(self.summary)-1} = {this_summary}')
-        return
+        logging.info(f'summary information for day {len(self.summary)-1} = {[float(x) for x in this_summary]}')
+        return this_summary
 
 
-    def plot(self):
+    def plot(self, output_dir_path:str):
         """
         Save a plot of all compartments over time
         """
@@ -72,7 +68,9 @@ class Day:
             values = [ row[comp.value] for row in self.summary ]
             plt.plot(days, values, label=f'Compartment={comp.name}')  
         plt.legend()
-        plt.savefig('plot.png')
+        plot_path = os.path.join(output_dir_path, "epicurve_plot.png")
+        plt.savefig(plot_path)
+        plt.close()
         return
 
 

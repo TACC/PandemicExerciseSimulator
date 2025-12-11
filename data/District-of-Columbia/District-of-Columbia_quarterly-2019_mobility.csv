@@ -1,0 +1,5 @@
+"state_fips","state_name","state_abbr","geoid_o","geoid_d","quarter","mean_max_norm_prop_flow","median_max_norm_prop_flow","min_max_norm_prop_flow","max_max_norm_prop_flow","imputed"
+11,"District-of-Columbia","DC","11001","11001","1",0.840879160073528,0.844881510426623,0.683449184707109,1,FALSE
+11,"District-of-Columbia","DC","11001","11001","2",0.840482727736018,0.860120193145099,0.704640597346167,0.911478844697984,FALSE
+11,"District-of-Columbia","DC","11001","11001","3",0.795640696091634,0.803717524867474,0.671333008762561,0.885411223521355,FALSE
+11,"District-of-Columbia","DC","11001","11001","4",0.81139831893323,0.835366573798642,0.536845155101496,0.948315928013261,FALSE

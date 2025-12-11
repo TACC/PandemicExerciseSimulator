@@ -1,3 +1,6 @@
+**/input.json
+.idea/
+OUTPUT_*/
 OUTPUT.json
 .python-version
 .pytest_cache
@@ -5,3 +8,23 @@ __pycache__/
 *.pyc
 *.swp
 *.xml
+.Rproj.user
+.vscode/
+scripts/.Rhistory
+scripts/.RData
+scripts/.RDataTmp
+
+# Ignore all input data files to be downloaded or created by user
+data/private_input_data/
+data/POPULATION/
+data/MOBILITY/
+data/BRFSS/
+data/NSCH/
+data/RISK_RATIOS/
+data/SVI/
+data/PLACES/
+data/VACCINATION/
+figures/
+
+# ignore output files
+US_States/

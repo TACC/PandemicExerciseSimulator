@@ -11,18 +11,35 @@ from baseclasses.ModelParameters import ModelParameters
 from baseclasses.Network import Network
 from baseclasses.Node import Node
 from utils.RNGMath import rand_binomial
+from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
 
 class BinomialTravel(TravelModel):
 
-    def __init__(self):
+    def __init__(self, travel_model:Type[TravelModel]):
+        self.parameters = travel_model.parameters
+        
+        # extract parameters
+        self.rho = float(self.parameters.travel_parameters['rho'])
+        self.flow_reduction = []
+        self.flow_reduction = [float(x) for x in self.parameters.travel_parameters['flow_reduction']]
+
+        # Read in traveling and transmitting compartments & weights
+        self.travel_dict = self.parameters.travel_parameters.get('traveling_compartments', {})
+        if not self.travel_dict:
+            raise ValueError("traveling_compartments is required but missing or empty")
+        self.transmit_dict = self.parameters.travel_parameters.get('transmitting_compartments', {})
+        if not self.transmit_dict:
+            raise ValueError("transmitting_compartments is required but missing or empty")
+
         logger.info(f'instantiated a BinomialTravel object: {BinomialTravel}')
         return
 
 
-    def travel(self, network:Type[Network], disease_model:Type[DiseaseModel], parameters:Type[ModelParameters], time:int):
+    def travel(self, network:Type[Network], disease_model:Type[DiseaseModel], parameters:Type[ModelParameters], time:int,
+               vaccine_model:Type[Vaccination]):
         """
         Simulate travel between nodes. "Sink" refers to the Node where people travel to; "Source"
         refers to the Node where people travel from.
@@ -42,15 +59,17 @@ class BinomialTravel(TravelModel):
             for node_source_id, node_source in enumerate(network.nodes):
                 if node_sink_id != node_source_id:
                     self._calculate_flow_probability(parameters, network, node_sink, node_sink_id,
-                                                     node_source, node_source_id, probabilities)
+                                                     node_source, node_source_id, probabilities,
+                                                     disease_model)
                     logging.debug(f'probabilities = {probabilities}')
 
-            self._expose_from_travel(parameters, node_sink, probabilities, disease_model)
+            self._expose_from_travel(parameters, node_sink, probabilities, disease_model, vaccine_model)
         return
 
 
     def _calculate_flow_probability(self, parameters:Type[ModelParameters], network:Type[Network], node_sink:Type[Node],
-                                    node_sink_id:int, node_source:Type[Node], node_source_id:int, probabilities:list):
+                                    node_sink_id:int, node_source:Type[Node], node_source_id:int, probabilities:list,
+                                    disease_model:Type[DiseaseModel]):
         """
         Given a pair of nodes, (1) identify whether travel happens between the nodes (based on
         travel flow data), (2) if so, iterate over all pairs of age groups, (3) calculate number
@@ -77,8 +96,8 @@ class BinomialTravel(TravelModel):
             for ag1 in range(parameters.number_of_age_groups):
                 number_of_infectious_contacts_sink_to_source = 0
                 number_of_infectious_contacts_source_to_sink = 0
-                this_sigma = float(parameters.relative_susceptibility[ag1])
-                this_beta_baseline = parameters.beta
+                this_sigma = float(disease_model.relative_susceptibility[ag1])
+                this_beta_baseline = disease_model.beta
 
                 # TODO incorporate PHA bits to modify value of beta
                 # pha_effectiveness = params.pha_effectiveness (list)
@@ -90,15 +109,16 @@ class BinomialTravel(TravelModel):
                 #}
 
                 for ag2 in range(parameters.number_of_age_groups):
-                    asymptomatic = node_source.compartments.asymptomatic_population_by_age(ag2)
-                    transmitting = node_source.compartments.transmitting_population_by_age(ag2) # asymptomatic, treatable, and infectious
+                    traveling = node_source.compartments.traveling_population_by_age(ag2, self.travel_dict)
+                    transmitting = node_source.compartments.transmitting_population_by_age(ag2, self.transmit_dict) # asymptomatic, treatable, and infectious
                     contact_rate = parameters.np_contact_matrix[ag1][ag2] # age group to age group contacts
-                    logging.debug(f'asymptomatic = {asymptomatic}, transmitting = {transmitting}, contact_rate = {contact_rate}')
+                    logging.debug(f'traveling = {traveling}, transmitting = {transmitting}, contact_rate = {contact_rate}')
 
-                    number_of_infectious_contacts_sink_to_source += transmitting * beta * parameters.rho * contact_rate \
-                                                                    * this_sigma / parameters.flow_reduction[ag1]
-                    number_of_infectious_contacts_source_to_sink += asymptomatic * beta * parameters.rho * contact_rate \
-                                                                    * this_sigma / parameters.flow_reduction[ag2]
+                    number_of_infectious_contacts_sink_to_source += transmitting * beta * self.rho * contact_rate \
+                                                                    * this_sigma / self.flow_reduction[ag1]
+                    number_of_infectious_contacts_source_to_sink += traveling * beta * self.rho * contact_rate \
+                                                                    * this_sigma / self.flow_reduction[ag2]
+
 
                 probabilities[ag1] += flow_sink_to_source * number_of_infectious_contacts_sink_to_source \
                                                    / node_source.total_population()
@@ -108,7 +128,8 @@ class BinomialTravel(TravelModel):
 
 
     def _expose_from_travel(self, parameters:Type[ModelParameters], node_sink:Type[Node], 
-                            probabilities:list, disease_model:Type[DiseaseModel]):
+                            probabilities:list, disease_model:Type[DiseaseModel],
+                            vaccine_model:Type[Vaccination]):
         """
         For each age group, risk group, and vaccine group in the sink Node, use a binomial function
         to determine the actual number of exposures in the Susceptible compartments. Expose those
@@ -123,7 +144,7 @@ class BinomialTravel(TravelModel):
         for ag in range(parameters.number_of_age_groups):
             for rg in range(len(RiskGroup)):
                 for vg in range(len(VaccineGroup)):
-                    prob = ((1-parameters.vaccine_effectiveness[ag]) * probabilities[ag]) \
+                    prob = ((1-vaccine_model.vaccine_effectiveness[ag]) * probabilities[ag]) \
                         if vg == VaccineGroup.V.value else probabilities[ag]
                     
                     # TODO what is this continuity correction (+ 0.5)?
@@ -135,7 +156,7 @@ class BinomialTravel(TravelModel):
                                       f'number_of_exposures = {number_of_exposures}')
                         
                     group = Group(ag, rg, vg)
-                    disease_model.expose_number_of_people(node_sink, group, number_of_exposures)
+                    disease_model.expose_number_of_people(node_sink, group, number_of_exposures, vaccine_model)
         return
 
     

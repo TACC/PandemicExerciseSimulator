@@ -1,133 +1,170 @@
 #!/usr/bin/env python3
 import numpy as np
-from scipy.integrate import solve_ivp
-
 import logging
 from typing import Type
 
 from .DiseaseModel import DiseaseModel
 from baseclasses.Group import Group, RiskGroup, VaccineGroup
-from baseclasses.Network import Network
 from baseclasses.Node import Node
+from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
-
-def SEATIRD_model(t, y, beta, nu, mu, tau, gamma, delta, rho):
+def SEATIRD_model(y, transmission_prob, tau, kappa, chi, gamma, nu):
+    """
+    SEATIRD compartmental model ODE function.
+    Parameters:
+        y (List[float]): Current values for compartments [S, E, A, T, I, R, D]
+        transmission_prob (float): beta modified by NPIs, vaccine effectiveness, contact rate, relative susceptibility (sigma),
+                                   has (A+T+I)/N hidden in it to do node based proportion of population infectious
+                                   Transmission rate converted to probability to keep between 0 and 1
+        tau (float): 1/Latency period in days (exposed to asymptomatic)
+        kappa (float): 1/Asymptomatic infectious period in days (asymptomatic to treatable)
+        chi (float): 1/Treatable infectious period in days (treatable to infectious)
+        gamma (float): 1/symptomatic infectious period in days (asymptomatic/treatable/infectious to recovered)
+        nu (float): Mortality rate in 1/days (asymptomatic/treatable/infectious to deceased)
+    Returns:
+       List[float]: Derivatives [dS/dt, dE/dt, dA/dt, dT/dt, dI/dt, dR/dt, dD/dt].
+   """
     S, E, A, T, I, R, D = y
-    
-    dS_dt = -beta * (A + I) * S
-    dE_dt = beta * (A + I) * S - nu * E
-    dA_dt = nu * E - (mu + tau) * A
-    dT_dt = tau * A - rho * T
-    dI_dt = mu * A - (gamma + delta) * I
-    dR_dt = gamma * I + rho * T
-    dD_dt = delta * I
-    
-    logging.debug(f'{dS_dt}, {dE_dt}, {dA_dt}, {dT_dt}, {dI_dt}, {dR_dt}, {dD_dt}')
-    return [dS_dt, dE_dt, dA_dt, dT_dt, dI_dt, dR_dt, dD_dt]
 
+    # Prevent S from going negative by only removing as many people remain in the compartment
+    max_new_infections = min(transmission_prob * S, S)
+    dS_dt = -max_new_infections
+    dE_dt = max_new_infections - (tau) * E
+
+    dA_dt = (tau) * E - (kappa + gamma + nu) * A
+    dT_dt = (kappa) * A - (chi + gamma + nu) * T
+    dI_dt = (chi) * T - (gamma + nu) * I
+
+    dR_dt = gamma * (A + T + I)
+    dD_dt = nu * (A + T + I)
+
+    return np.array([dS_dt, dE_dt, dA_dt, dT_dt, dI_dt, dR_dt, dD_dt])
 
 class DeterministicSEATIRD(DiseaseModel):
 
-    def __init__(self, disease_model:Type[DiseaseModel]):
-        self.is_stochastic = disease_model.is_stochastic
+    def __init__(self, disease_model:Type[DiseaseModel]): # add antiviral_model
         self.now = disease_model.now
         self.parameters = disease_model.parameters
+
+        self.R0             = float(self.parameters.disease_parameters['R0'])
+        self.beta_scale     = float(self.parameters.disease_parameters['beta_scale'] )   # "R0CorrectionFactor"
+        self.beta           = self.R0 / self.beta_scale
+
+        # the following four parameters are provided by users as periods (units = days),
+        # but then stored here as rates (units = 1/days)
+        self.tau            = 1/float(self.parameters.disease_parameters['tau'])
+        self.kappa          = 1/float(self.parameters.disease_parameters['kappa'])
+        self.gamma          = 1/float(self.parameters.disease_parameters['gamma'])
+        self.chi            = 1/float(self.parameters.disease_parameters['chi'])
+
+        # the user enters one nu value for each age group, assumed to be low risk
+        # population. use multiplier 9x to derive values for high risk population
+        self.nu_values      = [[],[]]
+        self.nu_values[0]   = [float(x)   for x in self.parameters.disease_parameters['nu']]
+        self.nu_values[1]   = [float(x)*9 for x in self.parameters.disease_parameters['nu']]
+
+        # transpose nu_values so that we can access values in the order we are used to
+        #   e.g.:    nu_values[age][risk]
+        self.nu_values = np.array(self.nu_values).transpose().tolist()
+
+        self.relative_susceptibility = []
+        self.relative_susceptibility = [float(x) for x in self.parameters.disease_parameters['sigma']]
+
+        # this isn't used, bc _calculate_beta_w_npi uses the schedule
         self.npis_schedule = disease_model.npis_schedule
 
-        logger.info(f'instantiated DeterministicSEATIRD object with stochastic={self.is_stochastic}')
+        logger.info(f'instantiated DeterministicSEATIRD object')
         logger.debug(f'{self.parameters}')
         return
 
-
-    def set_initial_conditions(self, initial:list, network:Type[Network]):
-        """
-        This method is invoked from the main simulator block. Read in the list of initial infected
-        per location per age group, and expose 
-
-        Args:
-            initial (list): list of initial infected per age group per county from INPUT
-            network (Network): network object with list of nodes
-        """
-        for item in initial:
-            # TODO the word "county" is hardcoded here but should be made dynamic in case
-            # people want to do zip codes instead. Maybe 'location_id'
-            this_node_id = int(item['county'])
-            this_infected = int(item['infected'])
-            this_age_group = int(item['age_group'])
-
-            group = Group(this_age_group, RiskGroup.L.value, VaccineGroup.U.value)
-
-            for node in network.nodes:
-                if node.node_id == this_node_id:
-                    self.expose_number_of_people(node, group, this_infected)
-
-        # TODO If this method remains the same between deterministic and stochastic,
-        # then I should move it into the parent class.
+    def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int, vaccine_model:Type[Vaccination]):
+        # this is a bulk transfer of people to move from S to E by group
+        node.compartments.expose_number_of_people_bulk(group, num_to_expose)
         return
 
-
-    def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int):
+    def simulate(self, node:Type[Node], time: int, vaccine_model:Type[Vaccination]):
         """
-        
-        """
-        node.compartments.expose_number_of_people(group, num_to_expose)
-        return
-    
+        Main simulation logic for deterministic SEATIRD model.
+        Each group (age, risk, vaccine) is simulated separately via ODE.
 
-    def simulate(self, node, time):
-        """
-        Main simulation logic for deterministic SEATIRD model
-
-        E = Exposed, S = Susceptible, A = Asymptomatic infectious,
+        S = Susceptible, E = Exposed, A = Asymptomatic infectious,
         T = Treated, I = Infectious symptomatic, R = Recovered, D = Deceased
         """
+
         logger.debug(f'node={node}, time={time}')
 
-        initial_conditions = [
-            node.compartments.susceptible_population(),
-            node.compartments.exposed_population(),
-            node.compartments.asymptomatic_population(),
-            node.compartments.treatable_population(),
-            node.compartments.infectious_population(),
-            node.compartments.recovered_population(),
-            node.compartments.deceased_population(),
-        ]
+        # Need to update the node sense of time to get NPIs to take effect
+        self.now = time
 
-        model_parameters = (
-            0.3,
-            0.2,
-            0.1,
-            0.05,
-            0.1,
-            0.01,
-            0.1,
-        )
+        # Snapshot: all compartments at start of the day so we don't call the updated subgroups
+        compartments_today = {
+            (group.age, group.risk, group.vaccine): np.array(node.compartments.get_compartment_vector_for(group))
+            for group in node.compartments.get_all_groups()
+        }
 
-        #model_parameters = (
-        #    self.parameters.beta,
-        #    self.parameters.nu,
-        #    self.parameters.mu,
-        #    self.parameters.tau,
-        #    self.parameters.gamma,
-        #    self.parameters.delta,
-        #    self.parameters.rho,
-        #)
+        # Get the total population of node
+        total_node_pop = node.total_population()
 
-        t_span = (0, 1)
-        t_eval = np.linspace(*t_span, 1)
+        # beta is set for all age groups by node and day, so calc before loop over groups in node
+        beta_vector = self._calculate_beta_w_npi(node.node_index, node.node_id)
 
-        # Solve ODE
-        solution = solve_ivp(SEATIRD_model, t_span, initial_conditions, args=model_parameters, t_eval=t_eval, vectorized=True)
+        # focal_group is the group we are simulating forward in time
+        # contacted_group is the group causing disease spread interaction
+        for focal_group in node.compartments.get_all_groups():
+            # print(focal_group)  # e.g. Group object: age=0, risk=0, vaccine=0
+            focal_group_compartments_today = np.array(node.compartments.get_compartment_vector_for(focal_group))
+            if sum(focal_group_compartments_today) == 0:
+                continue  # skip empty groups
 
-        # Extract solutions
-        if (node.node_id == 113):
-            S, E, A, T, I, R, D = solution.y
-            logger.info(f'solution.y = {solution.y}')
+            # Get nu as scalar needed for the model based on age and risk group
+            nu = float(self.nu_values[focal_group.age][focal_group.risk]) # nu is vector of values
+
+            # Determine vaccine effect on focal group susceptibility
+            # 1 is vaccinated subgroup, 0 unvaccinated subgroup
+            if focal_group.vaccine == 1:
+                vaccine_effectiveness = vaccine_model.vaccine_effectiveness[focal_group.age]
+            else:
+                vaccine_effectiveness = 0.0
+
+            #### Get force of infection from each interaction subgroup ####
+            # This is constant in time if we don't have an NPI schedule hitting beta each day
+            transmission_rate = 0
+            for contacted_group in node.compartments.get_all_groups():
+                contact_rate = float(self.parameters.np_contact_matrix[focal_group.age][contacted_group.age])
+                if contact_rate== 0:
+                    continue
+
+                # contacted_group_compartments_today
+                S, E, A, T, I, R, D = compartments_today[(contacted_group.age, contacted_group.risk, contacted_group.vaccine)]
+                infectious_contacted = A + T + I
+
+                # infectious_contacted/total_node_pop this captures the fraction of population we need to move from S -> E
+                # NOTE: Maybe an under-weighting if we should be doing age group specific: infectious_age/total_age_pop
+                transmission_rate += beta_vector[contacted_group.age] * contact_rate \
+                                     * (infectious_contacted/total_node_pop)
+            # Apply VE to the susceptible group (focal group)
+            transmission_rate *= (1.0 - vaccine_effectiveness) * self.relative_susceptibility[focal_group.age]
+            #print(f"{node.node_id}, {focal_group}, transmission_rate: {transmission_rate}")
+            transmission_rate = max(transmission_rate, 0) # Can't have negative transmission_rate
+            transmission_prob = 1.0 - np.exp(-transmission_rate)
+            #print(f"transmission probability: {transmission_prob}")
+
+            model_parameters = (
+                transmission_prob,     # S => E
+                self.tau,              # E => A
+                self.kappa,            # A => T
+                self.chi,              # T => I
+                self.gamma,            # A/T/I => R
+                nu                     # A/T/I => D
+            )
+
+            # Euler's Method solve of the system, can't do integer people
+            daily_change = SEATIRD_model(focal_group_compartments_today, *model_parameters)
+            compartments_tomorrow = focal_group_compartments_today + daily_change
+            node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
+
         return
-
-
-
 
 

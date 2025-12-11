@@ -3,8 +3,8 @@ import logging
 import pandas as pd
 import sys
 from typing import Type
-
-from .Group import RiskGroup, VaccineGroup
+from . import Group
+from .Group import RiskGroup, VaccineGroup, Compartments
 from .Node import Node
 from .PopulationCompartments import PopulationCompartments
 from .TravelFlow import TravelFlow
@@ -14,11 +14,21 @@ logger = logging.getLogger(__name__)
 
 class Network:
 
-    def __init__(self):
+    def __init__(self, compartment_labels:list):
         self.nodes = []
         self.travel_flow_data = None
         self.total_population = 0
         self.df_county_age_matrix = []
+
+        # Set the active Compartments enum globally (proxied)
+        self.compartment_labels = compartment_labels
+        Group.set_compartments(self.compartment_labels)
+
+        # Get Compartments enumeration for simulator to check totals
+        self.comp_index = {c.name: c.value for c in Compartments}
+
+        self.num_disease_compartments = len(self.compartment_labels)
+        # Will be 0 nodes so may be a more useful logger statement here
         logger.info(f'instantiated Network object with {self.get_number_of_nodes()} nodes')
         return
 
@@ -50,12 +60,38 @@ class Network:
         Store population data as list of nodes. Needs high_risk_ratios to
         partition between high risk and low risk compartments
         """
+        high_risk_ratios_md =[] # multidimensional high risk ratios
+
+        if ',' in high_risk_ratios[0]:
+            logging.info('detected multidimensional high risk ratio file')
+            _ = high_risk_ratios.pop(0)
+            for line in high_risk_ratios:
+                ratios = [float(x) for x in line.split(',')[1:]]
+                high_risk_ratios_md.append(ratios)
+            logger.debug(f'high_risk_ratios_proc = {high_risk_ratios_md}')
+
+        else:
+            logger.info('detected single dimensional high risk ratio file')
+            for _ in range(len(self.df_county_age_matrix)):
+                ratios = [float(x) for x in high_risk_ratios]
+                high_risk_ratios_md.append(ratios)
+            logger.debug(f'high_risk_ratios_proc = {high_risk_ratios_md}')
+
+        #TODO : This requires that rows / columns in county high risk ratio file are in the
+        # same order as the population file
+
         for index, row in self.df_county_age_matrix.iterrows():
             this_index = index
             this_id = row.iloc[0]
-            this_fips = (48000+int(this_id)) if True else None  # this works for Texas FIPS
+
+            # Assuming FIPS is id for now - may not be correct if e.g. ZIP Code/ZCTA or
+            # something else is provided instead.
+            # TODO: We can actually probably do away with the concept of 'fips' in this code
+            # and just use the node_id provided by input
+            this_fips = int(this_id)
+
             this_group = list(row[1:])
-            this_compartment = PopulationCompartments(this_group, high_risk_ratios)
+            this_compartment = PopulationCompartments(this_group, high_risk_ratios_md[index])
             this_node = Node(this_index, this_id, this_fips, this_compartment)
             self._add_node(this_node)
 
