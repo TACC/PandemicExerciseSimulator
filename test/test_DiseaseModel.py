@@ -8,6 +8,7 @@ from src.baseclasses.Node import Node
 from src.baseclasses.PopulationCompartments import PopulationCompartments
 from src.baseclasses.ModelParameters import ModelParameters
 
+# Also old style input from single model that needs to be re-done
 class DummyInput:
     def __init__(self):
         self.R0 = 1.0

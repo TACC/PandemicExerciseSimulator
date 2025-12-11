@@ -3,7 +3,7 @@ import importlib
 from src.baseclasses import Group
 from src.baseclasses.Group import Compartments
 
-# Reset the dynamic enum before each test (simple and explicit)
+# Reset the dynamic enum before each test
 @pytest.fixture(autouse=True)
 def reset_compartments():
     importlib.reload(Group)  # puts _active_compartments back to None

@@ -1,14 +1,15 @@
 import pytest
-
 from src.baseclasses.PopulationCompartments import PopulationCompartments
 from src.baseclasses import Group # needed to set dynamic Compartment Enum
 from src.baseclasses.Group import RiskGroup, VaccineGroup, Compartments
 
 @pytest.fixture
 def pc_2_node():
+    labels=["S", "E", "I", "R"]
+    Group.set_compartments(labels)
     # Two age groups: 100 and 200 people
     # High-risk ratios: 0.0 (all low risk), 0.5 (half high risk)
-    pc = PopulationCompartments(groups=[100, 200], high_risk_ratios=[0.0, 0.5])
+    pc = PopulationCompartments(age_group_pops=[100, 200], high_risk_ratios=[0.0, 0.5])
     return pc
 
 def test_by_group_only_unvaccinated_only_susceptible(pc_2_node):
@@ -47,12 +48,13 @@ def test_population_total_matches_sum_of_by_group(pc_2_node):
     pop_total = pc_2_node.vaccine_eligible_population(age_risk_priority_groups = pri)
     assert pop_total == by_group_total
     # Initialization places everyone in S, U:
-    assert pop_total == float(sum(pc_2_node.groups))
+    assert pop_total == float(sum(pc_2_node.age_group_pops))
 
 def test_only_susceptible_false_counts_all_compartments(pc_2_node):
     # Move some people out of S to E and R to verify counting logic
     # Example: take 10 from age1, high-risk, unvaccinated => move 5 to E and 5 to R
-    g = Group(age=1, risk_group=RiskGroup.H.value, vaccine_group=VaccineGroup.U.value)
+    # Need to call the class Group rather than module being imported
+    g = Group.Group(age=1, risk_group=RiskGroup.H.value, vaccine_group=VaccineGroup.U.value)
 
     vec = list(pc_2_node.compartment_data[g.age, g.risk, g.vaccine, :])
     # vec[Compartments.S.value] currently 100
