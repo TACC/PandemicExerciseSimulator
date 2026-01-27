@@ -163,6 +163,7 @@ class DeterministicSEATIRD(DiseaseModel):
             # Euler's Method solve of the system, can't do integer people
             daily_change = SEATIRD_model(focal_group_compartments_today, *model_parameters)
             compartments_tomorrow = focal_group_compartments_today + daily_change
+            compartments_tomorrow = np.maximum(compartments_tomorrow, 0.0)
             node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
 
         return
