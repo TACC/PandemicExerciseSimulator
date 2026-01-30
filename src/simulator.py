@@ -82,7 +82,7 @@ def run( simulation_days:Type[Day],
         writer.write_csv(day, network) if writer.total_sims > 1 else writer.write_json(day, network)
 
         # Early termination if no more infectious or soon to be people
-        tolerance = 1e-1
+        tolerance = 0.99 # less than 1 person
         compartment_totals = simulation_days.snapshot(network)
         names_to_sum = ('E', *travel_model.transmit_dict.keys())
         total_exposed_plus_inf = sum(
@@ -90,7 +90,7 @@ def run( simulation_days:Type[Day],
             for nm in names_to_sum
         )
         if total_exposed_plus_inf <= tolerance:
-            logger.info(f"All latent and infectious compartments are below "
+            logger.info(f"All exposed and infectious compartments are below "
                         f"{tolerance:.1e} on day {day}, ending simulation early.")
             break
 
