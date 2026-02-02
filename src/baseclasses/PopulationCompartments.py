@@ -74,8 +74,17 @@ class PopulationCompartments:
         Note: Not currently used in StochasticSEATIRD; a similarly named method
               exists in that class for this functionality
         """
-        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] -= num_to_expose
-        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.E.value] += num_to_expose
+        if num_to_expose < 0:
+            raise ValueError(f"num_to_expose must be >= 0, got {num_to_expose}")
+
+        s_idx = Compartments.S.value
+        e_idx = Compartments.E.value
+
+        s = self.compartment_data[group.age][group.risk][group.vaccine][s_idx]
+        actual = min(num_to_expose, s)
+
+        self.compartment_data[group.age][group.risk][group.vaccine][s_idx] = s - actual
+        self.compartment_data[group.age][group.risk][group.vaccine][e_idx] += actual
         return
 
 
