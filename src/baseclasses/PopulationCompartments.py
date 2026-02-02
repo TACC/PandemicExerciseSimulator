@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 import logging
-import copy
-
 import numpy as np
 from typing import Type
 
@@ -71,7 +69,7 @@ class PopulationCompartments:
 
         Args:
             group (Group): group where transition should happen
-            num_to_expose (int): number of people to move from S=>E
+            num_to_expose (float): number of people to move from S=>E
 
         Note: Not currently used in StochasticSEATIRD; a similarly named method
               exists in that class for this functionality
@@ -79,7 +77,7 @@ class PopulationCompartments:
         if num_to_expose < 0:
             raise ValueError(f"num_to_expose must be >= 0, got {num_to_expose}")
 
-        s = copy.deepcopy(self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value])
+        s = self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value]
         actual = min(num_to_expose, s)
 
         self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] = s - actual
