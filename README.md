@@ -1,11 +1,11 @@
-## PandemicExerciseSimulator
+## Pandemic Exercise Simulator
 
 This is a stand-alone Python command line implementation of an outbreak
-simulator using a SEATIRD compartment model and binomial travel model.
+simulator using your choice of stochastic or deterministic compartmental model with a binomial travel model.
 
 ### Install Using Poetry:
 
-Depends on [Poetry](https://python-poetry.org/docs/#installation) for native install.
+Depends on [Poetry](https://python-poetry.org/docs/#installation) for native installation.
 After installing Poetry, do:
 
 ```
@@ -19,8 +19,11 @@ environment by prefacing your commands with 'poetry run'. For example:
 
 ```
 $ poetry run python3 src/simulator.py --help
-$ poetry run python3 src/simulator.py -l INFO -d 10 -i data/texas/INPUT.json
+$ poetry run python3 src/simulator.py -l INFO -d 10 -i data/Texas/INPUT_SEIHRD-STOCH_Texas_R0-2.2_BASELINE.json
 ```
+Each state has at least a baseline and vaccination template based on the 2024-25 influenza vaccination coverage
+time series and effectiveness. Details on this can be found in `scripts/5_vaccine_coverage_by_state.R`. We generated
+additional input files for Alabama as an example based on the templates available in `data/INPUT_FILE_TEMPLATES`.
 
 ### Test:
 
@@ -36,7 +39,7 @@ simulator with [Docker](https://docs.docker.com/engine/install/).
 ```
 $ docker build -t pes:0.1.0 .
 $ docker run --rm pes:0.1.0 python3 src/simulator.py --help
-$ docker run --rm pes:0.1.0 python3 src/simulator.py -l INFO -d 10 -i data/texas/INPUT.json
+$ docker run --rm pes:0.1.0 python3 src/simulator.py -l INFO -d 10 -i data/Texas/INPUT_SEIHRD-STOCH_Texas_R0-2.2_BASELINE.json
 ```
 
 ### Input Data Required:
@@ -45,49 +48,40 @@ The simulator requires the data from the following folder:
 ```
 .
 └── data
-    └── texas
-        ├── INPUT.json
-        ├── contact_matrix.csv
-        ├── county_age_matrix.csv
-        ├── flow_reduction.csv
-        ├── high_risk_ratios.csv
-        ├── relative_susceptibility.csv
-        └── work_matrix_rel.csv
+    └── State
+        ├── INPUT_*.json
+        ├── contact_matrix_State_Mistry2021_all.csv
+        ├── county_pop_by_age_State_2019-2023ACS.csv
+        ├── state_State_high-risk-ratios-flu-only.csv or county_State_high-risk-ratios-flu-only.csv
+        ├── State_Q*-2019_mobility-matrix.csv for quarters 1-4
+        ├── State_quarterly-2019_mobility.csv
+        └── State_quarterly-2019_county-connection-ranking.csv
 ```
 
-* **INPUT.json:** Simulation properties file (see schema)
-* **contact_matrix.csv:** 5x5 matrix of contact ratios between age groups
-* **county_age_matrix.csv:** Populations for each county divided into age groups
-* **flow_reduction.csv:** Factor for reducing travel frequency by age group
-* **high_risk_ratios.csv:** List of risk ratio for each age group
-* **relative_susceptibility.csv** List of relative susceptibility for each age group
-* **work_matrix_rel.csv:** NxN matrix (N=num of counties) for travel flow
+* **INPUT_\*.json:** Simulation properties file
+* **contact_matrix_State_Mistry2021_all.csv:** Age x Age matrix of daily contacts between age groups taken from Epydemix python package (see `scripts/`). 
+  * Top to bottom must match the left to right order of age groups in population file.
+* **county_pop_by_age_State_2019-2023ACS.csv:** Populations for each county divided into age groups
+* **\*_State_high-risk-ratios-flu-only.csv:** state or county specific high risk ratios for proportion of population at increased risk of severe outcome (hospitalization/death).
+* **State_Q\*-2019_mobility-matrix.csv:** County x County mobility matrix of the fraction of the population that visits the other counties per day. 
+  * Must be ordered to match fips order of population file, i.e. sequential FIPS codes of counties.
+* **State_quarterly-2019_mobility.csv** Non-matrix form of mobility data with column labels, file the matrices are derived from.
+* **State_quarterly-2019_county-connection-ranking.csv:** Ranking of connectivity of counties by quarter to help you decide on where to initialize infections.
 
 
 ### Parameters Required:
 
-At a minimum, the following parameters are expected to be defined in the 
-INPUT.json file:
+Examples of required parameter inputs per model are available in `data/INPUT_FILE_TEMPLATES`
 
-* **R0:** (ex: 1.2) Reproduction number
-* **beta_scale:** (ex: 65) R0 correction factor - R0 is divided by this value and stored as beta
-* **tau:** (ex: 1.2) latency period in days (exposed to asymptomatic)
-* **kappa:** (ex: 1.9) asymptomatic infectious period in days (asymptomatic to treatable)
-* **gamma:** (ex: 4.1) total infectious period in days (transmitting (A/T/I) to recovered)
-* **chi:** (ex: 1.0) treatable to infectious period in days
-* **rho:** (ex: 0.39) multiplier to reduce age-specific mixing rate pattern to account for reduced
-  rate of contact when traveling
-* **nu**: (["0.01", "0.01", ..., "0.01"]) list of mortality rates per age group (units of 1/days)
-
-
-There also must be at least one county with initial infected population. Provide the
-county ID (as listed in the population file), number of initial infected, and the age
-group index of the infected, e.g.:
+There also must be at least one county with one initial infected person. Provide the
+county FIPS (as listed in the population file), number of initial infected, and the age
+group index of the infected. All people will be initialized in the low severity risk group of Exposed compartment. 
+If you initialize more than the people available the model will only infect susceptibles available after vaccinations are distributed.
 ```
 "initial_infected": [
     {
       "county": "1",
-      "infected": "10000",
+      "infected": "100",
       "age_group": "1"
     }
 ]
@@ -95,11 +89,11 @@ group index of the infected, e.g.:
 
 ### Optional Parameters
 
-Any number of non-pharmaceutical interventions can be added. Following the example in
-INPUT.json, interventions are assigned a name, a start day, a duration (number of days the
-intervention should be applied), a location (comma separated list of county IDs, or "0" for
+**NPIs:** Any number of non-pharmaceutical interventions can be added. 
+Interventions are assigned a name, a start day, a duration (number of days the
+intervention should be applied), a location (comma separated list of county FIPS, or "0" for
 all counties), and a list of effectivenesses per age group. The effectiveness models the
-reduction in transmission in that age group for the duration of the intervention:
+reduction in transmission (beta) in that age group for the duration of the intervention:
 
 ```
 "non_pharma_interventions": [
@@ -107,7 +101,7 @@ reduction in transmission in that age group for the duration of the intervention
     "name": "School Closure",
     "day": "20",
     "duration": "10",
-    "location": "113,141,201,375,453",
+    "location": "48113,48141,48201,48375,48453",
     "effectiveness": [
       "0.9",
       "0.9",
@@ -118,8 +112,46 @@ reduction in transmission in that age group for the duration of the intervention
   }
 ]
 ```
+**Vaccination:** Vaccines currently release from a stockpile and take `vaccine_eff_lag_days` before
+becoming effective. `age_risk_priority_groups` of 0 means no one in this age group receives the vaccine
+even if it is available, 0.5 mean only high risk, and 1 is everyone. The vaccines in the stockpile can 
+deteriorate as well with `vaccine_half_life_days`. Currently, people move completely into the vaccinated subgroup
+and do not leave for the rest of the simulation. `vaccine_capacity_proportion` is what fraction of the population
+can the area vaccinate per day, i.e. with 1M people and 1M doses can you only vaccinate 100K per day, then it's 10% or 0.1.
+`vaccine_adherence` is age stratified to estimate the proportion of that age group who would seek a vaccine if available. 
+We plan to make this county-specific as well in future updates. `vaccine_effectiveness` is the effectiveness against infection once
+someone has moved into the vaccinated subgroup. Setting to 1 means its completely effective and appropriate if you're assuming
+a fraction of those vaccinated from coverage data receive full effectiveness and the rest do not. 
+`vaccine_effectiveness_hosp` is the effectiveness against hospitalization and only available in the SEIHRD model if the vaccination
+against infection is less than one (<1). Stockpile release days can be negative to account for doses given sufficiently before an 
+epidemic begins, e.g. normal influenza season vaccination schedule people may get dose in early September but epidemic starts in mid-October.
+To shift a long time series you can simply alter the `vaccine_eff_lag_days`.
+
+```
+"vaccine_model": {
+    "identity": "stockpile-age-risk",
+    "parameters": {
+      "age_risk_priority_groups": ["0","0.5","0.5","1","1"],
+      "vaccine_half_life_days": null,
+      "vaccine_capacity_proportion": "1.0",
+      "vaccine_adherence": ["1","1","1","1","1"],
+      "vaccine_effectiveness": ["1","1","1","1","1"],
+      "vaccine_eff_lag_days": 14,
+      "vaccine_stockpile": [
+        {
+          "day": "-14",
+          "amount": "10000"
+        },
+        {
+          "day": "0",
+          "amount": "100"
+        },
+      ]
+    }
+```
+
+
 
 ### Development Notes
-
 This simulator can run stand-alone, or as the backend to a related project which provides a
 front end GUI: https://github.com/TACC/PandemicExerciseTool
