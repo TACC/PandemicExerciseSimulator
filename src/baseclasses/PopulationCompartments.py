@@ -63,19 +63,25 @@ class PopulationCompartments:
         return age_list
 
 
-    def expose_number_of_people_bulk(self, group:Type[Group], num_to_expose:int):
+    def expose_number_of_people_bulk(self, group:Type[Group], num_to_expose:float):
         """
         When entering this function, move people from Susceptible => Exposed
 
         Args:
             group (Group): group where transition should happen
-            num_to_expose (int): number of people to move from S=>E
+            num_to_expose (float): number of people to move from S=>E
 
         Note: Not currently used in StochasticSEATIRD; a similarly named method
               exists in that class for this functionality
         """
-        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] -= num_to_expose
-        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.E.value] += num_to_expose
+        if num_to_expose < 0:
+            raise ValueError(f"num_to_expose must be >= 0, got {num_to_expose}")
+
+        s = self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value]
+        actual = min(num_to_expose, s)
+
+        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.S.value] = s - actual
+        self.compartment_data[group.age][group.risk][group.vaccine][Compartments.E.value] += actual
         return
 
 
