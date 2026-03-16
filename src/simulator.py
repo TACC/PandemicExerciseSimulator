@@ -125,7 +125,7 @@ def main():
     # Also used for exporting day-by-day summary information
     realization_indices = simulation_properties.realization_indices
     realization_number = int(len(realization_indices))
-    batch_num = int(simulation_properties.batch_num)
+    batch_num = simulation_properties.batch_num
     
     # Initialize Model Parameters class instance
     # This is a subset of the simulation properties, and contains data from a
