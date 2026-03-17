@@ -203,10 +203,12 @@ def build_hash_payload(simulation_properties,
             antiviral_model,
             exclude=EXPORT_EXCLUDE
          ) if antiviral_model is not None else {}
-      },
-      "cli_args": { # Possibly worth removing in favor of adding DB flag of if a simulation is complete Inf=0
-         "days": cli_args.days if cli_args is not None else None
-      }
+      } #,
+      # Removing in favor of adding DB flag of if a simulation is complete Inf=0
+      #  or ended due to hitting day limit => want better clustering of nearly identical set-ups
+      #"cli_args": {
+      #   "days": cli_args.days if cli_args is not None else None
+      #}
    }
 
    return canonicalize_for_hash(payload, float_places=HASH_FLOAT_PLACES)
