@@ -28,3 +28,4 @@ figures/
 
 # ignore output files
 US_States/
+*_TEST/
