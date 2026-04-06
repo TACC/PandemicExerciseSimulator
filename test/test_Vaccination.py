@@ -3,6 +3,13 @@ import warnings
 from icecream import ic
 from types import SimpleNamespace
 
+# needed to set dynamic Compartment Enum while having relative paths in headers
+import sys, importlib
+GroupModule = importlib.import_module("src.baseclasses.Group")
+# ensure any alt path points to the same module
+sys.modules.setdefault("baseclasses.Group", GroupModule)
+
+from src.baseclasses.Network import Network
 from src.baseclasses.PopulationCompartments import PopulationCompartments
 from src.baseclasses.Node import Node
 from src.baseclasses import Group # needed to set dynamic Compartment Enum
@@ -20,8 +27,12 @@ else:
     print("ICECREAM DISABLED")
 
 def make_node_with_population(pop=100):
+    compartment_labels = ["S", "E", "I", "R"]
+    net = Network(compartment_labels)
     pc = PopulationCompartments(age_group_pops=[pop], high_risk_ratios=[0.0])
-    return Node(node_index=0, node_id=0, fips_id=0, compartments=pc)
+    node = Node(node_index=0, node_id=0, fips_id=0, compartments=pc)
+    net._add_node(node)
+    return node
 
 @pytest.fixture
 def dummy_vaccination():
@@ -38,8 +49,8 @@ def test_vaccinate_number_of_people(dummy_vaccination):
     ic("made compartments & node")
 
     # Define unvaccinated and vaccinated groups
-    unvax_group = Group.Group(age=0, risk_group=0, vaccine_group=0)
-    vax_group = Group.Group(age=0, risk_group=0, vaccine_group=1)
+    unvax_group = GroupModule.Group(age=0, risk_group=0, vaccine_group=0)
+    vax_group = GroupModule.Group(age=0, risk_group=0, vaccine_group=1)
 
     # Check initial counts
     initial_unvax = node.compartments.compartment_data[0][0][0][Compartments.S.value]
@@ -65,8 +76,8 @@ def test_vaccinate_when_no_susceptibles(dummy_vaccination):
     node = make_node_with_population(pop=0)
     ic("made compartments & node")
 
-    unvax_group = Group.Group(age=0, risk_group=0, vaccine_group=0)
-    vax_group = Group.Group(age=0, risk_group=0, vaccine_group=1)
+    unvax_group = GroupModule.Group(age=0, risk_group=0, vaccine_group=0)
+    vax_group = GroupModule.Group(age=0, risk_group=0, vaccine_group=1)
 
     initial_unvax = node.compartments.compartment_data[0][0][0][Compartments.S.value]
     initial_vax = node.compartments.compartment_data[0][0][1][Compartments.S.value]
@@ -89,8 +100,8 @@ def test_vaccinate_non_integer_input(dummy_vaccination):
     node = make_node_with_population(pop=10) # Create a Node with these compartments
     ic("made compartments & node")
 
-    unvax_group = Group.Group(age=0, risk_group=0, vaccine_group=0)
-    vax_group = Group.Group(age=0, risk_group=0, vaccine_group=1)
+    unvax_group = GroupModule.Group(age=0, risk_group=0, vaccine_group=0)
+    vax_group = GroupModule.Group(age=0, risk_group=0, vaccine_group=1)
 
     # a) Integer-valued float (3.0) should be accepted without warning
     initial_unvax = node.compartments.compartment_data[0][0][0][Compartments.S.value]
