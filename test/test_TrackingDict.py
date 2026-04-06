@@ -54,3 +54,46 @@ def test_items_marks_all_keys_used():
    assert td.used_only() == {"a": 1, "b": 2}
 
 
+def test_delitem_removes_key():
+   td = TrackingDict({"a": 1, "b": 2})
+
+   del td["a"]
+
+   assert "a" not in td
+   assert len(td) == 1
+   assert td.all_data() == {"b": 2}
+
+
+def test_keys_marks_all_keys_used():
+   td = TrackingDict({"a": 1, "b": 2})
+
+   td.keys()
+
+   assert td.used_only() == {"a": 1, "b": 2}
+
+
+def test_values_marks_all_keys_used():
+   td = TrackingDict({"a": 1, "b": 2})
+
+   td.values()
+
+   assert td.used_only() == {"a": 1, "b": 2}
+
+
+def test_used_only_list_of_nested_trackingdicts():
+   td = TrackingDict({
+      "items": [
+         {"x": 1, "y": 2},
+         {"z": 3}
+      ]
+   })
+
+   assert td["items"][0]["x"] == 1
+   assert td.used_only() == {"items": [{"x": 1}, {"z": 3}]}
+
+
+def test_delitem_missing_key_raises_keyerror():
+   td = TrackingDict({"a": 1})
+
+   with pytest.raises(KeyError):
+      del td["missing"]
