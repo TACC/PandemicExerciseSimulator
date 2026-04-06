@@ -29,3 +29,7 @@ figures/
 # ignore output files
 US_States/
 *_TEST/
+
+# ignore code coverage related files
+.coverage
+htmlcov/
