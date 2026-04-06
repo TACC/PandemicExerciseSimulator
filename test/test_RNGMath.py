@@ -1,3 +1,4 @@
+import pytest
 from src.utils.RNGMath import rand_binomial, rand_mt, rand_exp, rand_int
 
 class TestRNGMath:

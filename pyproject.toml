@@ -20,6 +20,10 @@ pymongo = "^4.8.0"
 icecream = "^2.1.5"
 uuid6 = "^2024.1"
 
+[tool.poetry.group.dev.dependencies]
+pytest-cov = "^7.1.0"
+pytest-xdist = "^3.8.0"
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 

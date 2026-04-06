@@ -2,7 +2,6 @@
 import hashlib
 import json
 import csv
-import os
 import subprocess
 from copy import deepcopy
 from datetime import datetime, timezone
