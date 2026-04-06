@@ -98,7 +98,7 @@ def normalize_for_json(value):
    """
    Convert TrackingDict and nested values into plain JSON-safe Python types.
    """
-   if isinstance(value, TrackingDict):
+   if hasattr(value, "all_data") and callable(value.all_data):
       return value.all_data()
 
    if isinstance(value, list):
@@ -146,10 +146,13 @@ def export_public_state(obj, exclude=None):
 def canonicalize_for_hash(value, float_places: int = HASH_FLOAT_PLACES):
    """
    Recursively normalize values so semantically equivalent scenarios hash the same.
-   e.g. R0=2 to 2.0 when values aren't ints
+   e.g. R0=2 to 2.0 when values aren't bools
    """
-   if isinstance(value, float):
-      return normalize_float(value, places=float_places)
+   if isinstance(value, bool):
+      return value
+
+   if isinstance(value, (int, float)):
+      return normalize_float(float(value), places=float_places)
 
    if isinstance(value, dict):
       return {

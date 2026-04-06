@@ -18,7 +18,7 @@ from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
 
-from utils.config_export import build_executed_config, write_metadata_json
+from utils.ConfigExport import build_executed_config, write_metadata_json
 
 from models.disease.DiseaseModel import DiseaseModel
 from models.travel.TravelModel import TravelModel

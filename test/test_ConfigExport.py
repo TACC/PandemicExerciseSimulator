@@ -1,7 +1,7 @@
 import pytest
 from types import SimpleNamespace
 from src.baseclasses.TrackingDict import TrackingDict
-from src.utils.config_export import (
+from src.utils.ConfigExport import (
    normalize_data_path, normalize_float, normalize_for_json,
    export_public_state, canonicalize_for_hash, generate_scenario_hash
 )
@@ -34,7 +34,49 @@ def test_canonicalize_for_hash_sorts_keys_and_rounds():
    assert canonicalize_for_hash(payload1) == canonicalize_for_hash(payload2)
 
 def test_generate_scenario_hash_stable():
-   payload = {"a": 1, "b": 2}
-   assert generate_scenario_hash(payload) == generate_scenario_hash({"b": 2, "a": 1})
+   payload = {"a": 1.0, "b": 2.0}
+   assert generate_scenario_hash(canonicalize_for_hash(payload)) == generate_scenario_hash(canonicalize_for_hash({"b": 2, "a": 1}))
+
+def test_bool_identity_not_just_value():
+   payload = {"flag": True}
+   out = canonicalize_for_hash(payload)
+
+   assert out["flag"] is True  # not just == True
+
+def test_canonicalize_preserves_bool_type():
+   payload = {"flag": True, "other": False}
+   out = canonicalize_for_hash(payload)
+
+   assert isinstance(out["flag"], bool)
+   assert isinstance(out["other"], bool)
+   assert out["flag"] is True
+   assert out["other"] is False
+
+
+def test_bool_not_equal_to_int_in_hash():
+   payload_bool = {"a": True}
+   payload_int  = {"a": 1}
+
+   hash_bool = generate_scenario_hash(canonicalize_for_hash(payload_bool))
+   hash_int  = generate_scenario_hash(canonicalize_for_hash(payload_int))
+
+   assert hash_bool != hash_int
+
+def test_hash_stable_with_bool_and_order():
+   payload1 = {"a": True, "b": 2.0}
+   payload2 = {"b": 2, "a": True}
+
+   h1 = generate_scenario_hash(canonicalize_for_hash(payload1))
+   h2 = generate_scenario_hash(canonicalize_for_hash(payload2))
+
+   assert h1 == h2
+
+def test_nested_bool_preserved():
+   payload = {"outer": {"flag": True, "val": 1}}
+   out = canonicalize_for_hash(payload)
+
+   assert isinstance(out["outer"]["flag"], bool)
+   assert out["outer"]["flag"] is True
+   assert isinstance(out["outer"]["val"], float)
 
 
