@@ -2,6 +2,7 @@
 import hashlib
 import json
 import csv
+import os
 import subprocess
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -331,11 +332,11 @@ def build_executed_config(simulation_properties,
    return out
 
 
-def write_canonical_input_json(executed_config, output_dir, batch_num, logger=None):
-   out_path = Path(output_dir) / f"input_batch-{batch_num}.json"
+def write_metadata_json(executed_config, output_dir, batch_num, logger=None):
+   out_path = Path(output_dir) / f"metadata_batch-{batch_num}.json"
 
    with open(out_path, "w") as f:
       json.dump(executed_config, f, indent=3)
 
    if logger is not None:
-      logger.info(f"Wrote canonical input file to: {out_path}")
+      logger.info(f"Wrote metadata file to: {out_path}")

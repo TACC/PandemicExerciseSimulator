@@ -7,10 +7,9 @@ import os
 from typing import Type
 import time
 import csv
-import json
 from pathlib import Path
 from secrets import token_bytes
-from numpy.random import SeedSequence, default_rng
+from numpy.random import SeedSequence
 
 from baseclasses.Day import Day
 from baseclasses.InputProperties import InputProperties
@@ -19,7 +18,7 @@ from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
 
-from utils.config_export import build_executed_config, write_canonical_input_json
+from utils.config_export import build_executed_config, write_metadata_json
 
 from models.disease.DiseaseModel import DiseaseModel
 from models.travel.TravelModel import TravelModel
@@ -187,8 +186,17 @@ def main():
     os.makedirs(simulation_properties.output_dir_path, exist_ok=True)
     logger.info(f'Created output directory: {simulation_properties.output_dir_path}')
 
+    # Copy original input file to output directory with batch-specific name
+    input_file_path = os.path.abspath(args.input_filename)
+    copied_input_path = os.path.join(
+        simulation_properties.output_dir_path,
+        f"input_batch-{simulation_properties.batch_num}.json"
+    )
+    shutil.copyfile(input_file_path, copied_input_path)
+    logger.info(f"Copied input file to: {copied_input_path}")
+
     # Write canonical input file based on resolved parameters actually used
-    write_canonical_input_json(
+    write_metadata_json(
         executed_config=executed_config,
         output_dir=simulation_properties.output_dir_path,
         batch_num=simulation_properties.batch_num,
