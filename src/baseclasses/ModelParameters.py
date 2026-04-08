@@ -4,6 +4,7 @@ import numpy as np
 from typing import Type
 
 from .InputProperties import InputProperties
+from .TrackingDict import TrackingDict
 
 logger = logging.getLogger(__name__)
 
@@ -13,22 +14,24 @@ class ModelParameters:
     def __init__(self, simulation_properties:Type[InputProperties]):
 
         # parameters loaded as a dictionary here, processed later by disease model
-        self.disease_parameters = simulation_properties.disease_parameters
+        self.disease_parameters = TrackingDict(simulation_properties.disease_parameters)
 
         # travel parameters loaded as a dictionary here, processed later by travel model
-        self.travel_parameters = simulation_properties.travel_parameters
+        self.travel_parameters = TrackingDict(simulation_properties.travel_parameters)
 
         # data files
         self.high_risk_ratios        = []
 
         # non-pharmaceutical interventions
-        self.non_pharma_interventions = simulation_properties.non_pharma_interventions
+        self.non_pharma_interventions = [
+            TrackingDict(npi) for npi in simulation_properties.non_pharma_interventions
+        ]
         
         # antivirals
-        #self.antiviral_parameters = simulation_properties.antiviral_parameters
+        self.antiviral_parameters = TrackingDict(simulation_properties.antiviral_parameters)
 
         # vaccines
-        self.vaccine_parameters = simulation_properties.vaccine_parameters
+        self.vaccine_parameters = TrackingDict(simulation_properties.vaccine_parameters)
 
         # some things assigned later
         self.number_of_age_groups = 0
@@ -44,7 +47,7 @@ class ModelParameters:
         return( f'disease_parameters={self.disease_parameters}\n'
                 f'travel_parameters={self.travel_parameters}\n'
                 f'non_pharma_interventions={self.non_pharma_interventions}\n'
-                #f'antiviral_parameters = {self.antiviral_parameters}\n'
+                f'antiviral_parameters = {self.antiviral_parameters}\n'
                 f'vaccine_parameters = {self.vaccine_parameters}\n'
                 f'high_risk_ratios = {self.high_risk_ratios}\n'
                 f'number_of_age_groups = {self.number_of_age_groups}\n'
