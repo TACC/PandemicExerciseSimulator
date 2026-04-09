@@ -29,6 +29,8 @@ figures/
 # ignore output files
 US_States/
 *_TEST/
+sim_data/
+metadata_master.csv
 
 # ignore code coverage related files
 .coverage
