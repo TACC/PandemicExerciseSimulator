@@ -49,6 +49,35 @@ safe_get <- function(x, ...) {
   tryCatch(purrr::pluck(x, ...), error = function(e) NULL)
 }
 
+get_batch_file_sizes <- function(scenario_hash, batch_num) {
+  batch_dir <- file.path(PARQUET_ROOT, scenario_hash, batch_num)
+  
+  network_path <- file.path(batch_dir, "network.parquet")
+  nodes_path   <- file.path(batch_dir, "nodes.parquet")
+  times_path   <- file.path(batch_dir, "simulation_times.parquet")
+  
+  network_bytes <- if (file.exists(network_path)) file.info(network_path)$size else NA_real_
+  nodes_bytes   <- if (file.exists(nodes_path))   file.info(nodes_path)$size else NA_real_
+  times_bytes   <- if (file.exists(times_path))   file.info(times_path)$size else NA_real_
+  
+  tibble(
+    network_parquet_bytes          = network_bytes,
+    nodes_parquet_bytes            = nodes_bytes,
+    simulation_times_parquet_bytes = times_bytes,
+    total_parquet_bytes            = sum(c(network_bytes, nodes_bytes, times_bytes), na.rm = TRUE)
+  )
+}
+
+format_bytes <- function(x) {
+  dplyr::case_when(
+    is.na(x) ~ NA_character_,
+    x < 1024 ~ paste0(x, " B"),
+    x < 1024^2 ~ paste0(round(x / 1024, 1), " KB"),
+    x < 1024^3 ~ paste0(round(x / 1024^2, 1), " MB"),
+    TRUE ~ paste0(round(x / 1024^3, 2), " GB")
+  )
+}
+
 # ── Simulation times ──────────────────────────────────────────────────────────
 parse_sim_times <- function(metadata_path, batch_num) {
   sim_file <- file.path(
@@ -82,6 +111,11 @@ parse_metadata <- function(path) {
   dm         <- m$disease_model %||% list()
   tm         <- m$travel_model  %||% list()
   sim_times  <- parse_sim_times(path, m$batch_num %||% "")
+  
+  sizes      <- get_batch_file_sizes(
+    scenario_hash = m$scenario_hash %||% NA_character_,
+    batch_num     = m$batch_num     %||% NA_character_
+  )
 
   tibble(
     file_path                  = path,
@@ -95,6 +129,11 @@ parse_metadata <- function(path) {
     attempt_realization_count  = safe_get(m, "realization_indices", "count") %||% NA_integer_,
     complete_realization_count = sim_times$complete_realization_count,
     mean_run_time_seconds      = sim_times$mean_run_time_seconds,
+    
+    network_parquet_bytes      = sizes$network_parquet_bytes,
+    nodes_parquet_bytes        = sizes$nodes_parquet_bytes,
+    sim_times_parquet_bytes    = sizes$simulation_times_parquet_bytes,
+    total_parquet_file_size    = format_bytes(sizes$total_parquet_bytes),
 
     data_population            = safe_get(m, "data", "population")       %||% NA_character_,
     data_contact               = safe_get(m, "data", "contact")          %||% NA_character_,
@@ -104,6 +143,7 @@ parse_metadata <- function(path) {
     # Model parameters stored as namespaced JSON — no column-level name collisions
     disease_identity           = dm$identity %||% NA_character_,
     disease_params_json        = to_json_str(dm$parameters),
+    disease_R0                 = as.numeric(safe_get(m, "disease_model", "parameters", "R0") %||% NA_real_ ),
     disease_runtime_json       = to_json_str(dm$runtime_attributes),
     travel_identity            = tm$identity %||% NA_character_,
     travel_params_json         = to_json_str(tm$parameters),
@@ -197,6 +237,35 @@ ingest_nodes <- function(metadata_dir, scenario_hash, batch_num) {
                   out_path, length(node_files)))
 }
 
+# ── Parquet ingest: simulation times ──────────────────────────────────────────
+# Reads simulation_times_batch-<batch_num>.csv and writes:
+#   sim_data/<scenario_hash>/<batch_num>/simulation_times.parquet
+
+ingest_sim_times <- function(metadata_dir, scenario_hash, batch_num) {
+  csv_path <- file.path(
+    metadata_dir,
+    paste0("simulation_times_batch-", batch_num, ".csv")
+  )
+  
+  if (!file.exists(csv_path)) {
+    message(sprintf("  [times]   no timing CSV found for batch %s — skipping", batch_num))
+    return(invisible(NULL))
+  }
+  
+  out_dir  <- file.path(PARQUET_ROOT, scenario_hash, batch_num)
+  out_path <- file.path(out_dir, "simulation_times.parquet")
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  
+  read_csv(csv_path, show_col_types = FALSE) %>%
+    mutate(
+      scenario_hash = scenario_hash,
+      batch_num = batch_num
+    ) %>%
+    write_parquet(out_path, compression = "zstd")
+  
+  message(sprintf("  [times]   wrote %s", out_path))
+}
+
 # ── MongoDB write ─────────────────────────────────────────────────────────────
 # Upserts the raw metadata document + computed fields into MongoDB.
 # Only called when MONGO_ENABLED = TRUE.
@@ -242,30 +311,48 @@ export_batch_csv <- function(batch_num, output_dir,
 
   # Helper: export one parquet file to CSV via DuckDB
   export_one <- function(type) {
-    parquet_glob <- file.path(parquet_root, "*", batch_num,
-                              paste0(type, ".parquet"))
+    parquet_glob <- file.path(parquet_root, "*", batch_num, paste0(type, ".parquet"))
     matches <- Sys.glob(parquet_glob)
     if (length(matches) == 0) {
       message(sprintf("  [export] no %s.parquet for batch %s", type, batch_num))
       return(invisible(NULL))
     }
-    out_csv <- file.path(output_dir,
-                         paste0(type, "_batch-", batch_num, ".csv"))
-    DBI::dbExecute(con, sprintf(
-      "COPY (
+    
+    out_csv <- file.path(output_dir, paste0(type, "_batch-", batch_num, ".csv"))
+    
+    order_clause <- dplyr::case_when(
+      type == "nodes" ~ "fips_id, sim_id, day",
+      type == "network" ~ "sim_id, day",
+      type == "simulation_times" ~ "sim_id",
+      TRUE ~ NULL
+    )
+    
+    sql <- if (!is.null(order_clause)) {
+      sprintf(
+        "COPY (
          SELECT * EXCLUDE (scenario_hash, batch_num)
          FROM read_parquet('%s')
          ORDER BY %s
        ) TO '%s' (HEADER, DELIMITER ',')",
-      matches[[1]],
-      if (type == "nodes") "fips_id, sim_id, day" else "sim_id, day",
-      out_csv
-    ))
+        matches[[1]], order_clause, out_csv
+      )
+    } else {
+      sprintf(
+        "COPY (
+         SELECT * EXCLUDE (scenario_hash, batch_num)
+         FROM read_parquet('%s')
+       ) TO '%s' (HEADER, DELIMITER ',')",
+        matches[[1]], out_csv
+      )
+    }
+    
+    DBI::dbExecute(con, sql)
     message(sprintf("  [export] wrote %s", out_csv))
   }
-
+  
   export_one("network")
   export_one("nodes")
+  export_one("simulation_times")
   invisible(output_dir)
 }
 
@@ -285,6 +372,11 @@ MASTER_COL_TYPES <- cols(
   attempt_realization_count  = col_integer(),
   complete_realization_count = col_integer(),
   mean_run_time_seconds      = col_double(),
+  
+  network_parquet_bytes   = col_double(),
+  nodes_parquet_bytes     = col_double(),
+  sim_times_parquet_bytes = col_double(),
+  total_parquet_file_size = col_character(),
 
   data_population            = col_character(),
   data_contact               = col_character(),
@@ -293,6 +385,7 @@ MASTER_COL_TYPES <- cols(
 
   disease_identity           = col_character(),
   disease_params_json        = col_character(),
+  disease_R0                 = col_double(),
   disease_runtime_json       = col_character(),
   travel_identity            = col_character(),
   travel_params_json         = col_character(),
@@ -386,9 +479,25 @@ if (nrow(new_rows) > 0) {
     bn   <- row$batch_num
 
     message(sprintf("\nIngesting %s / %s", hash, bn))
-
+    
+    #### Run ingest iuns #######################################################
     ingest_network(mdir, hash, bn)
     ingest_nodes(mdir, hash, bn)
+    ingest_sim_times(mdir, hash, bn)
+    
+    sizes <- get_batch_file_sizes(hash, bn)
+    
+    new_rows[i, c(
+      "network_parquet_bytes",
+      "nodes_parquet_bytes",
+      "sim_times_parquet_bytes",
+      "total_parquet_file_size"
+    )] <- tibble(
+      sizes$network_parquet_bytes,
+      sizes$nodes_parquet_bytes,
+      sizes$simulation_times_parquet_bytes,
+      format_bytes(sizes$total_parquet_bytes)
+    )
 
     if (!is.null(mongo_col)) {
       tryCatch(
@@ -399,8 +508,19 @@ if (nrow(new_rows) > 0) {
     }
   })
 
-  # ── Write metadata CSV ───────────────────────────────────────────────────────
+  #### Write metadata CSV ######################################################
   updated_master <- bind_rows(master, new_rows)
+  
+  # Back filling file size since parquets don't exist at time of ingestion and inital master creation
+  for (i in seq_len(nrow(updated_master))) {
+    sizes <- get_batch_file_sizes(updated_master$scenario_hash[i], updated_master$batch_num[i])
+    
+    updated_master$network_parquet_bytes[i]   <- sizes$network_parquet_bytes
+    updated_master$nodes_parquet_bytes[i]     <- sizes$nodes_parquet_bytes
+    updated_master$sim_times_parquet_bytes[i] <- sizes$simulation_times_parquet_bytes
+    updated_master$total_parquet_file_size[i] <- format_bytes(sizes$total_parquet_bytes)
+  }
+  
   write_csv(updated_master, MASTER_CSV)
   message(sprintf("\nMaster CSV: %s  (%d total row(s))", MASTER_CSV, nrow(updated_master)))
 
