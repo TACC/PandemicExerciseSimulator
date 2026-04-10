@@ -234,12 +234,12 @@ def main():
 
         # Write a time results as soon as sim completes to handle unfinished jobs
         with open(csv_time_path, "a", newline="") as f:
-            fieldnames = ["sim_num", "time_seconds"]
+            fieldnames = ["sim_id", "time_seconds"]
             csv_writer = csv.DictWriter(f, fieldnames=fieldnames)
             # write header if file is empty
             if f.tell() == 0:
                 csv_writer.writeheader()
-            csv_writer.writerow({"sim_num": r, "time_seconds": elapsed})
+            csv_writer.writerow({"sim_id": r, "time_seconds": elapsed})
     return
 
 
