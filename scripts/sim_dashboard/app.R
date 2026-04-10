@@ -152,7 +152,7 @@ ui <- page_navbar(
             downloadButton("export_meta_btn",  "Export metadata CSV",
                            class = "btn-outline-primary"),
             downloadButton("export_sims_btn",  "Export simulation CSVs",
-                           class = "btn-primary"),
+                           class = "btn-outline-primary"),
             helpText("Simulation export requires Parquet files to exist.",
                      style = "font-size:0.75rem; color:#6c757d")
           )
@@ -178,7 +178,7 @@ ui <- page_navbar(
         card_header(
           "Simulation batches",
           tooltip(bs_icon("info-circle", title = "Table info"),
-                  "Select rows to enable export. Click a row to preview the network time series below.")
+                  "Click rows to select and enable data export. Filter to limit network time series previews in \"Network preview\" tab.")
         ),
         DTOutput("batch_table"),
         card_footer(
@@ -196,7 +196,13 @@ ui <- page_navbar(
     page_sidebar(
       sidebar = sidebar(
         width = 250,
-        selectInput("preview_scenario", "Scenario", choices = NULL),
+        selectizeInput(
+          "preview_scenario",
+          "Scenario",
+          choices = NULL,
+          multiple = FALSE,
+          options = list(placeholder = "Choose one scenario")
+        ),
         selectInput("preview_compartment", "Compartment",
                     choices = NULL),
         helpText("Shows aggregate network-level time series across all realizations.")
@@ -259,15 +265,20 @@ server <- function(input, output, session) {
 
   # Populate filter dropdowns from data
   observe({
-    df <- meta()
+    df_all <- meta()
     
     updateSelectizeInput(session, "filter_region",
-                         choices  = sort(unique(df$geo_region)),
-                         selected = character(0), server = TRUE)
+                         choices = sort(unique(df_all$geo_region)),
+                         selected = isolate(input$filter_region),
+                         server = TRUE)
     
     updateSelectizeInput(session, "filter_disease",
-                         choices  = sort(unique(df$disease_identity)),
-                         selected = character(0), server = TRUE)
+                         choices = sort(unique(df_all$disease_identity)),
+                         selected = isolate(input$filter_disease),
+                         server = TRUE)
+    
+    df <- filtered()
+    
     preview_df <- df %>%
       dplyr::filter(has_parquet) %>%
       dplyr::arrange(dplyr::desc(created_at_utc)) %>%
@@ -283,25 +294,49 @@ server <- function(input, output, session) {
         )
       )
     
-    choices <- setNames(preview_df$scenario_hash, preview_df$scenario_label)
+    if (nrow(preview_df) == 0) {
+      updateSelectizeInput(
+        session,
+        "preview_scenario",
+        choices = character(0),
+        selected = character(0),
+        server = TRUE
+      )
+      return()
+    }
+    
+    choices <- stats::setNames(preview_df$scenario_hash, preview_df$scenario_label)
+    
+    selected_now <- intersect(isolate(input$preview_scenario), preview_df$scenario_hash)
+    
+    if (length(selected_now) == 0) {
+      selected_now <- preview_df$scenario_hash[[1]]
+    }
     
     updateSelectizeInput(
       session,
       "preview_scenario",
       choices = choices,
-      selected = preview_df$scenario_hash[[1]],
+      selected = selected_now,
       server = TRUE
     )
   })
   
   # Update compartment choices when batch changes
   observeEvent(input$preview_scenario, {
-    req(input$preview_scenario)
+    if (length(input$preview_scenario) == 0 || is.null(input$preview_scenario)) {
+      updateSelectInput(session, "preview_compartment",
+                        choices = character(0),
+                        selected = character(0))
+      return()
+    }
     
     df <- parquet_query_scenario(input$preview_scenario, "network")
     
     if (is.null(df)) {
-      updateSelectInput(session, "preview_compartment", choices = character(0))
+      updateSelectInput(session, "preview_compartment",
+                        choices = character(0),
+                        selected = character(0))
       return()
     }
     
@@ -314,14 +349,19 @@ server <- function(input, output, session) {
       setdiff(compartment_choices, preferred_order)
     )
     
+    if (length(ordered_choices) == 0) {
+      updateSelectInput(session, "preview_compartment",
+                        choices = character(0),
+                        selected = character(0))
+      return()
+    }
+    
     default_choice <- if ("IS" %in% ordered_choices) {
       "IS"
     } else if ("I" %in% ordered_choices) {
       "I"
-    } else if (length(ordered_choices) > 0) {
-      ordered_choices[[1]]
     } else {
-      character(0)
+      ordered_choices[[1]]
     }
     
     updateSelectInput(
@@ -345,6 +385,20 @@ server <- function(input, output, session) {
                  created_at_utc >= as.POSIXct(input$filter_dates[[1]]),
                  created_at_utc <= as.POSIXct(input$filter_dates[[2]]) + 86400)
     df
+  })
+  
+  # Link selected table row to network preview
+  observeEvent(input$batch_table_rows_selected, {
+    idx <- input$batch_table_rows_selected
+    if (length(idx) == 0) return()
+    
+    selected_hashes <- unique(filtered()$scenario_hash[idx])
+    
+    updateSelectizeInput(
+      session,
+      "preview_scenario",
+      selected = selected_hashes
+    )
   })
 
   # Summary value boxes
@@ -372,8 +426,9 @@ server <- function(input, output, session) {
         ),
         created = format(created_at_utc, "%Y-%m-%d %H:%M")
       ) %>%
-      select(parquet, geo_region, disease_identity, interventions,
-             completion, mean_run_time_seconds, created, batch_num, scenario_hash)
+      select(parquet, geo_region, disease_identity, disease_R0, sim_days,
+             interventions, completion, mean_run_time_seconds, created, 
+             batch_num, scenario_hash, total_parquet_file_size)
 
     datatable(
       df,
@@ -386,12 +441,13 @@ server <- function(input, output, session) {
         dom        = "Bfrtip",
         buttons    = list("colvis"),
         columnDefs = list(
-          list(visible = FALSE, targets = c(7, 8)),  # hide batch/hash cols
+          list(visible = FALSE, targets = c(9, 10)),  # hide batch/hash cols
           list(className = "dt-center", targets = 0)
         )
       ),
-      colnames = c("", "Region", "Model", "Interventions",
-                   "Completion", "Mean run (s)", "Created", "batch_num", "scenario_hash")
+      colnames = c("File Exists", "Region", "Model", "R0", "Run Day Max",
+                   "Interventions", "Sim Completion", "Mean Run Time (sec)", "Created", 
+                   "batch_num", "scenario_hash", "Total Parquet Size")
     ) %>%
       formatRound("mean_run_time_seconds", digits = 2)
   })
@@ -412,7 +468,7 @@ server <- function(input, output, session) {
   # ── Export metadata CSV ────────────────────────────────────────────────────
   output$export_meta_btn <- downloadHandler(
     filename = function() {
-      sprintf("metadata_export_%s.csv", format(Sys.time(), "%Y%m%d_%H%M%S"))
+      sprintf("metadata_export_%s.csv", format(Sys.time(), "%Y-%m-%d"))
     },
     content = function(file) {
       filtered() %>%
@@ -425,30 +481,40 @@ server <- function(input, output, session) {
   # ── Export simulation CSVs (zipped) ──────────────────────────────────────
   output$export_sims_btn <- downloadHandler(
     filename = function() {
-      sprintf("sim_export_%s.zip", format(Sys.time(), "%Y%m%d_%H%M%S"))
+      sprintf("sim_export_%s.zip", format(Sys.time(), "%Y-%m-%d"))
     },
     content = function(file) {
+      message("START export_sims_btn")
       tmp <- tempfile()
       dir.create(tmp)
       on.exit(unlink(tmp, recursive = TRUE), add = TRUE)
+      
+      bns <- selected_rows()
+      message("Selected batch nums: ", paste(bns, collapse = ", "))
+      if (length(bns) == 0) {
+        stop("No rows selected for export.")
+      }
 
       withProgress(message = "Exporting simulations…", {
-        bns <- selected_rows()
         for (i in seq_along(bns)) {
           bn      <- bns[[i]]
           out_dir <- file.path(tmp, bn)
           dir.create(out_dir)
+          
+          message("Exporting batch: ", bn)
 
           # Write network CSV
           net_pq <- Sys.glob(file.path(PARQUET_ROOT, "*", bn, "network.parquet"))
           if (length(net_pq) > 0) {
             con <- dbConnect(duckdb(), dbdir = ":memory:")
+            on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
             res <- dbGetQuery(
               con,
-              sprintf("SELECT * EXCLUDE (scenario_hash, batch_num) FROM read_parquet('%s') ORDER BY sim_id, day",
+              sprintf("SELECT * 
+                       FROM read_parquet('%s') 
+                       ORDER BY sim_id, day",
                       net_pq[[1]])
             )
-            dbDisconnect(con, shutdown = TRUE)
             write_csv(res, file.path(out_dir, paste0("network_batch-", bn, ".csv")))
           }
 
@@ -456,21 +522,44 @@ server <- function(input, output, session) {
           node_pq <- Sys.glob(file.path(PARQUET_ROOT, "*", bn, "nodes.parquet"))
           if (length(node_pq) > 0) {
             con <- dbConnect(duckdb(), dbdir = ":memory:")
+            on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
             res <- dbGetQuery(
-              con,
-              sprintf("SELECT * EXCLUDE (scenario_hash, batch_num) FROM read_parquet('%s') ORDER BY fips_id, sim_id, day",
+              con, # EXCLUDE (scenario_hash, batch_num) 
+              sprintf("SELECT * 
+                       FROM read_parquet('%s') 
+                       ORDER BY fips_id, sim_id, day",
                       node_pq[[1]])
             )
-            dbDisconnect(con, shutdown = TRUE)
             write_csv(res, file.path(out_dir, paste0("nodes_batch-", bn, ".csv")))
+          }
+          
+          # Write simulation times CSV
+          times_pq <- Sys.glob(file.path(PARQUET_ROOT, "*", bn, "simulation_times.parquet"))
+          if (length(times_pq) > 0) {
+            con <- dbConnect(duckdb(), dbdir = ":memory:")
+            on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+            res <- dbGetQuery(
+              con,
+              sprintf(
+                "SELECT * 
+                 FROM read_parquet('%s')
+                 ORDER BY sim_id",
+                times_pq[[1]]
+              )
+            )
+            write_csv(res, file.path(out_dir, paste0("simulation_times_batch-", bn, ".csv")))
           }
 
           incProgress(1 / length(bns), detail = bn)
-        }
+        } # end for i
       })
 
       # Zip everything
-      zip(file, files = list.files(tmp, full.names = TRUE, recursive = TRUE),
+      files_to_zip <- list.files(tmp, full.names = TRUE, recursive = TRUE)
+      if (length(files_to_zip) == 0) {
+        stop("No CSV files were created for export.")
+      }
+      utils::zip(file, files = files_to_zip,
           flags = "-j")
     }
   )
@@ -478,7 +567,16 @@ server <- function(input, output, session) {
   # ── Network preview plot ───────────────────────────────────────────────────
   #output$network_plot <- plotly::renderPlotly({
   output$network_plot <- renderPlot({
-    req(input$preview_scenario, input$preview_compartment)
+    validate(need(length(input$preview_scenario) > 0, 
+                  "No scenario available for the current table filter."))
+    validate(need(length(input$preview_compartment) > 0, 
+                  "No compartment available for the selected scenario."))
+    
+    df <- parquet_query_scenario(input$preview_scenario, "network")
+    validate(need(!is.null(df), "No network parquet found for this scenario."))
+    
+    req(input$preview_scenario)
+    req(input$preview_compartment)
     
     df <- parquet_query_scenario(input$preview_scenario, "network")
     validate(need(!is.null(df), "No network parquet found for this scenario."))
@@ -487,14 +585,14 @@ server <- function(input, output, session) {
     validate(need(comp %in% names(df),
                   paste("Column not found in network data:", comp)))
     
-    meta_df <- meta() |>
-      dplyr::filter(scenario_hash == input$preview_scenario) |>
+    meta_df <- meta() %>%
+      dplyr::filter(scenario_hash == input$preview_scenario) %>%
       dplyr::select(batch_num, sim_days)
     
-    df_plot <- df |>
-      dplyr::group_by(batch_num, sim_id, day) |>
-      dplyr::summarise(value = sum(.data[[comp]], na.rm = TRUE), .groups = "drop") |>
-      dplyr::left_join(meta_df, by = "batch_num") |>
+    df_plot <- df %>%
+      dplyr::group_by(batch_num, sim_id, day) %>%
+      dplyr::summarise(value = sum(.data[[comp]], na.rm = TRUE), .groups = "drop") %>%
+      dplyr::left_join(meta_df, by = "batch_num") %>%
       dplyr::mutate(
         batch_label = paste0(
           "batch ",
