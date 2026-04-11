@@ -210,8 +210,8 @@ ui <- page_navbar(
       card(
         full_screen = TRUE,
         card_header("Network time series"),
-        #plotly::plotlyOutput("network_plot", height = "450px")
-        plotOutput("network_plot", height = "450px")
+        plotly::plotlyOutput("network_plot", height = "450px")
+        #plotOutput("network_plot", height = "450px")
       )
     )
   ),
@@ -267,16 +267,22 @@ server <- function(input, output, session) {
   observe({
     df_all <- meta()
     
-    updateSelectizeInput(session, "filter_region",
-                         choices = sort(unique(df_all$geo_region)),
-                         selected = isolate(input$filter_region),
-                         server = TRUE)
+    updateSelectizeInput(
+      session, "filter_region",
+      choices = sort(unique(df_all$geo_region)),
+      selected = isolate(input$filter_region),
+      server = TRUE
+    )
     
-    updateSelectizeInput(session, "filter_disease",
-                         choices = sort(unique(df_all$disease_identity)),
-                         selected = isolate(input$filter_disease),
-                         server = TRUE)
-    
+    updateSelectizeInput(
+      session, "filter_disease",
+      choices = sort(unique(df_all$disease_identity)),
+      selected = isolate(input$filter_disease),
+      server = TRUE
+    )
+  })
+  
+  observe({
     df <- filtered()
     
     preview_df <- df %>%
@@ -308,9 +314,10 @@ server <- function(input, output, session) {
     choices <- stats::setNames(preview_df$scenario_hash, preview_df$scenario_label)
     
     selected_now <- intersect(isolate(input$preview_scenario), preview_df$scenario_hash)
-    
     if (length(selected_now) == 0) {
       selected_now <- preview_df$scenario_hash[[1]]
+    } else {
+      selected_now <- selected_now[[1]]
     }
     
     updateSelectizeInput(
@@ -390,14 +397,16 @@ server <- function(input, output, session) {
   # Link selected table row to network preview
   observeEvent(input$batch_table_rows_selected, {
     idx <- input$batch_table_rows_selected
-    if (length(idx) == 0) return()
     
-    selected_hashes <- unique(filtered()$scenario_hash[idx])
+    # Only sync preview when exactly one row is selected
+    if (length(idx) != 1) return()
+    
+    selected_hash <- filtered()$scenario_hash[idx]
     
     updateSelectizeInput(
       session,
       "preview_scenario",
-      selected = selected_hashes
+      selected = selected_hash
     )
   })
 
@@ -565,18 +574,11 @@ server <- function(input, output, session) {
   )
 
   # ── Network preview plot ───────────────────────────────────────────────────
-  #output$network_plot <- plotly::renderPlotly({
-  output$network_plot <- renderPlot({
-    validate(need(length(input$preview_scenario) > 0, 
+  output$network_plot <- plotly::renderPlotly({
+    validate(need(length(input$preview_scenario) > 0,
                   "No scenario available for the current table filter."))
-    validate(need(length(input$preview_compartment) > 0, 
+    validate(need(length(input$preview_compartment) > 0,
                   "No compartment available for the selected scenario."))
-    
-    df <- parquet_query_scenario(input$preview_scenario, "network")
-    validate(need(!is.null(df), "No network parquet found for this scenario."))
-    
-    req(input$preview_scenario)
-    req(input$preview_compartment)
     
     df <- parquet_query_scenario(input$preview_scenario, "network")
     validate(need(!is.null(df), "No network parquet found for this scenario."))
@@ -587,8 +589,24 @@ server <- function(input, output, session) {
     
     meta_df <- meta() %>%
       dplyr::filter(scenario_hash == input$preview_scenario) %>%
-      dplyr::select(batch_num, sim_days)
+      dplyr::mutate(
+        interventions = dplyr::case_when(
+          vaccine_used & npi_used  ~ "Vaccine + NPI",
+          vaccine_used             ~ "Vaccine",
+          antiviral_used           ~ "Antiviral",
+          npi_used                 ~ "NPI",
+          TRUE                     ~ "Baseline"
+        )
+      ) %>%
+      dplyr::select(
+        batch_num,
+        sim_days,
+        geo_region,
+        disease_R0,
+        interventions
+      )
     
+    # get last 4 digits of hash for labeling
     df_plot <- df %>%
       dplyr::group_by(batch_num, sim_id, day) %>%
       dplyr::summarise(value = sum(.data[[comp]], na.rm = TRUE), .groups = "drop") %>%
@@ -600,36 +618,52 @@ server <- function(input, output, session) {
           " | ",
           sim_days,
           " days"
-        )
-      )
+        ),
+        line_id = paste(batch_num, sim_id, sep = "_")
+      ) %>%
+      dplyr::arrange(batch_num, sim_id, day)
     
-    p <- ggplot2::ggplot(
-      df_plot,
-      ggplot2::aes(
-        x = day,
-        y = value,
-        group = interaction(batch_num, sim_id),
-        color = batch_label,
-        text = paste0(
-          "Batch: ", substr(batch_num, nchar(batch_num) - 3, nchar(batch_num)),
-          "<br>Days: ", sim_days,
-          "<br>Sim: ", sim_id,
-          "<br>Day: ", day,
-          "<br>Value: ", value
-        )
-      )
-    ) +
-      ggplot2::geom_line(alpha = 0.5, linewidth = 0.6) +
-      ggplot2::labs(
-        title = comp,
-        x = "Day",
-        y = comp,
-        color = "Batch"
-      ) +
-      ggplot2::theme_minimal(base_size = 13)
+    # Plot with one line per simulation, with descriptive title
+    total_sims <- dplyr::n_distinct(df_plot$sim_id)
     
-    #plotly::ggplotly(p, tooltip = "text")
-    p
+    geo_region <- unique(meta_df$geo_region)[1]
+    r0_value   <- unique(meta_df$disease_R0)[1]
+    
+    intervention_text <- meta_df %>%
+      dplyr::pull(interventions) %>%
+      unique() %>%
+      sort() %>%
+      paste(collapse = ", ")
+    
+    title_text <- paste0(
+      geo_region, " | ",
+      intervention_text, " | ",
+      "R0=", round(r0_value, 2), " | ",
+      total_sims, " sims"
+    )
+    
+    plotly::plot_ly(
+      data = df_plot,
+      x = ~day,
+      y = ~value,
+      type = "scatter",
+      mode = "lines",
+      split = ~interaction(batch_num, sim_id),
+      line = list(color = "rgba(78,121,167,0.6)", width = 1.5),
+      text = ~paste0(
+        "Batch: ", batch_label,
+        "<br>Sim: ", sim_id,
+        "<br>Day: ", day,
+        "<br>Value: ", value
+      ),
+      hovertemplate = "%{text}<extra></extra>"
+    ) %>%
+      plotly::layout(
+        title = list(text = paste0(title_text, "<br>")),
+        xaxis = list(title = "Day"),
+        yaxis = list(title = comp),
+        showlegend = FALSE
+      )
   })
 
   # ── About tab ──────────────────────────────────────────────────────────────
