@@ -27,12 +27,16 @@ class BinomialTravel(TravelModel):
         self.flow_reduction = [float(x) for x in self.parameters.travel_parameters['flow_reduction']]
 
         # Read in traveling and transmitting compartments & weights
-        self.travel_dict = self.parameters.travel_parameters.get('traveling_compartments', {})
-        if not self.travel_dict:
+        raw_travel_dict = self.parameters.travel_parameters.get('traveling_compartments', {})
+        if not raw_travel_dict:
             raise ValueError("traveling_compartments is required but missing or empty")
-        self.transmit_dict = self.parameters.travel_parameters.get('transmitting_compartments', {})
-        if not self.transmit_dict:
+
+        raw_transmit_dict = self.parameters.travel_parameters.get('transmitting_compartments', {})
+        if not raw_transmit_dict:
             raise ValueError("transmitting_compartments is required but missing or empty")
+
+        self.travel_dict = {k: float(v) for k, v in raw_travel_dict.items()}
+        self.transmit_dict = {k: float(v) for k, v in raw_transmit_dict.items()}
 
         logger.info(f'instantiated a BinomialTravel object: {BinomialTravel}')
         return
