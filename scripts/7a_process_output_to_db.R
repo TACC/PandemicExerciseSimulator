@@ -35,6 +35,15 @@ MONGO_DB         <- "pandemic_sim"
 MONGO_COLLECTION <- "batches"
 
 #### Helper Funs ###############################################################
+calc_sim_completion <- function(attempt_realization_count, complete_realization_count) {
+  dplyr::case_when(
+    is.na(attempt_realization_count) ~ NA_real_,
+    attempt_realization_count <= 0 ~ NA_real_,
+    is.na(complete_realization_count) ~ 0,
+    TRUE ~ pmin(complete_realization_count / attempt_realization_count, 1)
+  )
+}
+
 vec_to_str <- function(x) {
   if (is.null(x) || length(x) == 0) return(NA_character_)
   paste(unlist(x), collapse = "|")
@@ -112,6 +121,13 @@ parse_metadata <- function(path) {
   tm         <- m$travel_model  %||% list()
   sim_times  <- parse_sim_times(path, m$batch_num %||% "")
   
+  attempt_realization_count  <- safe_get(m, "realization_indices", "count") %||% NA_integer_
+  complete_realization_count <- sim_times$complete_realization_count
+  sim_completion             <- calc_sim_completion(
+    attempt_realization_count,
+    complete_realization_count
+  )
+  
   sizes      <- get_batch_file_sizes(
     scenario_hash = m$scenario_hash %||% NA_character_,
     batch_num     = m$batch_num     %||% NA_character_
@@ -126,8 +142,9 @@ parse_metadata <- function(path) {
 
     realization_min            = safe_get(m, "realization_indices", "min")   %||% NA_integer_,
     realization_max            = safe_get(m, "realization_indices", "max")   %||% NA_integer_,
-    attempt_realization_count  = safe_get(m, "realization_indices", "count") %||% NA_integer_,
-    complete_realization_count = sim_times$complete_realization_count,
+    attempt_realization_count  = attempt_realization_count,
+    complete_realization_count = complete_realization_count,
+    sim_completion             = sim_completion,
     mean_run_time_seconds      = sim_times$mean_run_time_seconds,
     
     network_parquet_bytes      = sizes$network_parquet_bytes,
@@ -280,6 +297,7 @@ write_to_mongo <- function(raw_json_path, row, mongo_col) {
   doc$npi_count                  <- row$npi_count
   doc$attempt_realization_count  <- row$attempt_realization_count
   doc$complete_realization_count <- row$complete_realization_count
+  doc$sim_completion             <- row$sim_completion
   doc$mean_run_time_seconds      <- row$mean_run_time_seconds
   doc$parquet_path               <- file.path(PARQUET_ROOT,
                                               row$scenario_hash,
@@ -371,6 +389,7 @@ MASTER_COL_TYPES <- cols(
   realization_max            = col_integer(),
   attempt_realization_count  = col_integer(),
   complete_realization_count = col_integer(),
+  sim_completion             = col_double(),
   mean_run_time_seconds      = col_double(),
   
   network_parquet_bytes   = col_double(),
@@ -427,7 +446,23 @@ MASTER_COL_TYPES <- cols(
 
 #### Load existing master ######################################################
 if (file.exists(MASTER_CSV)) {
-  master        <- read_csv(MASTER_CSV, col_types = MASTER_COL_TYPES)
+  master <- read_csv(MASTER_CSV, show_col_types = FALSE)
+  
+  if (!"sim_completion" %in% names(master)) {
+    master <- master %>%
+      dplyr::mutate(
+        sim_completion = calc_sim_completion(
+          attempt_realization_count,
+          complete_realization_count))}
+  
+  master <- master %>%
+    dplyr::mutate(
+      scenario_hash = as.character(scenario_hash),
+      batch_num = as.character(batch_num),
+      random_base_seed = as.character(random_base_seed),
+      created_at_utc = as.POSIXct(created_at_utc, tz = "UTC")
+    )
+  
   existing_keys <- paste(master$scenario_hash, master$batch_num, sep = "::")
   message(sprintf("Loaded existing master: %d row(s)", nrow(master)))
 } else {
@@ -446,16 +481,37 @@ json_files <- list.files(
 
 message(sprintf("Found %d metadata_batch JSON file(s).", length(json_files)))
 
-new_rows <- json_files %>%
-  map(\(path) tryCatch(parse_metadata(path),
-                       error = \(e) { warning(sprintf("Failed: %s — %s", path, e$message)); NULL })) %>%
+parsed_rows <- json_files %>%
+  map(\(path) tryCatch(
+    parse_metadata(path),
+    error = \(e) {
+      warning(sprintf("Failed: %s — %s", path, e$message))
+      NULL
+    }
+  )) %>%
   compact() %>%
-  list_rbind() %>%
-  dplyr::filter(!paste(scenario_hash, batch_num, sep = "::") %in% existing_keys)
+  list_rbind()
 
-n_skipped <- length(json_files) - nrow(new_rows)
-message(sprintf("%d new row(s) to add (skipping %d already in master).",
-                nrow(new_rows), n_skipped))
+if (nrow(parsed_rows) == 0) {
+  new_rows <- parsed_rows
+} else if (is.null(master) || nrow(master) == 0) {
+  new_rows <- parsed_rows
+} else {
+  master_lookup <- master %>%
+    dplyr::select(scenario_hash, batch_num, sim_completion) %>%
+    dplyr::rename(existing_sim_completion = sim_completion)
+  
+  new_rows <- parsed_rows %>%
+    dplyr::left_join(master_lookup, by = c("scenario_hash", "batch_num")) %>%
+    dplyr::filter(is.na(existing_sim_completion) | existing_sim_completion < 1) %>%
+    dplyr::select(-existing_sim_completion)
+}
+
+n_skipped <- nrow(parsed_rows) - nrow(new_rows)
+message(sprintf(
+  "%d row(s) to process (skipping %d already complete in master).",
+  nrow(new_rows), n_skipped
+))
 
 #### Ingest new rows ###########################################################
 if (nrow(new_rows) > 0) {
@@ -509,9 +565,17 @@ if (nrow(new_rows) > 0) {
   })
 
   #### Write metadata CSV ######################################################
-  updated_master <- bind_rows(master, new_rows)
+  if (is.null(master) || nrow(master) == 0) {
+    updated_master <- new_rows
+  } else {
+    keys_to_replace <- paste(new_rows$scenario_hash, new_rows$batch_num, sep = "::")
+    
+    updated_master <- master %>%
+      dplyr::filter(!paste(scenario_hash, batch_num, sep = "::") %in% keys_to_replace) %>%
+      bind_rows(new_rows)
+  }
   
-  # Back filling file size since parquets don't exist at time of ingestion and inital master creation
+  # Back filling file size since parquets don't exist at time of ingestion and initial master creation
   for (i in seq_len(nrow(updated_master))) {
     sizes <- get_batch_file_sizes(updated_master$scenario_hash[i], updated_master$batch_num[i])
     
