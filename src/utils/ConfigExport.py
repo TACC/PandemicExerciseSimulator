@@ -166,12 +166,61 @@ def canonicalize_for_hash(value, float_places: int = HASH_FLOAT_PLACES):
    return value
 
 
+def canonicalize_initial_infected_for_hash(initial_infected):
+   rows = normalize_for_json(initial_infected or [])
+
+   out = []
+   for row in rows:
+      out.append({
+         "county": str(row.get("county", "")),
+         "infected": float(row.get("infected", 0)),
+         "age_group": int(row.get("age_group", 0))
+      })
+
+   return sorted(
+      out,
+      key=lambda x: (
+         x["county"],
+         x["age_group"],
+         x["infected"]
+      )
+   )
+
+
+def canonicalize_npis_for_hash(npis):
+   '''
+   Excluding "name" from hash as it's irrelevant to what the intervention does
+   The name is more a note of the user than a hard rule used to look up a pattern
+   '''
+   rows = normalize_for_json(npis or [])
+
+   out = []
+   for row in rows:
+      out.append({
+         #"name": str(row.get("name", "")),
+         "day": int(row.get("day", 0)),
+         "duration": int(row.get("duration", 0)),
+         "location": str(row.get("location", "")),
+         "effectiveness": [float(x) for x in row.get("effectiveness", [])]
+      })
+
+   return sorted(
+      out,
+      key=lambda x: (
+         x["day"],
+         #x["name"],
+         x["duration"],
+         x["location"],
+         tuple(x["effectiveness"])
+      )
+   )
+
+
 def build_hash_payload(simulation_properties,
                        disease_model,
                        travel_model,
-                       vaccine_model,
                        antiviral_model,
-                       cli_args=None):
+                       vaccine_model):
    payload = {
       "data": {
          "population": normalize_data_path(simulation_properties.population_data_file),
@@ -193,6 +242,12 @@ def build_hash_payload(simulation_properties,
             exclude=EXPORT_EXCLUDE
          )
       },
+      "initial_infected": canonicalize_initial_infected_for_hash(
+         simulation_properties.initial
+      ),
+      "non_pharma_interventions": canonicalize_npis_for_hash(
+         simulation_properties.non_pharma_interventions
+      ),
       "vaccine_model": {
          "identity": simulation_properties.vaccine_model,
          "runtime_attributes": export_public_state(
@@ -206,12 +261,7 @@ def build_hash_payload(simulation_properties,
             antiviral_model,
             exclude=EXPORT_EXCLUDE
          ) if antiviral_model is not None else {}
-      } #,
-      # Removing in favor of adding DB flag of if a simulation is complete Inf=0
-      #  or ended due to hitting day limit => want better clustering of nearly identical set-ups
-      #"cli_args": {
-      #   "days": cli_args.days if cli_args is not None else None
-      #}
+      }
    }
 
    return canonicalize_for_hash(payload, float_places=HASH_FLOAT_PLACES)
@@ -229,21 +279,20 @@ def build_executed_config(simulation_properties,
                           parameters,
                           disease_model,
                           travel_model,
-                          vaccine_model,
+                          npi_model,
                           antiviral_model,
+                          vaccine_model,
                           node_count,
                           base_seed,
-                          cli_args=None
-                          ):
+                          cli_args=None):
    indices = simulation_properties.realization_indices
 
    hash_payload = build_hash_payload(
       simulation_properties=simulation_properties,
       disease_model=disease_model,
       travel_model=travel_model,
-      vaccine_model=vaccine_model,
       antiviral_model=antiviral_model,
-      cli_args=cli_args
+      vaccine_model=vaccine_model
    )
 
    scenario_hash = generate_scenario_hash(hash_payload)
@@ -283,10 +332,19 @@ def build_executed_config(simulation_properties,
             exclude=EXPORT_EXCLUDE
          )
       },
-      "initial_infected": simulation_properties.initial,
-      "non_pharma_interventions": [
-         npi.used_only() for npi in parameters.non_pharma_interventions
-      ],
+      "initial_infected": canonicalize_initial_infected_for_hash(simulation_properties.initial),
+      "non_pharma_interventions": {
+         "parameters": normalize_for_json(simulation_properties.non_pharma_interventions),
+         "runtime_attributes": (
+            { # gives the network details passed to NPIs
+            **export_public_state(
+               npi_model,
+               exclude=EXPORT_EXCLUDE | {"schedule", "npis"}
+            ), # gives the sorted schedule used in the hash for visual validation
+              "npis": canonicalize_npis_for_hash(npi_model.npis)
+            } if npi_model is not None else {}
+         )
+      },
       "antiviral_model": {
          "identity": simulation_properties.antiviral_model,
          "parameters": parameters.antiviral_parameters.used_only(),
