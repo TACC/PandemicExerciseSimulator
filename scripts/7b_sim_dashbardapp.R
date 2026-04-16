@@ -624,7 +624,7 @@ server <- function(input, output, session) {
       dplyr::arrange(batch_num, sim_id, day)
     
     # Plot with one line per simulation, with descriptive title
-    total_sims <- dplyr::n_distinct(df_plot$sim_id)
+    total_sims <- dplyr::n_distinct(df_plot$line_id)
     
     geo_region <- unique(meta_df$geo_region)[1]
     r0_value   <- unique(meta_df$disease_R0)[1]
