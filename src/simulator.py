@@ -173,8 +173,9 @@ def main():
         parameters=parameters,
         disease_model=disease_model,
         travel_model=travel_model,
-        vaccine_model=vaccine_model,
+        npi_model=npis,
         antiviral_model=antiviral_model,
+        vaccine_model=vaccine_model,
         node_count=network.get_number_of_nodes(),
         base_seed=base_seed,
         cli_args=args
