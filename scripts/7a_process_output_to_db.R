@@ -108,7 +108,7 @@ parse_sim_times <- function(metadata_path, batch_num) {
 parse_metadata <- function(path) {
   m <- jsonlite::read_json(path)
 
-  npi_list   <- m$non_pharma_interventions %||% list()
+  npi_list   <- m$non_pharma_interventions$runtime_attributes$npis %||% list()
   npi_used   <- length(npi_list) > 0
   npi_ids    <- vec_to_str(map_chr(npi_list, ~ .x$identity %||% NA_character_))
 
