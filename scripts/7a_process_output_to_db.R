@@ -1,5 +1,4 @@
-# 7_process_output_to_db.R
-#
+#///////////////////////////////////////////////////////////////////////////////
 # Post-job ETL: finds all metadata_batch-*.json files under SEARCH_ROOT and
 # ingests them into:
 #   1. metadata_master.csv  — flat metadata table, deduplication key
@@ -18,6 +17,7 @@
 #     columns of zeros cost almost nothing in file size.
 #   - For very large sweeps (250+ nodes × 250+ realizations) the node ingest
 #     reads all county files in one pass via arrow — no full in-memory load.
+#///////////////////////////////////////////////////////////////////////////////
 
 library(jsonlite)
 library(tidyverse)
