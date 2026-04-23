@@ -304,6 +304,7 @@ def build_executed_config(simulation_properties,
       "scenario_hash": scenario_hash,
       "output_dir_path": output_dir_path,
       "orig_output_dir_path": simulation_properties.output_dir_path,
+      "metadata_tags": simulation_properties.tags,
       "realization_indices": {
          "min": min(indices),
          "max": max(indices),
