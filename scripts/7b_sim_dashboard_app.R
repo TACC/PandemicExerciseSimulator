@@ -1,5 +1,4 @@
-# sim_dashboard/app.R
-#
+#///////////////////////////////////////////////////////////////////////////////
 # Browser dashboard for exploring simulation metadata, checking run completion,
 # and exporting finished scenarios to CSV.
 #
@@ -7,6 +6,7 @@
 # Or open app.R in RStudio and click "Run App"
 #
 # Dependencies: shiny, bslib, DT, dplyr, readr, duckdb, arrow, bsicons
+#///////////////////////////////////////////////////////////////////////////////
 
 #### Load packages #############################################################
 library(shiny)
