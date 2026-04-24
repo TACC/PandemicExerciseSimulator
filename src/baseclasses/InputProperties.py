@@ -56,6 +56,9 @@ class InputProperties:
         # legacy convenience: total number of realizations/simulations to do
         self.number_of_realizations = len(self.realization_indices)
 
+        # tags
+        self.tags = input.get('metadata_tags', {})
+
         # data files
         self.population_data_file         = input['data']['population']
         self.contact_data_file            = input['data']['contact']
