@@ -35,3 +35,6 @@ metadata_master.csv
 # ignore code coverage related files
 .coverage
 htmlcov/
+
+# ignore generated documentation builds
+docs/_build/
