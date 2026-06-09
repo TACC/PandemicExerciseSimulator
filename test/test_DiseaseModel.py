@@ -144,6 +144,56 @@ def test_spectral_radius_returns_largest_eigenvalue():
    assert DiseaseModel.spectral_radius(K) == 3.5
 
 
+def test_estimate_baseline_beta_matches_target_R0():
+   contact_matrix = np.array([[3.0, 1.0], [1.0, 2.0]])
+   susceptibility = np.array([1.0, 0.5])
+   w = np.array([4.0, 2.0])
+   R0 = 2.5
+
+   beta = DiseaseModel.estimate_baseline_beta(
+      contact_matrix,
+      R0,
+      w,
+      susceptibility,
+   )
+   K = DiseaseModel.build_NGM(beta, contact_matrix, w, susceptibility)
+
+   assert np.isclose(DiseaseModel.spectral_radius(K), R0)
+
+
+def test_adjust_two_way_split_proportion_realizes_desired_fraction():
+   target_rate = 1 / 3.0
+   competing_rate = 1 / 7.0
+   desired = 0.25
+
+   adjusted = DiseaseModel.adjust_two_way_split_proportion(
+      desired_realized_fraction=desired,
+      competing_rate=competing_rate,
+      target_rate=target_rate,
+   )
+
+   realized = adjusted * target_rate / (
+      adjusted * target_rate + (1 - adjusted) * competing_rate
+   )
+   assert np.isclose(realized, desired)
+
+
+def test_adjust_three_way_split_proportion_realizes_desired_fractions():
+   desired = [0.2, 0.3, 0.5]
+   rates = [1 / 2.0, 1 / 4.0, 1 / 9.0]
+
+   adjusted = DiseaseModel.adjust_three_way_split_proportion(
+      desired_realized_fractions=desired,
+      rates=rates,
+   )
+
+   realized_rates = np.array(adjusted) * np.array(rates)
+   realized = realized_rates / realized_rates.sum()
+
+   assert np.isclose(sum(adjusted), 1.0)
+   assert np.allclose(realized, desired)
+
+
 def test_group_cache_per_node_sums_to_one(tmp_path):
    params = make_params(tmp_path)
    npis = SimpleNamespace(schedule=[[[0.0, 0.0]]])
