@@ -1,5 +1,5 @@
 {
- "output_dir_path": "SEITRS-STOCH-STATE_BASELINE",
+ "output_dir_path": "GENERATE",
   "realization_range": ["0", "99"],
   "batch_num": "GENERATE",
   "data": {
