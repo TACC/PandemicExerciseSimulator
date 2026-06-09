@@ -172,6 +172,8 @@ def test_build_hash_payload():
       travel_model="binomial",
       vaccine_model=None,
       antiviral_model=None,
+      initial=[],
+      non_pharma_interventions=[],
    )
 
    disease_model = SimpleNamespace(public_attr=1, _private=2)
@@ -212,6 +214,14 @@ def test_build_executed_config(tmp_path, monkeypatch):
       vaccine_model=None,
       antiviral_model=None,
       initial=[{"county": "001", "infected": "1", "age_group": "0"}],
+      non_pharma_interventions=[{
+         "name": "school",
+         "day": "0",
+         "duration": "7",
+         "location": "0",
+         "effectiveness": ["0.5", "0.25"],
+      }],
+      tags={},
    )
 
    disease_params = TrackingDict({"R0": "3", "tau": "7"})
@@ -220,7 +230,13 @@ def test_build_executed_config(tmp_path, monkeypatch):
    travel_params = TrackingDict({"rho": "1"})
    _ = travel_params["rho"]
 
-   npi = TrackingDict({"name": "school", "day": "0"})
+   npi = TrackingDict({
+      "name": "school",
+      "day": "0",
+      "duration": "7",
+      "location": "0",
+      "effectiveness": ["0.5", "0.25"],
+   })
    _ = npi["name"]
 
    params = SimpleNamespace(
@@ -234,6 +250,12 @@ def test_build_executed_config(tmp_path, monkeypatch):
 
    disease_model = SimpleNamespace(foo=1)
    travel_model = SimpleNamespace(bar=2)
+   npi_model = SimpleNamespace(
+      npis=[npi],
+      length=31,
+      num_locations=5,
+      num_age_groups=2,
+   )
 
    monkeypatch.setattr(
       "src.utils.ConfigExport.get_git_info",
@@ -256,6 +278,7 @@ def test_build_executed_config(tmp_path, monkeypatch):
       parameters=params,
       disease_model=disease_model,
       travel_model=travel_model,
+      npi_model=npi_model,
       vaccine_model=None,
       antiviral_model=None,
       node_count=5,
@@ -272,7 +295,24 @@ def test_build_executed_config(tmp_path, monkeypatch):
    assert out["age_structure"]["labels"] == ["0-4", "5-17"]
    assert out["disease_model"]["parameters"] == {"R0": "3"}
    assert out["travel_model"]["parameters"] == {"rho": "1"}
-   assert out["non_pharma_interventions"] == [{"name": "school"}]
+   assert out["non_pharma_interventions"]["parameters"] == [{
+      "name": "school",
+      "day": "0",
+      "duration": "7",
+      "location": "0",
+      "effectiveness": ["0.5", "0.25"],
+   }]
+   assert out["non_pharma_interventions"]["runtime_attributes"] == {
+      "length": 31,
+      "num_locations": 5,
+      "num_age_groups": 2,
+      "npis": [{
+         "day": 0.0,
+         "duration": 7.0,
+         "location": "0",
+         "effectiveness": [0.5, 0.25],
+      }],
+   }
    assert out["git_info"]["git_commit"] == "abc"
    assert out["random_seed"]["base_seed"] == 123
    assert out["cli_args"] == {
