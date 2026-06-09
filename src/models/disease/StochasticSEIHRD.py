@@ -10,41 +10,6 @@ from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
-def adjust_two_way_split_proportion(
-    *,
-    desired_realized_fraction: float,
-    competing_rate: float,
-    target_rate: float,
-) -> float:
-    """
-    Compute the adjustment factor π for a two-way split so that the realized
-    fraction to the *target* branch equals p, per:
-
-        π = (p * γ) / ( (γ - η) * p + η )
-
-    See Appendix of this paper: https://www.researchsquare.com/article/rs-3467930/v1
-    Or worked-out GoogleDoc from Remy F. Pasco
-
-    Variable mapping to your model:
-      - p        : desired_realized_fraction  (e.g., prop_hosp from self.prop_*[…])
-      - γ (gamma): competing_rate             (e.g., self.IS_to_R_rate)
-      - η (eta)  : target_rate                (e.g., self.IS_to_H_rate)
-
-    Returns:
-      π in [0,1], to be used as:
-        flow_to_target    = π * η * compartment_level
-        flow_to_competing = (1 - π) * γ * compartment_level
-    """
-    if not (0.0 <= desired_realized_fraction <= 1.0):
-        raise ValueError("desired_realized_fraction must be in [0, 1].")
-    if competing_rate <= 0.0 or target_rate <= 0.0:
-        raise ValueError("Rates must be positive.")
-
-    denom = (competing_rate - target_rate) * desired_realized_fraction + target_rate
-    corrected_fraction = (desired_realized_fraction * competing_rate) / denom
-
-    return corrected_fraction
-
 #### Estimate the generation time based only on input parameters
 def compute_generation_time(
         E_out_rate, IP_to_IS_rate, IS_to_H_rate, IS_to_R_rate, IA_to_R_rate,
@@ -108,51 +73,6 @@ def compute_w(prop_E_to_IA,
 
     w = (1.0 - prop_E_to_IA) * symptomatic_block + prop_E_to_IA * asymptomatic_block
     return w
-
-
-def estimate_baseline_beta(
-    contact_matrix: list[list[float]],         # (n,n) matrix C, rows susceptible i, cols infectious j
-    R0: float,                                 # scalar
-    w: np.ndarray,                             # (n,) vector to diagonal matrix from compute_w
-    susceptibility: np.ndarray | None = None,  # optional (n,) S_i; defaults to 1s = identity matrix
-) -> float:
-    """
-    Compute beta so that rho( beta * S * C * diag(w) ) = R0.
-    rho() refers to the spectral radius = the dominant eigenvalue of matrix K
-    beta is scalar so beta * rho(M) = R0 => beta = R0/rho(M), where M = S * C * diag(w)
-    """
-    C = np.array(contact_matrix, dtype=float)
-    w = np.asarray(w, dtype=float)
-    n = C.shape[0] # number of age groups
-    assert C.shape == (n, n), "contact_matrix must be square"
-    assert w.shape == (n,), "w must be length-n"
-
-    if susceptibility is None:
-        S_mat = np.eye(n)
-    else:
-        s = np.asarray(susceptibility, dtype=float)
-        assert s.shape == (n,), "susceptibility must be length-n"
-        S_mat = np.diag(s)
-
-    M = S_mat @ C @ np.diag(w)    # this is the beta-free NGM core
-    rho = DiseaseModel.spectral_radius(M)      # spectral radius
-
-    if rho <= 0:
-        raise ValueError("Spectral radius is non-positive; check inputs (C, w, susceptibility).")
-
-    beta = R0 / rho
-    return beta
-
-# This should probably be moved to a pytest once debug phase over
-def build_NGM(beta: float, contact_matrix: np.ndarray, w: np.ndarray, susceptibility: np.ndarray | None = None) -> np.ndarray:
-    """
-    Optionally construct K to verify rho(K) ≈ R0 after solving for beta.
-    """
-    C = np.asarray(contact_matrix, dtype=float)
-    w = np.asarray(w, dtype=float)
-    n = C.shape[0]
-    S_mat = np.diag(susceptibility) if susceptibility is not None else np.eye(n)
-    return beta * (S_mat @ C @ np.diag(w))
 
 
 def SEIHRD_model(y,
@@ -256,7 +176,7 @@ class StochasticSEIHRD(DiseaseModel):
         self.prop_IS_to_H = []
         for risk_group_props in [lowrisk, highrisk]:
             corrected_for_this_risk = [
-                adjust_two_way_split_proportion(
+                DiseaseModel.adjust_two_way_split_proportion(
                     desired_realized_fraction=p,       # age and risk specific
                     competing_rate=self.IS_to_R_rate,  # γ = IS→R
                     target_rate=self.IS_to_H_rate,     # η = IS→H
@@ -269,7 +189,7 @@ class StochasticSEIHRD(DiseaseModel):
         # H → D vs R proportion correction
         prop_H_to_D    = [float(x) for x in self.parameters.disease_parameters['prop_H_to_D']]
         self.prop_H_to_D = [
-            adjust_two_way_split_proportion(
+            DiseaseModel.adjust_two_way_split_proportion(
                 desired_realized_fraction=p,
                 competing_rate=r_rate,         # γ = H→R (age-specific)
                 target_rate=self.H_to_D_rate,  # η = H→D (fixed/uniform)
@@ -294,11 +214,21 @@ class StochasticSEIHRD(DiseaseModel):
         w = compute_w(self.prop_E_to_IA,
                   self.IP_to_IS_rate, self.IS_to_H_rate, self.IS_to_R_rate, self.IA_to_R_rate,
                   rel_inf_IP=self.rel_inf_IP_to_IS, rel_inf_IA=self.rel_inf_IA_to_IS)
-        self.beta  = estimate_baseline_beta(self.parameters.np_contact_matrix, self.R0, w, self.relative_susceptibility)
+        self.beta = DiseaseModel.estimate_baseline_beta(
+            self.parameters.np_contact_matrix,
+            self.R0,
+            w,
+            self.relative_susceptibility,
+        )
         logger.info(f'baseline beta is {self.beta}')
 
         # Recalc/derive passed R0 with the beta we estimate
-        NGM_K = build_NGM(self.beta, self.parameters.np_contact_matrix, w, self.relative_susceptibility)
+        NGM_K = DiseaseModel.build_NGM(
+            self.beta,
+            self.parameters.np_contact_matrix,
+            w,
+            self.relative_susceptibility,
+        )
         rederive_R0 = DiseaseModel.spectral_radius(NGM_K)
         logger.info(f'original R0={self.R0} and the derived one is {rederive_R0}')
 
@@ -416,5 +346,3 @@ class StochasticSEIHRD(DiseaseModel):
             node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
 
         return
-
-
