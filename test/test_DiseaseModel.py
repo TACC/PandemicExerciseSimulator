@@ -178,11 +178,11 @@ def test_adjust_two_way_split_proportion_realizes_desired_fraction():
    assert np.isclose(realized, desired)
 
 
-def test_adjust_three_way_split_proportion_realizes_desired_fractions():
+def test_adjust_competing_clock_split_proportions_realizes_desired_fractions():
    desired = [0.2, 0.3, 0.5]
    rates = [1 / 2.0, 1 / 4.0, 1 / 9.0]
 
-   adjusted = DiseaseModel.adjust_three_way_split_proportion(
+   adjusted = DiseaseModel.adjust_competing_clock_split_proportions(
       desired_realized_fractions=desired,
       rates=rates,
    )
