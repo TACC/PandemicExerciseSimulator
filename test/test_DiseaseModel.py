@@ -232,3 +232,16 @@ def test_get_child_raises_on_unknown_model(tmp_path):
 
    with pytest.raises(Exception, match="not recognized"):
       model.get_child("not-a-real-model")
+
+
+def test_age_values_expands_scalar_to_age_groups():
+   assert DiseaseModel.age_values("0.5", 3) == [0.5, 0.5, 0.5]
+
+
+def test_age_values_accepts_age_specific_sequence():
+   assert DiseaseModel.age_values(["0.1", 0.2, "0.3"], 3) == [0.1, 0.2, 0.3]
+
+
+def test_age_values_rejects_wrong_length_sequence():
+   with pytest.raises(ValueError, match="Expected 3 age-specific values"):
+      DiseaseModel.age_values(["0.1", "0.2"], 3)
