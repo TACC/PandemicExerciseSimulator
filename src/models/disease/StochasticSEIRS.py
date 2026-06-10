@@ -137,7 +137,7 @@ class StochasticSEIRS(DiseaseModel):
                 'rel_inf_T_to_I',
                 1.0,
             )
-            self.rel_inf_T_to_I = self._age_values(
+            self.rel_inf_T_to_I = DiseaseModel.age_values(
                 raw_rel_inf_T_to_I,
                 num_age_grps,
             )
@@ -171,15 +171,6 @@ class StochasticSEIRS(DiseaseModel):
         logger.info(f'instantiated StochasticSEIRS object')
         logger.debug(f'{self.parameters}')
         return
-
-    @staticmethod
-    def _age_values(raw_value, num_age_grps: int) -> list[float]:
-        if isinstance(raw_value, (list, tuple, np.ndarray)):
-            values = [float(x) for x in raw_value]
-            if len(values) != num_age_grps:
-                raise ValueError(f"Expected {num_age_grps} age-specific values, got {len(values)}.")
-            return values
-        return [float(raw_value)] * num_age_grps
 
     def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int, vaccine_model:Type[Vaccination]):
         # this is a bulk transfer of people to move from S to E by group

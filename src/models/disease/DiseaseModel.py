@@ -133,6 +133,19 @@ class DiseaseModel:
         return beta
 
     @staticmethod
+    def age_values(raw_value, num_age_grps: int) -> list[float]:
+        """
+        Normalize a scalar or age-specific sequence into one float per age group.
+        """
+        if isinstance(raw_value, (list, tuple, np.ndarray)):
+            values = [float(x) for x in raw_value]
+            if len(values) != num_age_grps:
+                raise ValueError(f"Expected {num_age_grps} age-specific values, got {len(values)}.")
+            return values
+
+        return [float(raw_value)] * num_age_grps
+
+    @staticmethod
     def spectral_radius(K: np.ndarray) -> float:
         """
         R0 = spectral radius (rho) of K (dominant eigenvalue).

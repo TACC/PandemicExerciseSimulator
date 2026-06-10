@@ -3,7 +3,7 @@ import numpy as np
 import logging
 from typing import Type
 
-from baseclasses.Group import Group, RiskGroup, VaccineGroup
+from baseclasses.Group import Group, RiskGroup, VaccineGroup, Compartments
 from baseclasses.Node import Node
 from models.disease.DiseaseModel import DiseaseModel
 from models.treatments.Vaccination import Vaccination
@@ -150,6 +150,66 @@ def SEIHRD_model(y,
 
     return np.array([dS_dt, dE_dt, dIA_dt, dIP_dt, dIS_dt, dH_dt, dR_dt, dD_dt])
 
+
+def SEITHRD_model(y,
+                  transmission_rate, # S => E
+                  E_out_rate,        # E => IA & IP, goes in Poisson then split by prop
+                  prop_E_to_IA,      # fraction leaving E that are asymptomatic
+                  IP_to_IS_rate,     # IP => IS
+                  IS_to_H_rate,      # IS => H, rate * (1 - VE_hosp) * proportion hospitalized
+                  IS_to_R_rate,      # IS => R, rate * (1 - proportion hospitalized)
+                  H_to_D_rate,       # H => D,
+                  H_to_R_rate,       # H => R,
+                  IA_to_R_rate,      # IA => R,
+                  T_to_R_rate,       # T => R,
+                  rng):
+    """
+    SEIHRD model with a treated T compartment.
+
+    Antivirals move eligible compartments into T outside this disease step. The
+    disease model only progresses existing T to R.
+    """
+
+    S, E, IA, IP, IS, H, T, R, D = map(int, y)
+
+    lam_inf    = max(transmission_rate, 0.0) * S
+    lam_EIPIA  = max(E_out_rate, 0.0) * E
+    lam_IPIS   = max(IP_to_IS_rate, 0.0) * IP
+    rate_ISH = max(IS_to_H_rate, 0.0)
+    rate_ISR = max(IS_to_R_rate, 0.0)
+    rate_HD = max(H_to_D_rate, 0.0)
+    rate_HR = max(H_to_R_rate, 0.0)
+    lam_IAR = max(IA_to_R_rate, 0.0) * IA
+    lam_TR = max(T_to_R_rate, 0.0) * T
+
+    max_new_infections = min(rng.poisson(lam_inf), S)
+    total_e_out = min(rng.poisson(lam_EIPIA), E)
+    e_to_ia = np.floor(prop_E_to_IA * total_e_out)
+    e_to_ip = total_e_out - e_to_ia
+    ip_to_is = min(rng.poisson(lam_IPIS), IP)
+    ia_to_r = min(rng.poisson(lam_IAR), IA)
+    t_to_r = min(rng.poisson(lam_TR), T)
+
+    is_to_h = min(rng.poisson(rate_ISH * IS), IS)
+    remaining_IS = IS - is_to_h
+    is_to_r = min(rng.poisson(rate_ISR * remaining_IS), remaining_IS)
+
+    h_to_d = min(rng.poisson(rate_HD * H), H)
+    remaining_H = H - h_to_d
+    h_to_r = min(rng.poisson(rate_HR * remaining_H), remaining_H)
+
+    dS_dt  = -max_new_infections
+    dE_dt  = max_new_infections - e_to_ia - e_to_ip
+    dIA_dt = e_to_ia - ia_to_r
+    dIP_dt = e_to_ip - ip_to_is
+    dIS_dt = ip_to_is - is_to_h - is_to_r
+    dH_dt  = is_to_h - h_to_d - h_to_r
+    dT_dt  = -t_to_r
+    dR_dt  = is_to_r + h_to_r + ia_to_r + t_to_r
+    dD_dt  = h_to_d
+
+    return np.array([dS_dt, dE_dt, dIA_dt, dIP_dt, dIS_dt, dH_dt, dT_dt, dR_dt, dD_dt])
+
 class StochasticSEIHRD(DiseaseModel):
 
     def __init__(self, disease_model:Type[DiseaseModel]): # add antiviral_model
@@ -165,6 +225,30 @@ class StochasticSEIHRD(DiseaseModel):
         self.H_to_R_rates  = [1 / float(x) for x in self.parameters.disease_parameters['H_to_R_days']]
         self.IS_to_R_rate  = 1 / float(self.parameters.disease_parameters['IS_to_R_days'])
         self.IA_to_R_rate  = 1 / float(self.parameters.disease_parameters['IA_to_R_days'])
+        num_age_grps = self.parameters.number_of_age_groups
+        compartment_labels = [
+            str(label).upper()
+            for label in self.parameters.disease_parameters.get('compartments', [])
+        ]
+        self.has_treated_compartment = "T" in compartment_labels
+        if self.has_treated_compartment:
+            t_to_r_days = self.parameters.disease_parameters.get('T_to_R_days', None)
+            if t_to_r_days is None:
+                if self.parameters.antiviral_parameters:
+                    raise ValueError("T_to_R_days is required when antiviral treatment can create T.")
+                logger.warning(
+                    "T compartment specified without T_to_R_days; defaulting T_to_R_days to IS_to_R_days."
+                )
+                t_to_r_days = self.parameters.disease_parameters['IS_to_R_days']
+            self.T_to_R_rate = 1 / float(t_to_r_days)
+            self.rel_inf_T_to_IS = DiseaseModel.age_values(
+                self.parameters.disease_parameters.get('rel_inf_T_to_IS', 1.0),
+                num_age_grps,
+            )
+            if not self.parameters.antiviral_parameters:
+                logger.warning(
+                    "T compartment specified without an antiviral_model; no people will enter T unless antiviral stockpile is released."
+                )
 
         # Proportions of population for each split by age, & risk for hospitalization
         self.prop_E_to_IA   = [float(x) for x in self.parameters.disease_parameters['prop_E_to_IA']]
@@ -202,7 +286,6 @@ class StochasticSEIHRD(DiseaseModel):
         self.rel_inf_IA_to_IS = float(self.parameters.disease_parameters['rel_inf_IA_to_IS'])
 
         # Relative susceptibility required for travel model, make 1's if not specified
-        num_age_grps = self.parameters.number_of_age_groups
         self.relative_susceptibility = [
             float(x) for x in self.parameters.disease_parameters.get(
                 "relative_susceptibility", [1.0] * num_age_grps
@@ -241,7 +324,7 @@ class StochasticSEIHRD(DiseaseModel):
         # this isn't used in this file, but _calculate_beta_w_npi inherits from this init
         self.npis_schedule = disease_model.npis_schedule
 
-        logger.info(f'instantiated StochasticSEIRS object')
+        logger.info(f'instantiated StochasticSEIHRD object')
         logger.debug(f'{self.parameters}')
         return
 
@@ -310,12 +393,18 @@ class StochasticSEIHRD(DiseaseModel):
                 if contact_rate== 0:
                     continue
 
-                # contacted_group_compartments_today
-                S, E, IA, IP, IS, H, R, D = \
-                    compartments_today[(contacted_group.age, contacted_group.risk, contacted_group.vaccine)]
+                contacted_compartments = compartments_today[
+                    (contacted_group.age, contacted_group.risk, contacted_group.vaccine)
+                ]
+                IA = contacted_compartments[Compartments.IA.value]
+                IP = contacted_compartments[Compartments.IP.value]
+                IS = contacted_compartments[Compartments.IS.value]
                 infectious_contacted = self.rel_inf_IP_to_IS * IP + \
                                        self.rel_inf_IA_to_IS * IA + \
                                        IS # `IS` is base compartment so rel inf = 1
+                if self.has_treated_compartment:
+                    T = contacted_compartments[Compartments.T.value]
+                    infectious_contacted += self.rel_inf_T_to_IS[contacted_group.age] * T
 
                 # infectious_contacted/total_node_pop this captures the fraction of population we need to move from S -> E
                 # NOTE: Maybe an under-weighting if we should be doing age group specific: infectious_age/total_age_pop
@@ -340,8 +429,15 @@ class StochasticSEIHRD(DiseaseModel):
                 self.IA_to_R_rate      # IA => R,
             )
 
-            # Euler's Method solve of the system, can't do integer people
-            daily_change = SEIHRD_model(focal_group_compartments_today, *model_parameters, rng=self.rng)
+            if self.has_treated_compartment:
+                model_parameters = (
+                    *model_parameters,
+                    self.T_to_R_rate,
+                )
+                daily_change = SEITHRD_model(focal_group_compartments_today, *model_parameters, rng=self.rng)
+            else:
+                daily_change = SEIHRD_model(focal_group_compartments_today, *model_parameters, rng=self.rng)
+
             compartments_tomorrow = focal_group_compartments_today + daily_change
             node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
 
