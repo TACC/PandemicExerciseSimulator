@@ -53,11 +53,14 @@ class AntiviralStockpileStrategy(Antiviral):
             self.parameters.antiviral_parameters.get("antiviral_capacity_proportion", 1.0)
         )
 
-        self.antiviral_half_life_days = self.parameters.antiviral_parameters.get(
+        input_half_life = self.parameters.antiviral_parameters.get(
             "antiviral_half_life_days", None
         )
+        self.antiviral_half_life_days = (
+            float(input_half_life) if input_half_life is not None else None
+        )
         if self.antiviral_half_life_days is not None:
-            self.daily_antiviral_wastage = 0.5 ** (1 / float(self.antiviral_half_life_days))
+            self.daily_antiviral_wastage = 0.5 ** (1 / self.antiviral_half_life_days)
         else:
             self.daily_antiviral_wastage = None
 

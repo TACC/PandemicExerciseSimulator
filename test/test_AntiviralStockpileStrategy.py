@@ -114,6 +114,17 @@ def test_antiviral_stockpile_combines_negative_and_duplicate_days():
     assert strat.network_stockpile_by_day[2] == 10.0
 
 
+def test_antiviral_half_life_accepts_numeric_string():
+    net = make_network_with_t()
+    params = make_params([])
+    params.antiviral_parameters["antiviral_half_life_days"] = "60"
+
+    strategy = Antiviral(params).get_child("stockpile-age-risk", network=net)
+
+    assert strategy.antiviral_half_life_days == 60.0
+    assert strategy.daily_antiviral_wastage == pytest.approx(0.5 ** (1 / 60.0))
+
+
 def test_antivirals_roll_over_when_no_eligible_people():
     net = make_network_with_t()
     node = net.nodes[0]

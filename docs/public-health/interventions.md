@@ -53,7 +53,7 @@ hospitalization-risk group, adherence, and daily capacity.
     "vaccine_effectiveness_hosp": ["0.80", "0.80", "0.80", "0.80", "0.80"],
     "vaccine_capacity_proportion": "0.10",
     "vaccine_eff_lag_days": "14",
-    "vaccine_half_life_days": 60,
+    "vaccine_half_life_days": "60",
     "vaccine_stockpile": [
       {"day": "0", "amount": "1000"},
       {"day": "30", "amount": "500"}

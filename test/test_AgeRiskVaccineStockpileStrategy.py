@@ -241,3 +241,23 @@ def test_half_life_applies_only_after_day0_and_subinteger_loss():
     total_vax = node.compartments.get_compartment_vector_for(GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.V.value))
     assert float(sum(total_vax)) == 0.0
     assert 2 not in strat.node_stockpile_by_day[0]
+
+
+def test_half_life_accepts_numeric_string():
+    net = make_network_with_population()
+    params = SimpleNamespace(
+        number_of_age_groups=1,
+        vaccine_model="stockpile-age-risk",
+        vaccine_parameters={
+            "vaccine_half_life_days": "60",
+            "vaccine_adherence": ["1"],
+            "vaccine_effectiveness": ["1"],
+            "vaccine_eff_lag_days": "0",
+            "vaccine_stockpile": [],
+        },
+    )
+
+    strategy = Vaccination(parameters=params).get_child(params.vaccine_model, network=net)
+
+    assert strategy.vaccine_half_life_days == 60.0
+    assert strategy.daily_vaccine_wastage == pytest.approx(0.5 ** (1 / 60.0))

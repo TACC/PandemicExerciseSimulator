@@ -31,9 +31,10 @@ class AgeRiskVaccineStockpileStrategy(Vaccination):
             )
         ]
         # Vaccine half life in days, typically 60
-        self.vaccine_half_life_days = self.parameters.vaccine_parameters.get('vaccine_half_life_days', None)
+        input_half_life = self.parameters.vaccine_parameters.get('vaccine_half_life_days', None)
+        self.vaccine_half_life_days = float(input_half_life) if input_half_life is not None else None
         if self.vaccine_half_life_days is not None:
-            self.daily_vaccine_wastage  = 0.5 ** (1 / self.vaccine_half_life_days)
+            self.daily_vaccine_wastage = 0.5 ** (1 / self.vaccine_half_life_days)
         else:
             self.daily_vaccine_wastage = None
         # 0.0 to 1.0 fraction of the population that can be vaccinated per day, default no limit
@@ -308,4 +309,3 @@ class AgeRiskVaccineStockpileStrategy(Vaccination):
         # Return any remaining vaccines (if none could be used)
         final_given = sum(g["alloc"] for g in group_allocs); ic(final_given)
         return int(available_vaccines - final_given)
-
