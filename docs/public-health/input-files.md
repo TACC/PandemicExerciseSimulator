@@ -4,6 +4,8 @@ Each simulation is controlled by one JSON file. The main sections are:
 
 | Section | Purpose |
 | --- | --- |
+| `output_dir_path` | Output directory, or `"GENERATE"` for a state-and-scenario-hash directory. |
+| `batch_num` | Run identifier, or `"GENERATE"` for a new UUIDv7. |
 | `data` | Paths to population, contact, mobility, and risk-ratio files. |
 | `disease_model` | Disease model identity and model parameters. |
 | `travel_model` | Travel model identity and travel parameters. |
@@ -11,6 +13,41 @@ Each simulation is controlled by one JSON file. The main sections are:
 | `non_pharma_interventions` | Optional transmission reductions by day, place, and age. |
 | `antiviral_model` | Optional antiviral stockpile strategy. |
 | `vaccine_model` | Optional vaccine stockpile strategy. |
+
+## Generated Names
+
+The recommended settings are:
+
+```json
+"output_dir_path": "GENERATE",
+"batch_num": "GENERATE"
+```
+
+`output_dir_path: "GENERATE"` names the directory
+`<STATE>_<SCENARIO_HASH>`, for example:
+
+```text
+Texas_6a8d...f03c/
+```
+
+The state or region label comes from the population-data path. The hash
+identifies the canonical scenario, so equivalent configurations receive the
+same hash even when numeric values were written as `1` versus `1.0`.
+
+`batch_num: "GENERATE"` assigns a new UUIDv7 to the execution. A scenario may
+therefore contain several independently identifiable batches:
+
+```text
+Texas_<scenario-hash>/
+├── input_batch-<batch-uuid>.json
+├── metadata_batch-<batch-uuid>.json
+├── network_batch-<batch-uuid>.csv
+├── node_<fips>_batch-<batch-uuid>.csv
+└── simulation_times_batch-<batch-uuid>.csv
+```
+
+The generated batch UUID is separate from the scenario hash. It lets repeated
+or split executions of one scenario coexist and be tracked independently.
 
 ## Required Data Files
 

@@ -41,7 +41,7 @@ modeling/antivirals
 
 developer/architecture
 developer/templates
+developer/scripts
 developer/testing
 developer/readthedocs
 ```
-
