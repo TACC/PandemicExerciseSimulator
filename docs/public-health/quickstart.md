@@ -3,8 +3,8 @@
 ## Install With Poetry
 
 ```bash
-git clone https://github.com/TACC/PandemicExerciseSimulatorTACC.git
-cd PandemicExerciseSimulatorTACC
+git clone https://github.com/TACC/PandemicExerciseSimulator.git
+cd PandemicExerciseSimulator
 poetry install --no-root
 ```
 

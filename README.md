@@ -9,7 +9,7 @@ Depends on [Poetry](https://python-poetry.org/docs/#installation) for native ins
 After installing Poetry, do:
 
 ```
-$ git clone https://github.com/TACC/PandemicExerciseSimulator
+$ git clone https://github.com/TACC/PandemicExerciseSimulator.git
 $ cd PandemicExerciseSimulator/
 $ poetry install --no-root
 ```
