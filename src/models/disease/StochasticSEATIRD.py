@@ -131,6 +131,12 @@ class StochasticSEATIRD(DiseaseModel):
         return
 
 
+    def set_initial_conditions(self, initial:list, network, vaccine_model:Type[Vaccination]):
+        for node in network.nodes:
+            node.requires_antiviral_event_reconciliation = True
+        return super().set_initial_conditions(initial, network, vaccine_model)
+
+
     def simulate(self, node:Type[Node], time:int, vaccine_model:Type[Vaccination]):
         """
         Main simulation logic for stochastic SEATIRD model
@@ -143,6 +149,7 @@ class StochasticSEATIRD(DiseaseModel):
 
         self.now = time
         t_max = self.now + 1
+        self._reconcile_antiviral_transitions(node)
         #group_cache = np.zeros((self.parameters.number_of_age_groups, len(RiskGroup), len(VaccineGroup)))
         #self._demographic_sizes(node, group_cache)
         group_cache = node.group_cache
@@ -212,8 +219,47 @@ class StochasticSEATIRD(DiseaseModel):
         Given a node, a group, and two compartments (old and new), use the methods in the 
         PopulationCompartments class to move one individual
         """
+        current = node.compartments.compartment_data[group.age][group.risk][group.vaccine][old_compartment]
+        if current <= 0:
+            raise RuntimeError(
+                f"Cannot move a person from empty compartment {old_compartment} for {group}."
+            )
+
         node.compartments.decrement(group, old_compartment)
         node.compartments.increment(group, new_compartment)
+        return
+
+
+    def _reconcile_antiviral_transitions(self, node:Type[Node]):
+        """
+        Replace pre-treatment queued trajectories with new trajectories from T.
+
+        The antiviral stockpile moves aggregate compartment counts before this
+        disease step. SEATIRD is event-driven, so each moved person also needs
+        their old source event invalidated and a new T exit scheduled.
+        """
+        pending = node.pending_antiviral_transitions
+        if not pending:
+            return
+
+        for treatment in pending:
+            group = treatment["group"]
+            source = treatment["source_compartment"]
+            amount = int(treatment["amount"])
+
+            node.unqueued_event_counter[group.age][group.risk][group.vaccine][source] += amount
+
+            for _ in range(amount):
+                schedule = Schedule(self, self.now, group)
+                schedule.update(
+                    self,
+                    self.now,
+                    group,
+                    Compartments.T.value,
+                )
+                self._initialize_treatable_transitions(node, group, schedule)
+
+        pending.clear()
         return
 
 
@@ -330,16 +376,24 @@ class StochasticSEATIRD(DiseaseModel):
         this_type = this_event.event_type
 
         if this_type == 'EtoA':
-            self._transition(node, Compartments.E.value, Compartments.A.value, this_event.origin)
+            if self._keep_event(node, Compartments.E.value, this_event, initial_compartments):
+                self._transition(node, Compartments.E.value, Compartments.A.value, this_event.origin)
+            else:
+                self._unqueue_event(node, Compartments.A.value, this_event.origin)
 
         elif this_type == 'AtoT':
-            self._transition(node, Compartments.A.value, Compartments.T.value, this_event.origin)
+            if self._keep_event(node, Compartments.A.value, this_event, initial_compartments):
+                self._transition(node, Compartments.A.value, Compartments.T.value, this_event.origin)
+            else:
+                self._unqueue_event(node, Compartments.T.value, this_event.origin)
 
         elif this_type == 'AtoR':
-            self._transition(node, Compartments.A.value, Compartments.R.value, this_event.origin)
+            if self._keep_event(node, Compartments.A.value, this_event, initial_compartments):
+                self._transition(node, Compartments.A.value, Compartments.R.value, this_event.origin)
 
         elif this_type == 'AtoD':
-            self._transition(node, Compartments.A.value, Compartments.D.value, this_event.origin)
+            if self._keep_event(node, Compartments.A.value, this_event, initial_compartments):
+                self._transition(node, Compartments.A.value, Compartments.D.value, this_event.origin)
 
         elif this_type == 'TtoI':
             if self._keep_event(node, Compartments.T.value, this_event, initial_compartments):
@@ -390,10 +444,19 @@ class StochasticSEATIRD(DiseaseModel):
         logging.debug(f'group = {group}')
         unqueued_event_count = node.unqueued_event_counter[group.age][group.risk][group.vaccine][compartment]
 
+        initial_count = initial_compartments.compartment_data[group.age][group.risk][group.vaccine][compartment]
         if (compartment == Compartments.T.value and event.init_time == self.now):
             return True
-        elif (unqueued_event_count == 0 or rand_mt() > unqueued_event_count / (unqueued_event_count \
-                             + initial_compartments[group.age][group.risk][group.vaccine][compartment])):
+        if unqueued_event_count == 0:
+            return True
+        if compartment == Compartments.T.value:
+            node.unqueued_event_counter[group.age][group.risk][group.vaccine][compartment] -= 1
+            return False
+
+        if (
+            initial_count > 0
+            and rand_mt() > unqueued_event_count / (unqueued_event_count + initial_count)
+        ):
             initial_compartments.compartment_data[group.age][group.risk][group.vaccine][compartment] -= 1
             return True
         else:

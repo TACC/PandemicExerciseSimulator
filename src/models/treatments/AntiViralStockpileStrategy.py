@@ -241,6 +241,12 @@ class AntiviralStockpileStrategy(Antiviral):
                 continue
             vector[compartment_idx] -= moving
             vector[Compartments.T.value] += moving
+            if node.requires_antiviral_event_reconciliation:
+                node.pending_antiviral_transitions.append({
+                    "group": group,
+                    "source_compartment": compartment_idx,
+                    "amount": moving,
+                })
             remaining -= moving
 
     def _roll_network_stockpile(self, day: int, amount: float):
