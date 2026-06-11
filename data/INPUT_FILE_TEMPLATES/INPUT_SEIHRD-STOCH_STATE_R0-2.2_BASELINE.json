@@ -2,6 +2,12 @@
   "output_dir_path": "GENERATE",
   "realization_range": ["0", "99"],
   "batch_num": "GENERATE",
+  "metadata_tags": {
+    "creator": "YOUR_NAME",
+    "disease": ["DISEASE"],
+    "sim_day_0": null,
+    "notes": ["PLACEHOLDER"]
+  },
   "data": {
     "population": "../data/STATE/county_pop_by_age_STATE_2019-2023ACS.csv",
     "contact": "../data/STATE/contact_matrix_STATE_Mistry2021_all.csv",
