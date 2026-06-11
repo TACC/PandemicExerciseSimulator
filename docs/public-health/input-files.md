@@ -9,10 +9,10 @@ Each simulation is controlled by one JSON file. The main sections are:
 | `data` | Paths to population, contact, mobility, and risk-ratio files. |
 | `disease_model` | Disease model identity and model parameters. |
 | `travel_model` | Travel model identity and travel parameters. |
-| `initial_infected` | Seed infections by county and age group. |
+| `initial_infected` | Seed initial exposures to become infectious by county and age group. |
 | `non_pharma_interventions` | Optional transmission reductions by day, place, and age. |
-| `antiviral_model` | Optional antiviral stockpile strategy. |
-| `vaccine_model` | Optional vaccine stockpile strategy. |
+| `antiviral_model` | Optional daily antiviral stockpile release strategy. |
+| `vaccine_model` | Optional daily vaccine stockpile release strategy. |
 
 ## Generated Names
 
@@ -54,10 +54,10 @@ or split executions of one scenario coexist and be tracked independently.
 The data directory for a state or region should contain:
 
 - `INPUT_*.json`: simulation properties file.
-- `contact_matrix_*_Mistry2021_all.csv`: age-by-age daily contacts.
+- `contact_matrix_*_Mistry2021_all.csv`: age-by-age daily contacts from all settings ("home", "work", "school", "community").
 - `county_pop_by_age_*.csv`: county population by age group.
 - `*_high-risk-ratios-*.csv`: age-specific high-risk proportions.
-- `*_mobility-matrix.csv`: county-by-county mobility matrix.
+- `*_mobility-matrix.csv`: county-by-county mobility matrix, examples based on pre-pandemic 2019 quarterly SafeGraph proportion population traveling.
 
 The order of age groups must match between the population file, contact matrix,
 vaccine parameters, antiviral parameters, and any age-specific disease
@@ -65,7 +65,7 @@ parameters.
 
 ## Initial Infections
 
-Initial infections are placed into the low-risk unvaccinated exposed
+Initial infections are placed into the low-risk of hospitalization unvaccinated exposed
 compartment for the requested age group.
 
 ```json

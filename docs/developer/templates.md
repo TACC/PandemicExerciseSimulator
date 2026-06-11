@@ -15,6 +15,8 @@ When adding a new model template:
 5. Prefer strings for numeric values if matching existing templates.
 6. Use `"GENERATE"` for `output_dir_path` and `batch_num` unless a workflow
    requires fixed values.
+7. Include editable `metadata_tags` examples for `creator`, `disease`,
+   `sim_day_0`, and `notes`.
 
 ## Generated Output Names
 
