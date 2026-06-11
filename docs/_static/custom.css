@@ -1,0 +1,24 @@
+/* Keep reference tables readable without horizontal scrolling. */
+.rst-content .wy-table-responsive {
+  overflow-x: visible;
+}
+
+.rst-content .wy-table-responsive table.docutils {
+  display: table;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.rst-content table.docutils th,
+.rst-content table.docutils td {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  vertical-align: top;
+}
+
+.rst-content table.docutils th:first-child,
+.rst-content table.docutils td:first-child {
+  width: 24%;
+}
