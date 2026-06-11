@@ -26,6 +26,8 @@ class AntiviralStockpileStrategy(Antiviral):
         ]
         if len(self.age_risk_priority_groups) != num_age_grps:
             raise ValueError(f"age_risk_priority_groups must have length {num_age_grps}")
+        if any(priority not in (0.0, 0.5, 1.0) for priority in self.age_risk_priority_groups):
+            raise ValueError("age_risk_priority_groups values must be 0, 0.5, or 1")
 
         self.eligible_compartments = [
             str(label).strip().upper()
@@ -203,8 +205,6 @@ class AntiviralStockpileStrategy(Antiviral):
                 risks = [RiskGroup.H.value]
             elif priority == 1:
                 risks = [RiskGroup.L.value, RiskGroup.H.value]
-            else:
-                raise ValueError("age_risk_priority_groups values must be 0, 0.5, or 1")
 
             for risk in risks:
                 for vaccine in (VaccineGroup.U.value, VaccineGroup.V.value):
