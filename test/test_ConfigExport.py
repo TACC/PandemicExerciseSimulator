@@ -47,6 +47,16 @@ def test_canonicalize_for_hash_list():
    assert out == [1.0, 2.0, True, {"a": 3.0}]
 
 
+def test_age_risk_priority_numeric_forms_hash_the_same():
+   string_runtime_state = {"age_risk_priority_groups": [float(x) for x in ["0", "0.5", "1"]]}
+   numeric_runtime_state = {"age_risk_priority_groups": [0, 0.5, 1.0]}
+
+   string_hash = generate_scenario_hash(canonicalize_for_hash(string_runtime_state))
+   numeric_hash = generate_scenario_hash(canonicalize_for_hash(numeric_runtime_state))
+
+   assert string_hash == numeric_hash
+
+
 def test_generate_scenario_hash_stable():
    payload = {"a": 1.0, "b": 2.0}
    assert generate_scenario_hash(canonicalize_for_hash(payload)) == generate_scenario_hash(canonicalize_for_hash({"b": 2, "a": 1}))

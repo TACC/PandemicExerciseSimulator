@@ -204,6 +204,44 @@ def test_antiviral_age_risk_priority_can_limit_to_high_risk():
     assert node.compartments.get_compartment_vector_for(high)[Compartments.T.value] == 10.0
 
 
+@pytest.mark.parametrize("invalid_priority", ["0.25", -1, 2])
+def test_antiviral_rejects_invalid_age_risk_priority(invalid_priority):
+    net = make_network_with_t()
+    params = make_params([])
+    params.antiviral_parameters["age_risk_priority_groups"] = [invalid_priority]
+
+    with pytest.raises(
+        ValueError,
+        match="age_risk_priority_groups values must be 0, 0.5, or 1",
+    ):
+        Antiviral(params).get_child("stockpile-age-risk", network=net)
+
+
+@pytest.mark.parametrize(
+    ("configured_priority", "normalized_priority"),
+    [
+        ("0", 0.0),
+        (0, 0.0),
+        ("0.5", 0.5),
+        (0.5, 0.5),
+        ("1", 1.0),
+        (1, 1.0),
+    ],
+)
+def test_antiviral_normalizes_age_risk_priority_to_float(
+    configured_priority,
+    normalized_priority,
+):
+    net = make_network_with_t()
+    params = make_params([])
+    params.antiviral_parameters["age_risk_priority_groups"] = [configured_priority]
+
+    strategy = Antiviral(params).get_child("stockpile-age-risk", network=net)
+
+    assert strategy.age_risk_priority_groups == [normalized_priority]
+    assert isinstance(strategy.age_risk_priority_groups[0], float)
+
+
 def test_antiviral_can_treat_seihrd_eligible_compartments():
     net = Network(["S", "E", "IA", "IP", "IS", "H", "T", "R", "D"])
     node = Node(0, 0, 0, PopulationCompartments([100], [0.0]))
