@@ -11,7 +11,7 @@ sys.modules["baseclasses.Group"] = GroupModule
 
 import src.models.disease.StochasticSEATIRD as StochasticSEATIRDModule
 from src.baseclasses.Event import EventType
-from src.baseclasses.Group import Compartments, RiskGroup, VaccineGroup
+from src.baseclasses.Group import Compartments, Group, RiskGroup, VaccineGroup
 from src.baseclasses.Network import Network
 from src.baseclasses.Node import Node
 from src.baseclasses.PopulationCompartments import PopulationCompartments
@@ -278,3 +278,300 @@ def test_no_antiviral_release_leaves_queue_and_t_unchanged():
     assert node.pending_antiviral_transitions == []
     assert node.events == []
     assert_population_invariants(node, 10)
+
+
+def test_schedule_draws_complete_competing_event_times(monkeypatch):
+    model, _, _, group = make_model()
+    draws = iter([2.0, 3.0, 20.0, 8.0, 30.0, 9.0])
+    monkeypatch.setattr(
+        StochasticSEATIRDModule,
+        "rand_exp_min1",
+        lambda rate: next(draws),
+    )
+
+    schedule = StochasticSEATIRDModule.Schedule(model, now=1.0, group=group)
+
+    assert schedule.Ta() == 3.0
+    assert schedule.Tt() == 6.0
+    assert schedule.Ti() == 6.5
+    assert schedule.Td_a() == 23.0
+    assert schedule.Td_ti() == 14.0
+    assert schedule.Tr_a() == 33.0
+    assert schedule.Tr_ti() == 15.0
+    assert schedule.exit_asymptomatic_time == float("inf")
+    assert schedule.Trd_ati() == 14.0
+
+
+@pytest.mark.parametrize("compartment", [1, 2, 3, 4])
+def test_schedule_update_accepts_each_infected_compartment(monkeypatch, compartment):
+    model, _, _, group = make_model()
+    monkeypatch.setattr(StochasticSEATIRDModule, "rand_exp_min1", lambda rate: 2.0)
+    schedule = StochasticSEATIRDModule.Schedule(model, now=0.0, group=group)
+
+    schedule.update(model, now=10.0, group=group, compartment_num=compartment)
+
+    assert schedule.Ta() >= 10.0
+    assert schedule.Tt() >= schedule.Ta()
+    assert schedule.Ti() >= schedule.Tt()
+    assert schedule.Trd_ati() == min(
+        schedule.exit_asymptomatic_time,
+        schedule.exit_infectious_time,
+    )
+
+
+@pytest.mark.parametrize("compartment", [0, 5])
+def test_schedule_update_rejects_noninfected_compartments(compartment):
+    model, _, _, group = make_model()
+    schedule = StochasticSEATIRDModule.Schedule(model, now=0.0, group=group)
+
+    with pytest.raises(AssertionError):
+        schedule.update(model, now=0.0, group=group, compartment_num=compartment)
+
+
+class FixedSchedule:
+    def __init__(self, *, ta=1.0, tt=2.0, ti=3.0, td_a=4.0, td_ti=5.0,
+                 tr_a=6.0, tr_ti=7.0, trd=8.0):
+        self.values = {
+            "Ta": ta,
+            "Tt": tt,
+            "Ti": ti,
+            "Td_a": td_a,
+            "Td_ti": td_ti,
+            "Tr_a": tr_a,
+            "Tr_ti": tr_ti,
+            "Trd_ati": trd,
+        }
+
+    def __getattr__(self, name):
+        if name in self.values:
+            return lambda: self.values[name]
+        raise AttributeError(name)
+
+
+@pytest.mark.parametrize(
+    ("schedule", "expected_type", "calls_treatable"),
+    [
+        (FixedSchedule(tt=2, td_a=4, tr_a=6), EventType.AtoT.name, True),
+        (FixedSchedule(tt=8, td_a=6, tr_a=4), EventType.AtoR.name, False),
+        (FixedSchedule(tt=8, td_a=4, tr_a=6), EventType.AtoD.name, False),
+    ],
+)
+def test_asymptomatic_exit_selection(
+    monkeypatch,
+    schedule,
+    expected_type,
+    calls_treatable,
+):
+    model, _, node, group = make_model()
+    downstream = []
+    monkeypatch.setattr(
+        model,
+        "_initialize_treatable_transitions",
+        lambda *args: downstream.append(True),
+    )
+
+    model._initialize_asymptomatic_transitions(node, group, schedule)
+
+    assert [event.event_type for event in node.events] == [expected_type]
+    assert bool(downstream) is calls_treatable
+
+
+@pytest.mark.parametrize(
+    ("schedule", "expected_type", "calls_infectious"),
+    [
+        (FixedSchedule(ti=3, td_ti=5, tr_ti=7), EventType.TtoI.name, True),
+        (FixedSchedule(ti=8, td_ti=7, tr_ti=5), EventType.TtoR.name, False),
+        (FixedSchedule(ti=8, td_ti=5, tr_ti=7), EventType.TtoD.name, False),
+    ],
+)
+def test_treatable_exit_selection(
+    monkeypatch,
+    schedule,
+    expected_type,
+    calls_infectious,
+):
+    model, _, node, group = make_model()
+    downstream = []
+    monkeypatch.setattr(
+        model,
+        "_initialize_infectious_transitions",
+        lambda *args: downstream.append(True),
+    )
+
+    model._initialize_treatable_transitions(node, group, schedule)
+
+    assert [event.event_type for event in node.events] == [expected_type]
+    assert bool(downstream) is calls_infectious
+
+
+@pytest.mark.parametrize(
+    ("schedule", "expected_type"),
+    [
+        (FixedSchedule(td_ti=7, tr_ti=5), EventType.ItoR.name),
+        (FixedSchedule(td_ti=5, tr_ti=7), EventType.ItoD.name),
+    ],
+)
+def test_infectious_exit_selection(schedule, expected_type):
+    model, _, node, group = make_model()
+
+    model._initialize_infectious_transitions(node, group, schedule)
+
+    assert [event.event_type for event in node.events] == [expected_type]
+
+
+def test_contact_initialization_skips_empty_groups_and_uses_vaccine_effectiveness(
+    monkeypatch,
+):
+    model, _, node, group = make_model()
+    model._calculate_beta_w_npi = lambda node_index, node_id: [1.0]
+    node.group_cache[:] = 0.0
+    node.group_cache[0, RiskGroup.L.value, VaccineGroup.U.value] = 1.0
+    draws = iter([0.2, 0.2, 10.0])
+    monkeypatch.setattr(
+        StochasticSEATIRDModule,
+        "rand_exp_min1",
+        lambda rate: next(draws),
+    )
+
+    model._initialize_contact_events(
+        node,
+        group,
+        FixedSchedule(ta=1.0, trd=1.5),
+        node.group_cache,
+        DummyVax(),
+    )
+
+    assert sorted(event.time for event in node.events) == pytest.approx([1.2, 1.4])
+    assert all(event.event_type.name == "CONTACT" for event in node.events)
+
+    node.events.clear()
+    node.group_cache[:] = 0.0
+    node.group_cache[0, RiskGroup.L.value, VaccineGroup.V.value] = 1.0
+    model._initialize_contact_events(
+        node,
+        group,
+        FixedSchedule(ta=1.0, trd=2.0),
+        node.group_cache,
+        SimpleNamespace(vaccine_effectiveness=[1.0]),
+    )
+    assert node.events == []
+
+
+@pytest.mark.parametrize(
+    ("event_type", "source_label", "destination_label"),
+    [
+        (EventType.AtoT.name, "A", "T"),
+        (EventType.AtoR.name, "A", "R"),
+        (EventType.AtoD.name, "A", "D"),
+        (EventType.TtoI.name, "T", "I"),
+        (EventType.TtoR.name, "T", "R"),
+        (EventType.TtoD.name, "T", "D"),
+        (EventType.ItoR.name, "I", "R"),
+        (EventType.ItoD.name, "I", "D"),
+    ],
+)
+def test_each_progression_event_moves_exactly_one_person(
+    event_type,
+    source_label,
+    destination_label,
+):
+    model, _, node, group = make_model(pop=1)
+    source = getattr(Compartments, source_label).value
+    destination = getattr(Compartments, destination_label).value
+    values = np.zeros(len(Compartments))
+    values[source] = 1.0
+    node.compartments.set_compartment_vector_for(group, values)
+    node.add_transition_event(0.0, 0.25, event_type, group)
+    initial = deepcopy(node.compartments)
+
+    model._next_event(node, node.group_cache, initial, DummyVax())
+
+    result = compartment_vector(node, group)
+    assert result[source] == 0
+    assert result[destination] == 1
+    assert_population_invariants(node, 1)
+
+
+def test_stale_exposed_event_unqueues_downstream_asymptomatic_event():
+    model, _, node, group = make_model(pop=1)
+    node.compartments.set_compartment_vector_for(
+        group,
+        np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
+    )
+    node.unqueued_event_counter[
+        group.age, group.risk, group.vaccine, Compartments.E.value
+    ] = 1
+    node.add_transition_event(0.0, 0.25, EventType.EtoA.name, group)
+
+    model._next_event(node, node.group_cache, deepcopy(node.compartments), DummyVax())
+
+    assert node.unqueued_event_counter[
+        group.age, group.risk, group.vaccine, Compartments.A.value
+    ] == 1
+    assert_population_invariants(node, 1)
+
+
+def test_contact_event_can_expose_target_without_changing_population(monkeypatch):
+    model, _, node, group = make_model(pop=5)
+    node.add_contact_event(0.0, 0.25, EventType.CONTACT, group, group)
+    initial = deepcopy(node.compartments)
+    transmitted = []
+    monkeypatch.setattr(model, "_keep_contact", lambda *args: True)
+    monkeypatch.setattr(StochasticSEATIRDModule, "rand_int", lambda low, high: 1)
+    monkeypatch.setattr(model, "_is_susceptible", lambda *args: True)
+    monkeypatch.setattr(
+        model,
+        "_transmit_disease",
+        lambda *args: transmitted.append(args[1]),
+    )
+
+    model._next_event(node, node.group_cache, initial, DummyVax())
+
+    assert transmitted == [group]
+    assert_population_invariants(node, 5)
+
+
+def test_keep_event_can_retain_one_original_queued_person(monkeypatch):
+    model, _, node, group = make_model(pop=1)
+    node.compartments.set_compartment_vector_for(
+        group,
+        np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
+    )
+    initial = deepcopy(node.compartments)
+    node.unqueued_event_counter[
+        group.age, group.risk, group.vaccine, Compartments.A.value
+    ] = 1
+    event = SimpleNamespace(origin=group, init_time=-1.0)
+    monkeypatch.setattr(StochasticSEATIRDModule, "rand_mt", lambda: 0.75)
+
+    assert model._keep_event(node, Compartments.A.value, event, initial)
+    assert initial.compartment_data[
+        group.age, group.risk, group.vaccine, Compartments.A.value
+    ] == 0
+
+
+def test_keep_contact_updates_counters_for_kept_and_discarded_contacts(monkeypatch):
+    model, _, node, group = make_model()
+    index = (group.age, group.risk, group.vaccine)
+
+    node.contact_counter[index] = 2
+    node.unqueued_contact_counter[index] = 1
+    monkeypatch.setattr(StochasticSEATIRDModule, "rand_mt", lambda: 0.75)
+    assert model._keep_contact(node, group)
+    assert node.contact_counter[index] == 1
+    assert node.unqueued_contact_counter[index] == 1
+
+    node.contact_counter[index] = 2
+    node.unqueued_contact_counter[index] = 1
+    monkeypatch.setattr(StochasticSEATIRDModule, "rand_mt", lambda: 0.25)
+    assert not model._keep_contact(node, group)
+    assert node.contact_counter[index] == 1
+    assert node.unqueued_contact_counter[index] == 0
+
+
+def test_susceptibility_check_and_reinitialize_placeholder():
+    model, _, node, group = make_model(pop=2)
+
+    assert model._is_susceptible(node, group, 1)
+    assert not model._is_susceptible(node, group, 2)
+    assert model.reinitialize_events(node) is None
