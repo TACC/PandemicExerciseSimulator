@@ -57,7 +57,7 @@ $\rho_T =$ `rel_inf_T_to_IS`.
 The systems below show the mean compartment flows without age, risk, vaccine,
 or node subscripts. Each equation applies separately to those groups, while
 $\lambda$ includes the infectious pressure summed across the interacting
-groups. Define the uncapped mean-field incidence as:
+groups. We'll let the uncapped mean-field incidence be:
 
 ```{math}
 F = \lambda S.
@@ -65,9 +65,7 @@ F = \lambda S.
 
 The simulator advances these systems in one-day steps rather than using a
 continuous ODE solver. Deterministic models use capped mean flows; stochastic
-daily models replace eligible flows with capped Poisson draws. Therefore, the
-equations are the clean expected-flow representation of the implemented
-compartment pathways.
+daily models replace eligible flows with capped Poisson draws.
 
 ### SEIR And SEIRS
 
@@ -87,16 +85,24 @@ $\omega$ the `R -> S` rate. For SEIR, set $\omega=0$.
 
 ### SEITRS
 
-Let $\tau_T = 1/\text{T\_to\_R\_days}$. Antiviral allocation first makes the
-discrete daily transfer:
+Let $d_T$ denote the configured duration `T_to_R_days`, so
+$\tau_T = 1/d_T$. At the start of a simulation day, the antiviral stockpile
+model may move eligible people into `T`. Let $E_{\mathrm{before}}$,
+$I_{\mathrm{before}}$, and $T_{\mathrm{before}}$ be the compartment counts
+immediately before allocation. If $u_E$ exposed people and $u_I$ infectious
+people receive treatment, the counts immediately after allocation are:
 
 ```{math}
-(E,I,T)^+ =
-(E-u_E,\ I-u_I,\ T+u_E+u_I),
+\begin{aligned}
+E_{\mathrm{after}} &= E_{\mathrm{before}} - u_E, \\
+I_{\mathrm{after}} &= I_{\mathrm{before}} - u_I, \\
+T_{\mathrm{after}} &= T_{\mathrm{before}} + u_E + u_I.
+\end{aligned}
 ```
 
 where $u_E$ and $u_I$ are allocated dose counts, not continuous disease rates.
-The disease step then follows:
+“After” means after antiviral allocation on the same simulation day, not the
+next day. The disease-progression step then uses these updated counts:
 
 :::{container} ode-system
 ```{math}
@@ -143,18 +149,25 @@ resolves competing exits from the remaining source population.
 ### SEITHRD
 
 SEITHRD uses the SEIHRD progression rates above and adds treated recovery.
-Before disease progression, antiviral allocation may transfer people from
-`E`, `IA`, `IP`, and `IS`:
+At the start of a simulation day, antiviral allocation may transfer people
+from `E`, `IA`, `IP`, and `IS` into `T`. For each compartment, “before” means
+immediately before that day's allocation and “after” means immediately after
+allocation, before disease progression:
 
 ```{math}
 \begin{aligned}
-(E,IA,IP,IS,T)^+ = (&E-u_E,\ IA-u_{IA},\ IP-u_{IP},\\
-                    &IS-u_{IS},\ T+u_E+u_{IA}+u_{IP}+u_{IS}).
+E_{\mathrm{after}}  &= E_{\mathrm{before}} - u_E, \\
+IA_{\mathrm{after}} &= IA_{\mathrm{before}} - u_{IA}, \\
+IP_{\mathrm{after}} &= IP_{\mathrm{before}} - u_{IP}, \\
+IS_{\mathrm{after}} &= IS_{\mathrm{before}} - u_{IS}, \\
+T_{\mathrm{after}}  &= T_{\mathrm{before}}
+                        + u_E + u_{IA} + u_{IP} + u_{IS}.
 \end{aligned}
 ```
 
 The $u$ values are whole-person daily allocations from the stockpile model.
-They are not rates in the ODE system.
+They are not rates in the ODE system, and these equations do not describe a
+change from one day to the next.
 
 :::{container} ode-system
 ```{math}
@@ -271,10 +284,11 @@ After antiviral allocation, the SEITRS disease step includes:
 \Delta_{T \to R} =
 \min(\operatorname{Pois}(\tau_T T), T),
 \quad
-\tau_T = \frac{1}{\text{T_to_R_days}}
+\tau_T = \frac{1}{d_T}
 ```
 
-for stochastic SEITRS. Deterministic SEITRS uses
+where $d_T$ is `T_to_R_days`. For stochastic SEITRS, the transition is drawn
+from the Poisson distribution above. Deterministic SEITRS uses
 $\Delta_{T \to R} = \min(\tau_T T, T)$.
 
 ## SEITHRD Daily Transitions
@@ -315,10 +329,10 @@ then moves treated people out of `T`:
 \Delta_{T \to R} =
 \min(\operatorname{Pois}(\tau_T T), T),
 \quad
-\tau_T = \frac{1}{\text{T_to_R_days}}.
+\tau_T = \frac{1}{d_T}.
 ```
 
-No stockpile release means no new `T` entries.
+Here $d_T$ is `T_to_R_days`. No stockpile release means no new `T` entries.
 
 ## Gillespie SEATIRD Events
 
@@ -347,14 +361,18 @@ I \xrightarrow{\text{dose}} T.
 
 For each stockpile-allocated dose, the old source trajectory is marked stale
 and a new `T` trajectory is drawn. There is no daily antiviral transition
-rate. Every event is a one-person move, so:
+rate. Every event moves one person out of one compartment and into another.
+Therefore, if $N_{c,\mathrm{before}}$ and $N_{c,\mathrm{after}}$ are the
+counts in compartment $c$ immediately before and after one event:
 
 ```{math}
-\sum_c N_c(t^+) = \sum_c N_c(t^-)
+\sum_c N_{c,\mathrm{after}} = \sum_c N_{c,\mathrm{before}}.
 ```
 
-for every processed event, and an event is discarded if its source person was
-already moved by treatment.
+This is an immediate event-level comparison, not a comparison between
+simulation days. Population is preserved because each event removes and adds
+the same one person. An event is discarded if its source person was already
+moved by treatment.
 
 Progression events are reconciled after treatment. Contact events remain in the
 existing group-level contact queue because SEATIRD currently applies the same

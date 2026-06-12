@@ -37,7 +37,8 @@ The simulator solves:
 \rho(K) = R_0
 ```
 
-so:
+where $\rho()$ is the spectral radius or dominant eigenvalue, resulting in a scalar.
+Then solving for $\beta$ we get:
 
 ```{math}
 \beta = \frac{R_0}{\rho(S C \operatorname{diag}(w))}.
@@ -58,20 +59,25 @@ spectral radius of $C$ is 1, this reduces to the familiar homogeneous result:
 
 For SEIHRD, $w$ combines the probability of entering the asymptomatic or
 symptomatic path, time spent in `IA`, `IP`, and `IS`, and each compartment's
-relative infectiousness:
+relative infectiousness. This page uses $\eta$ for relative infectiousness so
+that $\rho(\cdot)$ remains reserved for the spectral-radius function:
 
 ```{math}
 w_j =
 (1-p_{A,j})
 \left(
-\rho_{IP}d_{IP} + d_{IS}
+\eta_{IP}d_{IP} + d_{IS}
 \right)
 +
-p_{A,j}\rho_{IA}d_{IA}.
+p_{A,j}\eta_{IA}d_{IA}.
 ```
 
 Here $p_{A,j}$ is `prop_E_to_IA` for age group $j$, the $d$ terms are mean
-infectious durations, and the $\rho$ terms are relative infectiousness.
+infectious durations, $\eta_{IP}$ is the code parameter
+`rel_inf_IP_to_IS`, and $\eta_{IA}$ is `rel_inf_IA_to_IS`. The simulator's
+travel parameter remains named `rho` in input files and code; it is unrelated
+to either these $\eta$ multipliers or the spectral-radius function
+$\rho(\cdot)$.
 
 The simulator logs both the estimated beta and the $R_0$ re-derived from the
 resulting next-generation matrix.
