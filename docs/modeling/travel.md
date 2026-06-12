@@ -1,18 +1,18 @@
 # Binomial Travel Model
 
 The `binomial` travel model adds exposure between nodes without permanently
-moving population. A traveler leaves their home node for the day's contact
+moving the population to a visited node. A traveler leaves their home node for the day's contact
 calculation and returns home afterward. The population count assigned to each
-node therefore remains unchanged.
+node therefore remains unchanged the entire simulation.
 
 Travel is evaluated after within-node disease progression each simulation day.
 It can create new exposures in either direction for an origin-destination
 pair:
 
-1. infectious residents travel from their home node and expose susceptible
-   people at the destination;
-2. susceptible visitors travel to another node and encounter infectious
-   residents who remained there.
+1. Infectious residents travel from their home node and expose susceptible
+   people at the destination
+2. Susceptible visitors travel to another node and encounter infectious
+   residents who remained there
 
 Only the resulting susceptible-to-exposed movements are applied. Travelers
 themselves are not removed from one node and added to another.
