@@ -203,3 +203,7 @@ the stockpile model creates additional resource-constrained routes from `E`,
 
 See [Antiviral Stockpile Model](../modeling/antivirals.md) for validation rules,
 allocation behavior, and model-specific details.
+
+See [NPI And Vaccine Mathematics](../modeling/npis-vaccines.md) for the NPI
+overlap equation, vaccine stockpile allocation, adherence headroom, decay,
+rounding, and effectiveness equations.
