@@ -20,5 +20,5 @@ Good tests for this codebase usually check:
 - no compartment goes negative;
 - stockpile caps are honored;
 - dynamic compartment labels are respected;
-- baseline beta re-derives the requested \(R_0\);
+- baseline beta re-derives the requested $R_0$;
 - metadata captures parameters that were actually used.

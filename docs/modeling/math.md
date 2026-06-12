@@ -4,11 +4,13 @@ This page summarizes the core equations. The stochastic implementation uses
 integer-valued daily transitions, typically drawn from Poisson processes and
 capped by compartment counts. The deterministic implementation uses the same
 daily transition structure but evaluates the transition amounts directly from
-rates instead of drawing Poisson counts.
+rates (fractions of people) instead of drawing Poisson counts. The deterministic
+model is Euler's method, so it will not converge without non-integer people
+being allowed to progress forward in time.
 
 ## Force Of Infection
 
-For susceptible age group \(i\), the force of infection is:
+For susceptible age group $i$, the force of infection is:
 
 ```{math}
 \lambda_i(t) =
@@ -19,11 +21,11 @@ For susceptible age group \(i\), the force of infection is:
 
 where:
 
-- \(C_{ij}\) is the contact matrix from susceptible age group \(i\) to
-  infectious age group \(j\);
-- \(N\) is node population;
-- \(I_j^\ast\) is the weighted infectious population in age group \(j\);
-- \(\beta_i(t)\) is the baseline beta after NPI modification.
+- $C_{ij}$ is the contact matrix from susceptible age group $i$ to
+  infectious age group $j$;
+- $N$ is node population;
+- $I_j^\ast$ is the weighted infectious population in age group $j$;
+- $\beta_i(t)$ is the baseline beta after NPI modification.
 
 For SEITRS and deterministic SEITRS:
 
@@ -31,7 +33,7 @@ For SEITRS and deterministic SEITRS:
 I_j^\ast = I_j + \rho_T T_j
 ```
 
-where \(\rho_T =\) `rel_inf_T_to_I`.
+where $\rho_T =$ `rel_inf_T_to_I`.
 
 For SEITHRD:
 
@@ -43,9 +45,9 @@ IS_j +
 \rho_T T_j
 ```
 
-where \(\rho_{IP} =\) `rel_inf_IP_to_IS`,
-\(\rho_{IA} =\) `rel_inf_IA_to_IS`, and
-\(\rho_T =\) `rel_inf_T_to_IS`.
+where $\rho_{IP} =$ `rel_inf_IP_to_IS`,
+$\rho_{IA} =$ `rel_inf_IA_to_IS`, and
+$\rho_T =$ `rel_inf_T_to_IS`.
 
 ## SEIRS Daily Transitions
 
@@ -80,7 +82,7 @@ The stochastic transition counts are:
 
 The deterministic model uses the same capped transitions, replacing each
 Poisson draw with its mean, for example
-\(\Delta_{E \to I} = \min(\sigma E, E)\).
+$\Delta_{E \to I} = \min(\sigma E, E)$.
 
 ## SEITRS Daily Transitions
 
@@ -107,7 +109,7 @@ The antiviral stockpile model creates treatment movements:
 \Delta_{I \to T}^{AV}
 ```
 
-where each \(\Delta^{AV}\) is an allocation count from available doses, not a
+where each $\Delta^{AV}$ is an allocation count from available doses, not a
 disease-rate draw. If no antiviral stockpile is released, these movement counts
 are zero forever and `T` remains zero unless initialized externally.
 
@@ -121,7 +123,7 @@ After antiviral allocation, the SEITRS disease step includes:
 ```
 
 for stochastic SEITRS. Deterministic SEITRS uses
-\(\Delta_{T \to R} = \min(\tau_T T, T)\).
+$\Delta_{T \to R} = \min(\tau_T T, T)$.
 
 ## SEITHRD Daily Transitions
 
@@ -209,7 +211,7 @@ contact-generation process across `A`, `T`, and `I`.
 ## Competing Clocks
 
 When a compartment has competing exits and the desired realized fraction is
-\(p_i\), the simulator adjusts branch multipliers \(\pi_i\) so:
+$p_i$, the simulator adjusts branch multipliers $\pi_i$ so:
 
 ```{math}
 \frac{\pi_i r_i}{\sum_j \pi_j r_j} = p_i.

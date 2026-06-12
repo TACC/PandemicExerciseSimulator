@@ -30,6 +30,7 @@ public-health/outputs
 :caption: Modeling Reference
 
 modeling/compartments
+modeling/simulation-methods
 modeling/math
 modeling/calibration
 modeling/antivirals

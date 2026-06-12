@@ -117,7 +117,7 @@ treatment that day. Unused doses roll forward to the next day. The default is
 ### `antiviral_half_life_days`
 
 This optional positive value models stockpile loss over time. For a half-life
-\(h\), stock remaining after day 0 is multiplied each day by:
+$h$, stock remaining after day 0 is multiplied each day by:
 
 ```{math}
 0.5^{1/h}.

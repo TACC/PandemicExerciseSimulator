@@ -1,8 +1,10 @@
 # Outputs
 
 For each simulation day, the simulator writes compartment totals and subgroup
-details. For multiple realizations it writes CSV files; for a single
-realization it can write JSON and a plot.
+details. For multiple simulations it writes CSV files; for a single
+simulation it can write JSON and a plot. Running more than one simulation is preferable,
+because stochastic models and the travel model inject noise into outcomes. You will
+want to visualize a range of possibilities (spaghetti plots) in the Shiny dashboard.
 
 Each output run also includes metadata describing:
 
@@ -26,7 +28,7 @@ With `"output_dir_path": "GENERATE"`, outputs are written to:
 
 The full SHA-256 scenario hash groups semantically equivalent configurations.
 It is based on normalized data paths, model identities and runtime attributes,
-initial infections, and NPIs. Output location, batch identifier, random seed,
+initial infections, and NPIs. Output location, tags, batch identifier, random seed,
 and superficial numeric differences such as `1` versus `1.0` do not create a
 new scenario hash.
 
