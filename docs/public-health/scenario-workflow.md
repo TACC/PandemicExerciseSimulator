@@ -106,6 +106,11 @@ SEIHRD travel settings might include:
 }
 ```
 
+Travel does not migrate residents between counties. The dictionaries weight
+infectious people who travel to another node and infectious residents who
+expose incoming visitors, respectively. See
+[Binomial Travel Model](../modeling/travel.md) for the full distinction.
+
 When testing a model with `T`, decide whether treated people travel and include
 their relative transmission contribution.
 

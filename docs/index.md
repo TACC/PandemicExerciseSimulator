@@ -31,6 +31,7 @@ public-health/outputs
 
 modeling/compartments
 modeling/simulation-methods
+modeling/travel
 modeling/math
 modeling/calibration
 modeling/antivirals

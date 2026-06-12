@@ -94,14 +94,18 @@ configured transmitting and traveling compartments.
 
 Consequently, `-deterministic` describes disease progression within nodes; it
 does not make the complete network simulation deterministic while binomial
-travel is active.
+travel is active (more than one node in the network).
+
+See [Binomial Travel Model](travel.md) for the complete parameter reference and
+the distinction between traveling and locally transmitting compartments.
 
 ## Choosing Realizations
 
 One realization is useful for checking that an input runs, but not for
 estimating a stochastic outcome. Begin with roughly 5 to 100 realizations,
 depending on runtime and variability, then increase the count when rare
-epidemic emergence or extinction dominates the result.
+epidemic emergence or extinction dominates the result. Small populations,
+$R_0$ close to 1, or few initial infections will drive-up stochasticity.
 
 For example, an $R_0$ below 1 should naturally decline without intervention.
 Conversely, seeding very few infections in a rural county may require hundreds

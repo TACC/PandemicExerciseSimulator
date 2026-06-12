@@ -63,6 +63,12 @@ The order of age groups must match between the population file, contact matrix,
 vaccine parameters, antiviral parameters, and any age-specific disease
 parameters.
 
+The binomial travel model uses `traveling_compartments` for infectious
+residents who expose people at another node and `transmitting_compartments` for
+infectious residents who expose visitors at their home node. Travel does not
+change node population counts. See
+[Binomial Travel Model](../modeling/travel.md) for all parameters and examples.
+
 ## Initial Infections
 
 Initial infections are placed into the low-risk of hospitalization unvaccinated exposed
