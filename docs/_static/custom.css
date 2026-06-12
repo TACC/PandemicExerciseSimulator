@@ -29,3 +29,17 @@
   white-space: nowrap;
   overflow-wrap: normal;
 }
+
+/* Visually separate complete model equation systems from surrounding prose. */
+.rst-content .ode-system {
+  margin: 0 0 24px;
+  padding: 14px 20px;
+  overflow-x: auto;
+  background: #f3f4f5;
+  border: 1px solid #d9dde1;
+  border-left: 4px solid #9aa4ad;
+}
+
+.rst-content .ode-system .math {
+  margin: 0;
+}

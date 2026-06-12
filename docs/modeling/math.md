@@ -8,6 +8,10 @@ rates (fractions of people) instead of drawing Poisson counts. The deterministic
 model is Euler's method, so it will not converge without non-integer people
 being allowed to progress forward in time.
 
+Intervention allocation and effectiveness equations are documented separately
+in [NPI And Vaccine Mathematics](npis-vaccines.md) and
+[Antiviral Stockpile Model](antivirals.md).
+
 ## Force Of Infection
 
 For susceptible age group $i$, the force of infection is:
@@ -21,9 +25,8 @@ For susceptible age group $i$, the force of infection is:
 
 where:
 
-- $C_{ij}$ is the contact matrix from susceptible age group $i$ to
-  infectious age group $j$;
-- $N$ is node population;
+- $C_{ij}$ is the average number of daily contacts that a person in group $i$ (contact initiator) has with people in group $j$ (contactee);
+- $N$ is node population (e.g. county);
 - $I_j^\ast$ is the weighted infectious population in age group $j$;
 - $\beta_i(t)$ is the baseline beta after NPI modification.
 
@@ -48,6 +51,155 @@ IS_j +
 where $\rho_{IP} =$ `rel_inf_IP_to_IS`,
 $\rho_{IA} =$ `rel_inf_IA_to_IS`, and
 $\rho_T =$ `rel_inf_T_to_IS`.
+
+## Model Equation Systems
+
+The systems below show the mean compartment flows without age, risk, vaccine,
+or node subscripts. Each equation applies separately to those groups, while
+$\lambda$ includes the infectious pressure summed across the interacting
+groups. Define the uncapped mean-field incidence as:
+
+```{math}
+F = \lambda S.
+```
+
+The simulator advances these systems in one-day steps rather than using a
+continuous ODE solver. Deterministic models use capped mean flows; stochastic
+daily models replace eligible flows with capped Poisson draws. Therefore, the
+equations are the clean expected-flow representation of the implemented
+compartment pathways.
+
+### SEIR And SEIRS
+
+Let $\sigma$ be the `E -> I` rate, $\gamma$ the `I -> R` rate, and
+$\omega$ the `R -> S` rate. For SEIR, set $\omega=0$.
+
+:::{container} ode-system
+```{math}
+\begin{aligned}
+\dot S &= -F + \omega R, \\
+\dot E &= F - \sigma E, \\
+\dot I &= \sigma E - \gamma I, \\
+\dot R &= \gamma I - \omega R.
+\end{aligned}
+```
+:::
+
+### SEITRS
+
+Let $\tau_T = 1/\text{T\_to\_R\_days}$. Antiviral allocation first makes the
+discrete daily transfer:
+
+```{math}
+(E,I,T)^+ =
+(E-u_E,\ I-u_I,\ T+u_E+u_I),
+```
+
+where $u_E$ and $u_I$ are allocated dose counts, not continuous disease rates.
+The disease step then follows:
+
+:::{container} ode-system
+```{math}
+\begin{aligned}
+\dot S &= -F + \omega R, \\
+\dot E &= F - \sigma E, \\
+\dot I &= \sigma E - \gamma I, \\
+\dot T &= -\tau_T T, \\
+\dot R &= \gamma I + \tau_T T - \omega R.
+\end{aligned}
+```
+:::
+
+Here $F$ uses $I^\ast=I+\rho_TT$. With no allocated doses and no initialized
+treated population, $u_E=u_I=0$ and $T$ remains zero.
+
+### SEIHRD
+
+Let $\alpha$ be the `E -> IA/IP` rate, $p_A$ the asymptomatic branch
+proportion, $\kappa$ the `IP -> IS` rate, $\gamma_A$ the `IA -> R` rate,
+$h$ the effective `IS -> H` rate, $\gamma_S$ the `IS -> R` rate, $\mu_H$
+the `H -> D` rate, and $\gamma_H$ the `H -> R` rate. The effective
+hospitalization rate $h$ includes the configured age, risk, and vaccine
+modifiers.
+
+:::{container} ode-system
+```{math}
+\begin{aligned}
+\dot S  &= -F, \\
+\dot E  &= F - \alpha E, \\
+\dot{IA} &= p_A\alpha E - \gamma_A IA, \\
+\dot{IP} &= (1-p_A)\alpha E - \kappa IP, \\
+\dot{IS} &= \kappa IP - (h+\gamma_S)IS, \\
+\dot H  &= hIS - (\mu_H+\gamma_H)H, \\
+\dot R  &= \gamma_A IA + \gamma_S IS + \gamma_H H, \\
+\dot D  &= \mu_H H.
+\end{aligned}
+```
+:::
+
+The stochastic implementation draws and caps the daily transitions, then
+resolves competing exits from the remaining source population.
+
+### SEITHRD
+
+SEITHRD uses the SEIHRD progression rates above and adds treated recovery.
+Before disease progression, antiviral allocation may transfer people from
+`E`, `IA`, `IP`, and `IS`:
+
+```{math}
+\begin{aligned}
+(E,IA,IP,IS,T)^+ = (&E-u_E,\ IA-u_{IA},\ IP-u_{IP},\\
+                    &IS-u_{IS},\ T+u_E+u_{IA}+u_{IP}+u_{IS}).
+\end{aligned}
+```
+
+The $u$ values are whole-person daily allocations from the stockpile model.
+They are not rates in the ODE system.
+
+:::{container} ode-system
+```{math}
+\begin{aligned}
+\dot S  &= -F, \\
+\dot E  &= F - \alpha E, \\
+\dot{IA} &= p_A\alpha E - \gamma_A IA, \\
+\dot{IP} &= (1-p_A)\alpha E - \kappa IP, \\
+\dot{IS} &= \kappa IP - (h+\gamma_S)IS, \\
+\dot H  &= hIS - (\mu_H+\gamma_H)H, \\
+\dot T  &= -\tau_T T, \\
+\dot R  &= \gamma_A IA + \gamma_S IS + \gamma_H H + \tau_T T, \\
+\dot D  &= \mu_H H.
+\end{aligned}
+```
+:::
+
+Here $F$ uses the weighted infectious population defined in the Force Of
+Infection section above, including treated infectiousness.
+
+### SEATIRD
+
+The deterministic SEATIRD mean-flow system uses $\tau$ for `E -> A`,
+$\kappa$ for `A -> T`, $\chi$ for `T -> I`, $\gamma$ for recovery, and
+$\nu$ for mortality:
+
+:::{container} ode-system
+```{math}
+\begin{aligned}
+\dot S &= -F, \\
+\dot E &= F - \tau E, \\
+\dot A &= \tau E - (\kappa+\gamma+\nu)A, \\
+\dot T &= \kappa A - (\chi+\gamma+\nu)T, \\
+\dot I &= \chi T - (\gamma+\nu)I, \\
+\dot R &= \gamma(A+T+I), \\
+\dot D &= \nu(A+T+I).
+\end{aligned}
+```
+:::
+
+The stochastic SEATIRD model follows these pathways with a Gillespie-style
+queue of individual events rather than numerically solving this ODE system.
+Its built-in `A -> T` pathway is part of the disease trajectory; optional
+stockpile treatment additionally replaces an eligible person's queued
+trajectory with a newly drawn trajectory beginning in `T`.
 
 ## SEIRS Daily Transitions
 
