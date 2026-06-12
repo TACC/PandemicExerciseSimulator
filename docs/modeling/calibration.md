@@ -6,8 +6,8 @@ coefficient $\beta$ from the requested $R_0$ and the next-generation matrix.
 ## Contact Matrix
 
 The age-stratified contact matrix $C$ replaces the single contact-rate scalar
-used in a homogeneous-mixing model. An element $C_{ij}$ is the average daily
-contact from a susceptible person in age group $i$ to people in age group $j$.
+used in a homogeneous-mixing model. An element $C_{ij}$ is the average number of 
+daily contacts that a person in group $i$ (contact initiator) has with people in group $j$ (contactee).
 
 The matrix can be asymmetric. Children may have frequent contact with adult
 teachers and caregivers even though many adults have little contact with
