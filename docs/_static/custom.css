@@ -13,9 +13,14 @@
 .rst-content table.docutils td {
   min-width: 0;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   word-break: normal;
   vertical-align: top;
+}
+
+.rst-content table.docutils code.literal {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 .rst-content table.docutils th:first-child,
