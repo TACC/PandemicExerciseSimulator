@@ -9,25 +9,27 @@ input parameter reference and JSON examples.
 
 On simulation day $d$, intervention-related operations occur in this order:
 
-1. release vaccine doses scheduled for day $d$ and divide them among nodes;
-2. vaccinate eligible susceptible people within each node;
-3. progress disease within each node using NPI-adjusted beta and vaccine
-   effectiveness;
-4. draw travel-associated exposures, including vaccine effectiveness against
-   infection.
+1. Release vaccine doses scheduled for day $d$ and divide them among nodes
+2. Vaccinate eligible susceptible people within each node
+3. Progress disease within each node using NPI-adjusted beta and vaccine
+   effectiveness
+4. Draw travel-associated exposures, including vaccine effectiveness against
+   infection
 
 Day-0 vaccine allocation occurs before initial output is written. Initial
 infections were already placed into the exposed compartment and are therefore
-not eligible for vaccination.
+not eligible for vaccination. For example, if you have a node with 1000 residents,
+900 susceptible and 100 exposed, you can allocate 1000 vaccines on day-0 but only
+900 could be distributed.
 
 ## NPI Schedule
 
 For NPI $k$, let:
 
-- $d_k$ be its start day;
-- $L_k$ be its duration;
-- $e_{k,a}$ be its effectiveness for age group $a$;
-- $\mathcal{N}_k$ be its selected nodes.
+- $d_k$ be its start day
+- $L_k$ be its duration
+- $e_{k,a}$ be its effectiveness for age group $a$
+- $\mathcal{N}_k$ be its selected nodes
 
 The intervention is active on:
 
@@ -201,11 +203,11 @@ stock above capacity rolls to the next day.
 
 Within a node, consider eligible age/risk group $g$. Let:
 
-- $S_g^U$ be unvaccinated susceptible people;
+- $S_g^U$ be unvaccinated susceptible people
 - $N_g$ be total people in the age/risk group across all disease and vaccine
-  states;
-- $V_g$ be all people already in the vaccinated subgroup;
-- $a_g$ be age-specific adherence.
+  states
+- $V_g$ be all people already in the vaccinated subgroup
+- $a_g$ be age-specific adherence
 
 Remaining adherence capacity is:
 
@@ -276,8 +278,8 @@ $VE_i^{inf}$ multiplies force of infection:
 
 Thus:
 
-- $VE_i^{inf}=0$ gives no reduction;
-- $VE_i^{inf}=1$ gives complete modeled protection from infection.
+- $VE_i^{inf}=0$ gives no reduction
+- $VE_i^{inf}=1$ gives complete modeled protection from infection
 
 The same multiplier is applied to travel-associated exposure probability:
 
@@ -324,11 +326,11 @@ after hospitalization. It reduces deaths indirectly by reducing movement into
 
 ## Current Boundaries
 
-- Vaccine protection does not wane.
-- Only susceptible people are vaccinated.
+- Vaccine protection does not wane
+- Only susceptible people are vaccinated
 - There are two vaccine groups: unvaccinated and vaccinated; boosters and
-  multiple products are not represented.
+  multiple products are not represented
 - NPI effectiveness modifies beta but does not change contact matrices,
-  mobility flows, or travel-associated beta.
+  mobility flows, or travel-associated beta
 - Vaccine allocation uses deterministic proportional allocation and integer
-  largest-remainder rounding; it is not randomly sampled.
+  largest-remainder rounding; it is not randomly sampled

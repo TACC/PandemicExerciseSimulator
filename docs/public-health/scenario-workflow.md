@@ -179,16 +179,16 @@ Before interpreting an intervention, examine the untreated baseline:
 
 - If baseline `R0` is below 1, infections are expected to decline on average.
   An intervention may show little additional benefit because the epidemic
-  already tends to die out.
+  already tends to die out
 - Even when `R0` is above 1, early stochastic extinction is possible. A small
-  seed can disappear before sustained transmission begins.
+  seed can disappear before sustained transmission begins
 - Seeding very few infections in a small or rural county may produce many
   realizations with no substantial epidemic, especially when mobility and
-  contact opportunities are limited.
+  contact opportunities are limited
 - In a low-emergence scenario, hundreds or sometimes 1,000 or more realizations
   may be needed to estimate the probability and distribution of epidemic
   outcomes. Increasing the initial seed or choosing a more connected county
-  answers a different scenario question and should be documented as such.
+  answers a different scenario question and should be documented as such
 
 As a rule of thumb, first compare the fraction of baseline realizations that
 produce a sustained epidemic, their peak sizes, and their time to peak. Then
@@ -232,11 +232,11 @@ PARQUET_ROOT <- file.path(REPO_ROOT, "sim_data")
 
 Open `7b_sim_dashboard_app.R` in RStudio and select **Run App**. Review:
 
-- completion counts and simulation times;
-- baseline and intervention scenario hashes;
-- batch UUIDs and metadata;
-- network and node compartment trajectories;
-- whether the intervention changed the expected compartments and outcomes.
+- Completion counts and simulation times
+- Baseline and intervention scenario hashes
+- Batch UUIDs and metadata
+- Network and node compartment trajectories
+- Whether the intervention changed the expected compartments and outcomes
 
 Before deleting large CSV outputs, confirm that the corresponding
 `(scenario_hash, batch_num)` rows appear in `metadata_master.csv` and that the
@@ -247,11 +247,11 @@ Parquet files exist under `sim_data/<scenario_hash>/<batch_num>/`.
 Keep a baseline scenario with no interventions except the initial infections.
 Then compare:
 
-- vaccination release timing and prioritization;
-- antiviral release timing and prioritization;
-- NPI timing, duration, and age targeting;
-- mobility reductions;
-- alternate initial infection locations.
+- Vaccination release timing and prioritization
+- Antiviral release timing and prioritization
+- NPI timing, duration, and age targeting
+- Mobility reductions
+- Alternate initial infection locations
 
 ## Naming Outputs
 
@@ -273,11 +273,11 @@ add any other JSON-safe keys that help document the scenario.
 
 The supplied templates include:
 
-- `creator`: the person or team responsible for the scenario;
-- `disease`: one or more disease labels, such as `["influenza", "flu"]`;
-- `sim_day_0`: the calendar date represented by simulation day 0, or `null`
-  when the scenario is not tied to a date;
-- `notes`: a list of purposes, assumptions, sweep labels, or reminders.
+- `creator`: The person or team responsible for the scenario
+- `disease`: One or more disease labels, such as `["influenza", "flu"]`
+- `sim_day_0`: The calendar date represented by simulation day 0, or `null`
+  when the scenario is not tied to a date
+- `notes`: A list of purposes, assumptions, sweep labels, or reminders
 
 For example, a vaccination scenario tied to the 2024-2025 influenza season
 may use:

@@ -8,12 +8,12 @@ want to visualize a range of possibilities (spaghetti plots) in the Shiny dashbo
 
 Each output run also includes metadata describing:
 
-- the input data files;
-- disease, travel, NPI, vaccine, and antiviral model parameters;
-- runtime attributes derived from the parameters;
-- a scenario hash;
-- git commit and dirty-state information when available;
-- random seed strategy.
+- The input data files
+- Disease, travel, NPI, vaccine, and antiviral model parameters
+- Runtime attributes derived from the parameters
+- A scenario hash
+- Git commit and dirty-state information when available
+- Random seed strategy
 
 This metadata is important for reproducibility. When sharing results, include
 the metadata file with the daily outputs.

@@ -14,10 +14,10 @@ At a high level:
 
 ## Model Families
 
-- Disease models live in `src/models/disease/`.
-- Travel models live in `src/models/travel/`.
-- Treatment and intervention models live in `src/models/treatments/`.
-- Base classes and shared data structures live in `src/baseclasses/`.
+- Disease models live in `src/models/disease/`
+- Travel models live in `src/models/travel/`
+- Treatment and intervention models live in `src/models/treatments/`
+- Base classes and shared data structures live in `src/baseclasses/`
 
 ## Dynamic Compartments
 

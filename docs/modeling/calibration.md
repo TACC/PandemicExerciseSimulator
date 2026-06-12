@@ -27,9 +27,9 @@ K = \beta S C \operatorname{diag}(w)
 
 where:
 
-- $S$ is a diagonal relative susceptibility matrix;
-- $C$ is the contact matrix;
-- $w$ is an age-specific infectiousness-duration weight.
+- $S$ is a diagonal relative susceptibility matrix
+- $C$ is the contact matrix
+- $w$ is an age-specific infectiousness-duration weight
 
 The simulator solves:
 

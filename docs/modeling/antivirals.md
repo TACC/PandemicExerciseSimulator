@@ -56,9 +56,9 @@ No other values are allowed. For example:
 
 means:
 
-- nobody in age group 0 is eligible;
-- only high-risk people in age groups 1 and 4 are eligible;
-- everyone in age groups 2 and 3 is eligible.
+- Nobody in age group 0 is eligible
+- Only high-risk people in age groups 1 and 4 are eligible
+- Everyone in age groups 2 and 3 is eligible
 
 This parameter controls age/risk eligibility, not ordering between age groups.
 Available doses are allocated proportionally among eligible groups. Both

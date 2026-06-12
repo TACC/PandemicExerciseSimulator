@@ -25,10 +25,10 @@ For susceptible age group $i$, the force of infection is:
 
 where:
 
-- $C_{ij}$ is the average number of daily contacts that a person in group $i$ (contact initiator) has with people in group $j$ (contactee);
-- $N$ is node population (e.g. county);
-- $I_j^\ast$ is the weighted infectious population in age group $j$;
-- $\beta_i(t)$ is the baseline beta after NPI modification.
+- $C_{ij}$ is the average number of daily contacts that a person in group $i$ (contact initiator) has with people in group $j$ (contactee)
+- $N$ is node population (e.g. county)
+- $I_j^\ast$ is the weighted infectious population in age group $j$
+- $\beta_i(t)$ is the baseline beta after NPI modification
 
 For SEITRS and deterministic SEITRS:
 

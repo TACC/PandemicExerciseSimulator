@@ -32,13 +32,13 @@ The standard template header is:
 
 These two `GENERATE` values have different purposes:
 
-- `output_dir_path: "GENERATE"` creates a scenario directory named
+- `output_dir_path: "GENERATE"` Creates a scenario directory named
   `<STATE>_<SCENARIO_HASH>`. The state or region name is read from the
   population-data path, and the scenario hash is the full SHA-256 hash of the
-  canonical scenario configuration.
-- `batch_num: "GENERATE"` creates a UUIDv7 for that execution. The UUID is used
+  canonical scenario configuration
+- `batch_num: "GENERATE"` Creates a UUIDv7 for that execution. The UUID is used
   in output filenames such as `metadata_batch-<UUID>.json` and
-  `network_batch-<UUID>.csv`.
+  `network_batch-<UUID>.csv`
 
 The scenario hash does not include the output path, batch UUID, random seed, or
 JSON formatting differences such as numeric `1` versus `1.0`. Re-running an

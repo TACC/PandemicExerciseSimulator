@@ -9,9 +9,9 @@ non-pharmaceutical interventions.
 This documentation is written for two audiences:
 
 - **Public health professionals** who need to run scenarios, read inputs, and
-  interpret outputs.
+  interpret outputs
 - **Epidemiologist developers** who need the model equations, stochastic
-  assumptions, calibration details, and extension points.
+  assumptions, calibration details, and extension points
 
 ```{toctree}
 :maxdepth: 2

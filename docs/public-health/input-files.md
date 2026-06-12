@@ -53,11 +53,11 @@ or split executions of one scenario coexist and be tracked independently.
 
 The data directory for a state or region should contain:
 
-- `INPUT_*.json`: simulation properties file.
-- `contact_matrix_*_Mistry2021_all.csv`: age-by-age daily contacts from all settings ("home", "work", "school", "community").
-- `county_pop_by_age_*.csv`: county population by age group.
-- `*_high-risk-ratios-*.csv`: age-specific high-risk proportions.
-- `*_mobility-matrix.csv`: county-by-county mobility matrix, examples based on pre-pandemic 2019 quarterly SafeGraph proportion population traveling.
+- `INPUT_*.json`: Simulation properties file
+- `contact_matrix_*_Mistry2021_all.csv`: Age-by-age daily contacts from all settings ("home", "work", "school", "community")
+- `county_pop_by_age_*.csv`: County population by age group
+- `*_high-risk-ratios-*.csv`: Age-specific high-risk proportions
+- `*_mobility-matrix.csv`: County-by-county mobility matrix, examples based on pre-pandemic 2019 quarterly SafeGraph proportion population traveling
 
 The order of age groups must match between the population file, contact matrix,
 vaccine parameters, antiviral parameters, and any age-specific disease

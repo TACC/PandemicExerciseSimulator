@@ -2,10 +2,10 @@
 
 The simulator helps public health teams ask operational questions such as:
 
-- How quickly could an outbreak spread across counties?
-- Which age groups drive transmission under a given contact pattern?
-- How much do vaccines, antivirals, travel, or non-pharmaceutical interventions (NPIs) change the epidemic curve?
-- What happens when limited stockpiles are released on specific days?
+- How quickly could an outbreak spread across counties
+- Which age groups drive transmission under a given contact pattern
+- How much do vaccines, antivirals, travel, or non-pharmaceutical interventions (NPIs) change the epidemic curve
+- What happens when limited stockpiles are released on specific days
 
 Each run begins with an input JSON file. That file points to population,
 contact, mobility, and high risk of hospitalization ratios, then selects disease, travel,
@@ -26,15 +26,15 @@ The output can be used as a comparison between scenarios or a starting point for
 ## Current Boundaries
 
 - Contact and mobility matrices are constant by simulation day; weekend,
-  holiday, and behavioral feedback effects are not modeled automatically.
+  holiday, and behavioral feedback effects are not modeled automatically
 - “Risk” means risk of hospitalization. Separate infection-risk categories,
-  such as occupational exposure for frontline workers, are not yet available.
+  such as occupational exposure for frontline workers, are not yet available
 - Vaccination has unvaccinated and vaccinated groups but no waning, boosters,
-  or multiple vaccine products.
+  or multiple vaccine products
 - The daily stochastic models use Poisson transitions. Alternative
   distributions for superspreading, such as a negative binomial force of
-  infection, are not currently implemented.
+  infection, are not currently implemented
 - County connectivity rankings are produced by the preparation pipeline, but
-  centrality is not itself a disease-model parameter.
+  centrality is not itself a disease-model parameter
 - National result maps and sensitivity-analysis figures are analysis products,
-  not generated automatically by the simulator.
+  not generated automatically by the simulator

@@ -85,9 +85,9 @@ compartment.
 Each value is a multiplier on the number of people in that compartment. It can
 represent:
 
-- the fraction who make relevant trips;
-- infectiousness relative to a reference compartment;
-- a combined assumption about travel behavior and relative infectiousness.
+- The fraction who make relevant trips
+- Infectiousness relative to a reference compartment
+- A combined assumption about travel behavior and relative infectiousness
 
 When asymptomatic and symptomatic states are modeled separately, the weights
 can preserve the disease model's relative-infectiousness assumptions:

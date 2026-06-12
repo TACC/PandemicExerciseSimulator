@@ -74,11 +74,11 @@ After simulations finish, configure `SEARCH_ROOT` near the top of
 `scripts/7a_process_output_to_db.R` and run the script from the repository
 working directory. It discovers `metadata_batch-*.json`, then:
 
-- creates or updates `metadata_master.csv`;
-- converts network, node, and timing CSVs to compressed Parquet;
-- partitions Parquet as `sim_data/<scenario_hash>/<batch_num>/`;
-- optionally upserts metadata into MongoDB;
-- skips an already ingested `(scenario_hash, batch_num)` pair.
+- Creates or updates `metadata_master.csv`
+- Converts network, node, and timing CSVs to compressed Parquet
+- Partitions Parquet as `sim_data/<scenario_hash>/<batch_num>/`
+- Optionally upserts metadata into MongoDB
+- Skips an already ingested `(scenario_hash, batch_num)` pair
 
 The source simulation directories remain the reproducibility record. Confirm
 that the expected scenario/batch pairs are present in `metadata_master.csv`
@@ -90,11 +90,11 @@ Configure `REPO_ROOT`, `MASTER_CSV`, and `PARQUET_ROOT` near the top of
 `scripts/7b_sim_dashboard_app.R`, then open the file in RStudio and select
 **Run App**. The dashboard reads the metadata index and Parquet partitions to:
 
-- filter scenarios by geography, model, and intervention;
-- inspect completion and run-time information by batch;
-- compare all batches sharing a scenario hash;
-- plot compartment trajectories;
-- export selected Parquet data back to CSV.
+- Filter scenarios by geography, model, and intervention
+- Inspect completion and run-time information by batch
+- Compare all batches sharing a scenario hash
+- Plot compartment trajectories
+- Export selected Parquet data back to CSV
 
 The scenario hash represents the modeled configuration. The batch UUID
 represents one execution of that configuration. Keeping both identifiers is

@@ -51,10 +51,10 @@ build.
 
 `.readthedocs.yaml` tells Read the Docs:
 
-- which operating system image to use;
-- which Python version to use;
-- where the Sphinx configuration file lives;
-- which documentation requirements to install.
+- Which operating system image to use
+- Which Python version to use
+- Where the Sphinx configuration file lives
+- Which documentation requirements to install
 
 `docs/conf.py` configures Sphinx itself. It enables Markdown, LaTeX math, and
 the Read the Docs theme.
