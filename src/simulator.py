@@ -26,18 +26,24 @@ from models.treatments.NonPharmaInterventions import NonPharmaInterventions
 from models.treatments.Antiviral import Antiviral
 from models.treatments.Vaccination import Vaccination
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNING',
-                    help='set log level to DEBUG, INFO, WARNING, ERROR, or CRITICAL')
-parser.add_argument('-d', '--days', type=int, required=False, default=365,
-                    help='set number of days to simulate')
-parser.add_argument('-i', '--input_filename', type=str, required=True,
-                    help='path and name of input simulation properties json file')
-args = parser.parse_args()
-
 format_str=f'[%(asctime)s] %(filename)s:%(funcName)s:%(lineno)s - %(levelname)s: %(message)s'
-logging.basicConfig(level=args.loglevel, format=format_str)
 logger = logging.getLogger(__name__)
+
+
+def build_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNING',
+                        help='set log level to DEBUG, INFO, WARNING, ERROR, or CRITICAL')
+    parser.add_argument('-d', '--days', type=int, required=False, default=365,
+                        help='set number of days to simulate')
+    parser.add_argument('-i', '--input_filename', type=str, required=True,
+                        help='path and name of input simulation properties json file')
+    return parser
+
+
+def parse_args(argv=None):
+    return build_parser().parse_args(argv)
+
 
 def run( simulation_days:Type[Day],
          parameters:Type[ModelParameters],
@@ -108,10 +114,12 @@ def run( simulation_days:Type[Day],
     return
 
 
-def main():
+def main(cli_args=None):
     """
     Main entry point to PandemicExerciseSimulator
     """
+    args = cli_args if cli_args is not None else parse_args()
+    logging.basicConfig(level=args.loglevel, format=format_str)
     logger.info(f'entered main loop')
 
     # Read input properties file
