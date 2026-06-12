@@ -24,11 +24,3 @@
   white-space: nowrap;
   overflow-wrap: normal;
 }
-
-/* Keep short reference fields compact so descriptions receive the extra room. */
-.rst-content table.docutils:has(th:nth-child(3)) th:nth-child(2),
-.rst-content table.docutils:has(th:nth-child(3)) td:nth-child(2),
-.rst-content table.docutils:has(th:nth-child(4)) th:nth-child(3),
-.rst-content table.docutils:has(th:nth-child(4)) td:nth-child(3) {
-  width: 1%;
-}
