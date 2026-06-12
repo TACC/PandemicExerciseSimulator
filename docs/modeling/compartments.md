@@ -27,8 +27,8 @@ index order.
 
 ## Available Structures
 
-The model identity chooses the implementation, while `compartments` chooses
-whether optional states such as `T` or waning immunity are active.
+The model `identity` chooses between stochastic or deterministic versions of a model, 
+while `compartments` chooses whether optional states such as `T` are active. 
 
 Parameter values in the templates are runnable examples, not universal
 estimates for every pathogen, season, or population. Scenario authors should
@@ -39,14 +39,14 @@ values.
 | --- | --- | --- |
 | SEIR | `S, E, I, R` | Use a SEIRS implementation without `immune_period_days`, or set it to 0. |
 | SEIRS | `S, E, I, R` | Adds waning immunity through `R -> S`. |
-| SEITRS | `S, E, I, T, R` | Adds treated infectious `T`; `T` is created by antiviral stockpile release. |
+| SEITRS | `S, E, I, T, R` | Adds treated infectious `T`; People moved into `T` by antiviral stockpile release. |
 | SEATIRD | `S, E, A, T, I, R, D` | Gillespie model where `T` is treated and part of the queued infection trajectory. |
 | SEIHRD | `S, E, IA, IP, IS, H, R, D` | Separates infectious into asymptomatic, pre-symptomatic, symptomatic; hospitalization, recovered and death not infectious. |
 | SEITHRD | `S, E, IA, IP, IS, H, T, R, D` | SEIHRD plus treated `T`. |
 
 All epidemics are initialized by moving the requested susceptible people into
 `E`. A very short latent period can approximate immediate infectiousness, but
-the initial state remains exposed.
+the initial state remains exposed. `E` is therefore a required compartment for all models.
 
 ## SEIR And SEIRS Parameters
 
@@ -102,7 +102,7 @@ multipliers so the realized proportion still matches the requested value. See
 
 ## SEATIRD Parameters
 
-SEATIRD uses `S, E, A, T, I, R, D`. Its stochastic implementation creates an
+SEATIRD uses `S, E, A, T, I, R, D`. Its stochastic Gillespie implementation creates an
 individual event queue, while its deterministic implementation uses daily
 Euler updates with the same parameter meanings.
 
@@ -119,7 +119,11 @@ Euler updates with the same parameter meanings.
 
 SEATIRD currently treats `A`, `T`, and `I` as equally infectious in its contact
 process. Unlike SEITRS and SEITHRD, its built-in `A -> T` path is part of the
-disease trajectory and does not require a released antiviral stockpile.
+disease trajectory and does not require a released antiviral stockpile. 
+
+SEATIRD is a legacy model from when the original code base was in C++. We do not recommend using this model as
+it's parameterization does not emulate the real-world well. However, it is a good example of a Gillespie model
+and may be of use to students, developers, or those interested in comparing model runtimes/limitations.
 
 ## SEITRS Interpretation
 
