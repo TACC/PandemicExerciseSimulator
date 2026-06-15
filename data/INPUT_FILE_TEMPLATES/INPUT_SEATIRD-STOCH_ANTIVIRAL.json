@@ -81,7 +81,6 @@
         "1.0",
         "1.0"
       ],
-      "eligible_compartments": ["E", "A", "I"],
       "compartment_priority": ["I", "A", "E"],
       "antiviral_capacity_proportion": "1.0",
       "antiviral_half_life_days": null,

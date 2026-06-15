@@ -33,7 +33,6 @@ def make_params(stockpile):
         antiviral_model="stockpile-age-risk",
         antiviral_parameters={
             "age_risk_priority_groups": ["1"],
-            "eligible_compartments": ["E", "I"],
             "compartment_priority": ["I", "E"],
             "antiviral_stockpile": stockpile,
         },
@@ -253,7 +252,7 @@ def test_antiviral_normalizes_age_risk_priority_to_float(
     assert isinstance(strategy.age_risk_priority_groups[0], float)
 
 
-def test_antiviral_can_treat_seihrd_eligible_compartments():
+def test_antiviral_can_treat_seihrd_priority_compartments():
     net = Network(["S", "E", "IA", "IP", "IS", "H", "T", "R", "D"])
     node = Node(0, 0, 0, PopulationCompartments([100], [0.0]))
     net._add_node(node)
@@ -264,7 +263,6 @@ def test_antiviral_can_treat_seihrd_eligible_compartments():
     )
 
     params = make_params([{"day": "0", "amount": "14"}])
-    params.antiviral_parameters["eligible_compartments"] = ["E", "IA", "IP", "IS"]
     params.antiviral_parameters["compartment_priority"] = ["IS", "IP", "IA", "E"]
     strat = Antiviral(params).get_child("stockpile-age-risk", network=net)
 

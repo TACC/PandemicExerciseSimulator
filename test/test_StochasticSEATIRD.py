@@ -197,7 +197,6 @@ def test_stale_t_event_is_skipped_before_new_antiviral_t_event():
 def test_antiviral_allocation_replaces_old_queue_with_t_trajectories(monkeypatch):
     antiviral_parameters = {
         "age_risk_priority_groups": ["1"],
-        "eligible_compartments": ["E", "A", "I"],
         "compartment_priority": ["I", "A", "E"],
         "antiviral_stockpile": [{"day": "0", "amount": "10"}],
     }
@@ -260,7 +259,6 @@ def test_no_antiviral_release_leaves_queue_and_t_unchanged():
         pop=10,
         antiviral_parameters={
             "age_risk_priority_groups": ["1"],
-            "eligible_compartments": ["E", "A", "I"],
             "compartment_priority": ["I", "A", "E"],
             "antiviral_stockpile": [],
         },

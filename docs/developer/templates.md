@@ -64,8 +64,8 @@ Current useful templates include:
 SEITRS templates should include both a `T` compartment and an `antiviral_model`
 block when treatment is part of the scenario.
 SEITHRD templates should also include `T_to_R_days`, `rel_inf_T_to_IS`, and
-antiviral `eligible_compartments`/`compartment_priority` values that match the
-SEIHRD compartment labels.
+antiviral `compartment_priority` values that match the SEIHRD compartment
+labels.
 
 SEATIRD always includes the Treated compartment `T` and its built-in `A -> T`
 treatment event. Use `INPUT_SEATIRD-STOCH_ANTIVIRAL.json` when a scenario also

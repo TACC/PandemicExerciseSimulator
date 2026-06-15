@@ -149,7 +149,9 @@ For a release of $Q_d$ doses, the expected share for node $n$ is:
 x_n = Q_d\frac{P_n^{eligible}}{P^{eligible}}.
 ```
 
-Each node first receives $\lfloor x_n\rfloor$. Remaining whole doses are
+Each node first receives $\lfloor x_n\rfloor$, i.e. a node gets vaccines equivalent
+to their share of the network population. If a node has half the total network population
+then they'll receive half of the vaccine doses that become available. Remaining whole doses are
 assigned one at a time to nodes with the largest fractional remainders:
 
 ```{math}
@@ -157,7 +159,8 @@ r_n = x_n-\lfloor x_n\rfloor.
 ```
 
 This is the largest-remainder method. It preserves integer allocations while
-keeping them as close as possible to population-proportional shares.
+keeping them as close as possible to population-proportional shares, 
+i.e. having 50.35% of the population requires us to choose how to allocate 0.35% of doses.
 
 The network eligibility denominator is calculated when the vaccine strategy
 is initialized. It includes all disease compartments, so ordinary disease

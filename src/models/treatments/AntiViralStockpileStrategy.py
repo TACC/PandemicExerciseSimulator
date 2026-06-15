@@ -29,16 +29,6 @@ class AntiviralStockpileStrategy(Antiviral):
         if any(priority not in (0.0, 0.5, 1.0) for priority in self.age_risk_priority_groups):
             raise ValueError("age_risk_priority_groups values must be 0, 0.5, or 1")
 
-        self.eligible_compartments = [
-            str(label).strip().upper()
-            for label in self.parameters.antiviral_parameters.get(
-                "eligible_compartments", ["E", "I"]
-            )
-        ]
-        for label in self.eligible_compartments:
-            if not hasattr(Compartments, label):
-                raise ValueError(f"Eligible antiviral compartment {label} not in active compartments.")
-
         self.compartment_priority = [
             str(label).strip().upper()
             for label in self.parameters.antiviral_parameters.get(
@@ -46,8 +36,8 @@ class AntiviralStockpileStrategy(Antiviral):
             )
         ]
         for label in self.compartment_priority:
-            if label not in self.eligible_compartments:
-                raise ValueError(f"Priority compartment {label} must also be eligible.")
+            if not hasattr(Compartments, label):
+                raise ValueError(f"Antiviral compartment {label} not in active compartments.")
 
         self.antiviral_capacity = float(
             self.parameters.antiviral_parameters.get("antiviral_capacity_proportion", 1.0)
@@ -226,7 +216,7 @@ class AntiviralStockpileStrategy(Antiviral):
 
     def _eligible_in_group(self, node: Type[Node], group: Type[Group]) -> float:
         vector = node.compartments.get_compartment_vector_for(group)
-        return float(sum(vector[getattr(Compartments, label).value] for label in self.eligible_compartments))
+        return float(sum(vector[getattr(Compartments, label).value] for label in self.compartment_priority))
 
     def _treat_group(self, node: Type[Node], group: Type[Group], amount: int):
         if amount <= 0:

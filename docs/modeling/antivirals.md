@@ -21,7 +21,6 @@ five-age-group configuration looks like:
   "identity": "stockpile-age-risk",
   "parameters": {
     "age_risk_priority_groups": ["0.0", "0.5", "1.0", "1.0", "0.5"],
-    "eligible_compartments": ["E", "I"],
     "compartment_priority": ["I", "E"],
     "antiviral_capacity_proportion": "0.10",
     "antiviral_half_life_days": "30",
@@ -67,35 +66,19 @@ age/risk and compartment criteria.
 
 If omitted, every age group defaults to `1.0`.
 
-### `eligible_compartments`
-
-This list defines which current disease states can receive an antiviral dose
-and move into `T`.
-
-| Model | Supported example |
-| --- | --- |
-| SEITRS, stochastic or deterministic | `["E", "I"]` |
-| SEITHRD | `["E", "IA", "IP", "IS"]` |
-| Gillespie SEATIRD | `["E", "A", "I"]` |
-
-Every label must exist in the active model's compartment list. If omitted, the
-default is `["E", "I"]`.
-
 ### `compartment_priority`
 
-This list controls which eligible disease state is treated first within an
-age/risk/vaccination group. It does not prioritize one age group over another.
+This list defines the disease states eligible for antiviral treatment and the
+order in which they are treated within an age/risk/vaccination group. It does
+not prioritize one age group over another.
 
 ```json
-"eligible_compartments": ["E", "I"],
 "compartment_priority": ["I", "E"]
 ```
 
 With this configuration, available doses first move people from `I` to `T`,
-then move people from `E` to `T`. Each priority label must also appear in
-`eligible_compartments`. The priority list should contain every eligible
-compartment exactly once so all eligible states can receive treatment. If
-omitted, the default is `["I", "E"]`.
+then move people from `E` to `T`. Every label must exist in the active model's
+compartment list. If omitted, the default is `["I", "E"]`.
 
 ### `antiviral_capacity_proportion`
 
@@ -164,7 +147,7 @@ people enter `T`.
 
 There are no disease-model rates such as `E_to_T_days` or `I_to_T_days`.
 Movement into `T` is fully determined by released doses, daily capacity,
-eligible population, and `compartment_priority`. In SEITRS and SEITHRD,
+the population in `compartment_priority`. In SEITRS and SEITHRD,
 movement out of `T` is controlled by `T_to_R_days`.
 
 ## Gillespie SEATIRD

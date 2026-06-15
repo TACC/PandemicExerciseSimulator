@@ -321,9 +321,9 @@ creates the possible treatment movements:
 \Delta_{IS \to T}^{AV}.
 ```
 
-These are governed by `eligible_compartments`, `compartment_priority`, node
-allocation, daily capacity, and stockpile availability. Disease progression
-then moves treated people out of `T`:
+These are governed by `compartment_priority`, node allocation, daily capacity,
+and stockpile availability. Disease progression then moves treated people out
+of `T`:
 
 ```{math}
 \Delta_{T \to R} =

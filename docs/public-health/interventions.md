@@ -153,7 +153,6 @@ incomplete treatment through stockpile timing, capacity, eligibility,
   "identity": "stockpile-age-risk",
   "parameters": {
     "age_risk_priority_groups": ["0.0", "0.5", "1.0", "1.0", "0.5"],
-    "eligible_compartments": ["E", "I"],
     "compartment_priority": ["I", "E"],
     "antiviral_capacity_proportion": "0.10",
     "antiviral_half_life_days": "30",
@@ -169,19 +168,18 @@ incomplete treatment through stockpile timing, capacity, eligibility,
 | --- | --- | --- | --- |
 | `identity` | Yes | None | Antiviral allocation strategy. The supported value is `"stockpile-age-risk"`. |
 | `age_risk_priority_groups` | No | All `1.0` | Eligibility for each age and hospitalization-risk group. Allowed values are `0.0`, `0.5`, and `1.0`, with the same meanings as vaccination. |
-| `eligible_compartments` | No | `["E", "I"]` | Disease compartments whose members can receive a dose and move into `T`. Every label must exist in the selected disease model. |
-| `compartment_priority` | No | `["I", "E"]` | Order in which eligible compartments receive treatment within a demographic group. Every listed compartment must also be eligible. |
+| `compartment_priority` | No | `["I", "E"]` | Disease compartments whose members can receive treatment, in treatment order within a demographic group. Every label must exist in the selected disease model. |
 | `antiviral_capacity_proportion` | No | `1.0` | Maximum fraction of a node's total population that can begin treatment per day. |
 | `antiviral_half_life_days` | No | `null` | Positive stockpile half-life in days. Use `null` to disable decay. This affects unused doses, not people already in `T`. |
 | `antiviral_stockpile` | No | Empty list | Dose releases. Each entry requires an integer simulation `day` and a dose `amount`. Same-day entries are combined and negative days are reassigned to day 0. |
 
 Common eligible compartments are:
 
-| Disease model | Eligible-compartment example | Priority example |
-| --- | --- | --- |
-| SEITRS, stochastic or deterministic | `["E", "I"]` | `["I", "E"]` |
-| SEITHRD | `["E", "IA", "IP", "IS"]` | `["IS", "IP", "IA", "E"]` |
-| Gillespie SEATIRD | `["E", "A", "I"]` | `["I", "A", "E"]` |
+| Disease model | `compartment_priority` example |
+| --- | --- |
+| SEITRS, stochastic or deterministic | `["I", "E"]` |
+| SEITHRD | `["IS", "IP", "IA", "E"]` |
+| Gillespie SEATIRD | `["I", "A", "E"]` |
 
 The stockpile parameters control movement **into** `T`. Disease model
 parameters control what happens after treatment begins:
