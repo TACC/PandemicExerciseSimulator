@@ -35,6 +35,34 @@ open docs/_build/html/index.html
 
 On Linux, use `xdg-open` instead of `open`.
 
+## Preview Edits Live
+
+For documentation editing, `sphinx-autobuild` is included in
+`docs/requirements.txt` as an optional authoring tool. It is only needed by
+contributors who want live browser refreshes while editing docs.
+
+Install the documentation dependencies in your active Python environment:
+
+```bash
+python3 -m pip install -r docs/requirements.txt
+```
+
+Start the live preview server from the repository root:
+
+```bash
+sphinx-autobuild docs docs/_build/html --open-browser
+```
+
+If your shell cannot find the `sphinx-autobuild` command, confirm that the same
+environment used for installation is active, or run it as a Python module:
+
+```bash
+python3 -m sphinx_autobuild docs docs/_build/html --open-browser
+```
+
+By default, the preview is served at `http://127.0.0.1:8000/` and rebuilds when
+files under `docs/` change.
+
 ## Host On Read The Docs
 
 1. Commit and push `.readthedocs.yaml`, `docs/conf.py`, and the `docs/` pages.
