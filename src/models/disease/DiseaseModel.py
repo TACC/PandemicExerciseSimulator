@@ -52,7 +52,7 @@ class DiseaseModel:
         elif self.disease_model == 'seirs-deterministic':
             from .DeterministicSEIRS import DeterministicSEIRS
             return DeterministicSEIRS(self)
-        elif self.disease_model in ('seirs-stochastic', 'seitrs-stochastic', 'seir-stochastic', 'seitr-stochastic'):
+        elif self.disease_model in 'seirs-stochastic':
             from .StochasticSEIRS import StochasticSEIRS
             return StochasticSEIRS(self)
         elif self.disease_model == 'seihrd-stochastic':
