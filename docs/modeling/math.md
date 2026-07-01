@@ -148,7 +148,8 @@ resolves competing exits from the remaining source population.
 
 ### SEITHRD
 
-SEITHRD uses the SEIHRD progression rates above and adds treated recovery.
+SEITHRD uses the SEIHRD progression rates above and adds treated
+hospitalization or recovery.
 At the start of a simulation day, antiviral allocation may transfer people
 from `E`, `IA`, `IP`, and `IS` into `T`. For each compartment, “before” means
 immediately before that day's allocation and “after” means immediately after
@@ -177,8 +178,8 @@ change from one day to the next.
 \dot{IA} &= p_A\alpha E - \gamma_A IA, \\
 \dot{IP} &= (1-p_A)\alpha E - \kappa IP, \\
 \dot{IS} &= \kappa IP - (h+\gamma_S)IS, \\
-\dot H  &= hIS - (\mu_H+\gamma_H)H, \\
-\dot T  &= -\tau_T T, \\
+\dot H  &= hIS + h_TT - (\mu_H+\gamma_H)H, \\
+\dot T  &= -(h_T+\tau_T)T, \\
 \dot R  &= \gamma_A IA + \gamma_S IS + \gamma_H H + \tau_T T, \\
 \dot D  &= \mu_H H.
 \end{aligned}
@@ -186,7 +187,68 @@ change from one day to the next.
 :::
 
 Here $F$ uses the weighted infectious population defined in the Force Of
-Infection section above, including treated infectiousness.
+Infection section above, including treated infectiousness. The treated
+hospitalization rate $h_T$ uses the SEIHRD hospitalization split reduced by
+`antiviral_effectiveness_hosp`; for example, `0.25` means 25% lower
+hospitalization risk, or 75% relative risk, among treated people.
+
+The `T -> H` branch uses the same target clock as untreated symptomatic
+hospitalization. Let $d_{IS,H}$ be `IS_to_H_days`:
+
+```{math}
+\eta_H = \frac{1}{d_{IS,H}}.
+```
+
+Treatment changes the desired realized hospitalization proportion. Let
+$e_{AV,H}$ be `antiviral_effectiveness_hosp`:
+
+```{math}
+p_{T \to H} = p_{IS \to H}
+              \left(1 - e_{AV,H}\right),
+```
+
+then the competing-clock adjustment solves for the `T -> H` branch multiplier
+using target rate $\eta_H$ and competing recovery rate
+$\tau_T = 1 / d_T$, where $d_T$ is `T_to_R_days`.
+
+For a concrete low-risk example, take
+`prop_IS_to_H_lowrisk = 0.10`, `IS_to_H_days = 3`,
+`IS_to_R_days = 7`, `T_to_R_days = 5`, and
+`antiviral_effectiveness_hosp = 0.25`. Untreated `IS` has a realized
+hospitalization proportion of 0.10, so about 100 of 1,000 untreated
+symptomatic people eventually enter `H`. Treated `T` has:
+
+```{math}
+p_{T \to H} = 0.10(1 - 0.25) = 0.075,
+```
+
+so about 75 of 1,000 treated people eventually enter `H`. Because
+`T_to_R_days` differs from `IS_to_R_days`, the branch multiplier changes, but
+the `T -> H` target clock remains $\eta_H = 1/3$ per day.
+
+For the untreated pathway, the competing-clock adjustment combines
+$\eta_H = 1/3$ with $\gamma_S = 1/7$. The adjusted daily rates are
+approximately:
+
+```{math}
+h = 0.0152,\quad \gamma_S^\ast = 0.1364,\quad
+\frac{h}{h+\gamma_S^\ast} = 0.10.
+```
+
+For the treated pathway, the target clock remains $\eta_H = 1/3$, but the
+desired realized hospitalization proportion is 0.075 and the competing
+recovery clock is $\tau_T = 1/5$. The adjusted daily rates are approximately:
+
+```{math}
+h_T = 0.0155,\quad \tau_T' = 0.1907,\quad
+\frac{h_T}{h_T+\tau_T'} = 0.075.
+```
+
+Thus the antiviral parameter changes the realized proportion from 10% to
+7.5%, while the hospitalization target rate used in the adjustment is still
+the original `IS_to_H_days` rate. The recovery clock is also shortened from
+`IS_to_R_days = 7` to `T_to_R_days = 5`, representing a 2-day antiviral
+reduction in symptomatic duration for people treated after entering `IS`.
 
 ### SEATIRD
 
@@ -208,11 +270,10 @@ $\nu$ for mortality:
 ```
 :::
 
-The stochastic SEATIRD model follows these pathways with a Gillespie-style
-queue of individual events rather than numerically solving this ODE system.
-Its built-in `A -> T` pathway is part of the disease trajectory; optional
-stockpile treatment additionally replaces an eligible person's queued
-trajectory with a newly drawn trajectory beginning in `T`.
+The stochastic SEATIRD model uses a Gillespie-style queue of individual events
+rather than numerically solving this ODE system. Its untreated trajectory
+bypasses `T` with `A -> I`; optional stockpile treatment replaces an eligible
+person's queued trajectory with a newly drawn trajectory beginning in `T`.
 
 ## SEIRS Daily Transitions
 
@@ -302,23 +363,27 @@ S, E, IA, IP, IS, H, T, R, D.
 The disease progression transitions are:
 
 ```{math}
-S \rightarrow E,\quad
-E \rightarrow IA \text{ or } IP,\quad
-IP \rightarrow IS,\quad
-IS \rightarrow H \text{ or } R,\quad
-H \rightarrow D \text{ or } R,\quad
-IA \rightarrow R,\quad
-T \rightarrow R.
+\begin{aligned}
+S &\rightarrow E, &
+E &\rightarrow IA \text{ or } IP, &
+IP &\rightarrow IS, \\
+IS &\rightarrow H \text{ or } R, &
+H &\rightarrow D \text{ or } R, &
+IA &\rightarrow R, \\
+T &\rightarrow H \text{ or } R.
+\end{aligned}
 ```
 
 As with SEITRS, the disease model has no rate into `T`. Antiviral allocation
 creates the possible treatment movements:
 
 ```{math}
+\begin{aligned}
 \Delta_{E \to T}^{AV},\quad
 \Delta_{IA \to T}^{AV},\quad
 \Delta_{IP \to T}^{AV},\quad
 \Delta_{IS \to T}^{AV}.
+\end{aligned}
 ```
 
 These are governed by `compartment_priority`, node allocation, daily capacity,
@@ -326,13 +391,24 @@ and stockpile availability. Disease progression then moves treated people out
 of `T`:
 
 ```{math}
-\Delta_{T \to R} =
-\min(\operatorname{Pois}(\tau_T T), T),
-\quad
-\tau_T = \frac{1}{d_T}.
+\begin{aligned}
+\Delta_{T \to H}
+&= \min(\operatorname{Pois}(h_T T), T), \\
+\Delta_{T \to R}
+&= \min(
+    \operatorname{Pois}(\tau_T (T-\Delta_{T \to H})),
+    T-\Delta_{T \to H}
+), \\
+\tau_T &= \frac{1}{d_T}.
+\end{aligned}
 ```
 
-Here $d_T$ is `T_to_R_days`. No stockpile release means no new `T` entries.
+Here $d_T$ is `T_to_R_days`. The `T -> H` split is reduced by
+`antiviral_effectiveness_hosp` relative to the untreated `IS -> H` realized
+proportion, while the `T -> H` target rate remains
+`1 / IS_to_H_days`. Treatment reduces severe outcomes without forcing all
+treated people to recover directly. No stockpile release means no new `T`
+entries.
 
 ## Gillespie SEATIRD Events
 
@@ -341,15 +417,14 @@ infection time, each person receives an event schedule:
 
 ```{math}
 E \rightarrow A,\quad
-A \rightarrow T \text{ or } R \text{ or } D,\quad
+A \rightarrow I \text{ or } R \text{ or } D,\quad
 T \rightarrow I \text{ or } R \text{ or } D,\quad
 I \rightarrow R \text{ or } D.
 ```
 
 Here `T` means Treated, and anyone in `T` is assumed to be receiving an
-antiviral. The event times are drawn when the infection trajectory is created.
-The built-in `A -> T` event assigns treatment as part of that trajectory, even
-without an antiviral stockpile.
+antiviral. Untreated event times are drawn when the infection trajectory is
+created, but `T` is only entered when an antiviral stockpile dose is allocated.
 
 The optional stockpile model adds external queue edits:
 

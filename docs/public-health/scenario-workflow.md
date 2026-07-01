@@ -79,9 +79,20 @@ For an antiviral SEITHRD scenario, also define treated progression and
 infectiousness, such as:
 
 ```json
+"IS_to_R_days": "7",
 "T_to_R_days": "5",
 "rel_inf_T_to_IS": "0.5"
 ```
+
+This represents a 2-day reduction in symptomatic duration for people treated
+after entering `IS`. For routine treatment, set
+`antiviral_model.parameters.compartment_priority` to `["IS"]`. Including `E`,
+`IA`, or `IP` makes the scenario a prophylaxis or early-treatment scenario and
+changes the interpretation of treated infectious time.
+
+Set the antiviral severe-outcome effect in `antiviral_model.parameters`; for
+example, `"antiviral_effectiveness_hosp": "0.25"` represents a 25% treated
+hospitalization risk reduction, or 75% relative risk.
 
 ## 4. Choose Travel Assumptions
 
@@ -123,12 +134,16 @@ stockpile while leaving vaccination and NPIs empty:
 "antiviral_stockpile": [
   {"day": "10", "amount": "100"}
 ],
+"antiviral_effectiveness_hosp": "0.25",
 "vaccine_model": {},
 "non_pharma_interventions": []
 ```
 
 Run separate comparisons for changes in release timing, amount, eligibility,
 or compartment priority instead of changing all of them at once.
+For vaccine target groups, there is no staged rollout from one eligibility
+group to another within a single run. Choose the target population up front,
+then compare target groups with separate scenarios.
 
 ## Plan Runtime And Realizations
 

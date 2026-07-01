@@ -63,10 +63,13 @@ Current useful templates include:
 
 SEITRS templates should include both a `T` compartment and an `antiviral_model`
 block when treatment is part of the scenario.
-SEITHRD templates should also include `T_to_R_days`, `rel_inf_T_to_IS`, and
-antiviral `compartment_priority` values that match the SEIHRD compartment
-labels.
+SEITHRD templates should also include `T_to_R_days`, `rel_inf_T_to_IS`,
+`antiviral_effectiveness_hosp`, and antiviral `compartment_priority` values
+that match the SEIHRD compartment labels. Use `IS_to_R_days = 7.0` and
+`T_to_R_days = 5.0` for the default 2-day antiviral reduction, and use
+`["IS"]` as the default SEITHRD `compartment_priority` unless the template is
+specifically for prophylaxis.
 
-SEATIRD always includes the Treated compartment `T` and its built-in `A -> T`
-treatment event. Use `INPUT_SEATIRD-STOCH_ANTIVIRAL.json` when a scenario also
-needs stockpile-constrained treatment from `E`, `A`, or `I`.
+SEATIRD always includes the Treated compartment `T`, but Gillespie stochastic
+SEATIRD enters `T` only through stockpile-constrained treatment from `E`, `A`,
+or `I`. Use `INPUT_SEATIRD-STOCH_ANTIVIRAL.json` for antiviral scenarios.

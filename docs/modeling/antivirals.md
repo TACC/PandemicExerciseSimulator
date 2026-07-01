@@ -4,7 +4,9 @@ Antivirals are modeled as a stockpile-constrained intervention. They move
 people from eligible compartments into `T` by allocation, not by a disease-rate
 equation. This is intentionally similar to vaccination: a stockpile is released,
 distributed to nodes, and then applied within each node according to eligibility
-and priority.
+and priority. Releases and allocation are deterministic fixed-count transfers;
+the stockpile model does not draw a random number of doses or randomly sample
+who receives a dose.
 
 For SEITRS, eligible compartments are usually `E` and `I`. For SEITHRD, the
 antiviral-capable SEIHRD variant, eligible compartments can be `E`, `IA`, `IP`,
@@ -21,7 +23,8 @@ five-age-group configuration looks like:
   "identity": "stockpile-age-risk",
   "parameters": {
     "age_risk_priority_groups": ["0.0", "0.5", "1.0", "1.0", "0.5"],
-    "compartment_priority": ["I", "E"],
+    "compartment_priority": ["IS"],
+    "antiviral_effectiveness_hosp": "0.25",
     "antiviral_capacity_proportion": "0.10",
     "antiviral_half_life_days": "30",
     "antiviral_stockpile": [
@@ -64,6 +67,12 @@ Available doses are allocated proportionally among eligible groups. Both
 vaccinated and unvaccinated people may receive antivirals if they satisfy the
 age/risk and compartment criteria.
 
+If supplies, daily capacity, and eligible compartment counts are sufficient,
+everyone who meets the configured age/risk and compartment criteria can receive
+an antiviral. People outside that eligibility are excluded from the scenario,
+even if unused doses remain. To test a narrower or broader target population,
+run a separate scenario with a different eligibility vector.
+
 If omitted, every age group defaults to `1.0`.
 
 ### `compartment_priority`
@@ -73,12 +82,76 @@ order in which they are treated within an age/risk/vaccination group. It does
 not prioritize one age group over another.
 
 ```json
-"compartment_priority": ["I", "E"]
+"compartment_priority": ["IS"]
 ```
 
-With this configuration, available doses first move people from `I` to `T`,
-then move people from `E` to `T`. Every label must exist in the active model's
-compartment list. If omitted, the default is `["I", "E"]`.
+With this SEITHRD configuration, available doses move people from symptomatic
+infectious `IS` to `T`. Every label must exist in the active model's
+compartment list. If omitted, the default is `["I", "E"]`, which is mainly
+useful for SEITRS-style models. For SEITHRD symptomatic treatment scenarios,
+set `compartment_priority` explicitly to `["IS"]`.
+
+Including `E`, `IA`, or `IP` in SEITHRD changes the scenario from symptomatic
+treatment toward prophylaxis or early treatment. Those people may spend more
+calendar time in `T` than someone treated only after entering `IS`, so the
+meaning of `T_to_R_days` and treated infectious time changes. The current
+stockpile model treats eligible compartment members directly; it does not yet
+represent a separate proportion or household-contact multiplier, such as
+treating 1 to 5 family members per infectious person. Use earlier
+compartments only for explicit prophylaxis scenarios.
+
+### `antiviral_effectiveness_hosp`
+
+This optional SEITHRD parameter is the treated relative reduction in
+hospitalization risk. It accepts a scalar or one value per age group, with
+values from `0.0` to `1.0`.
+
+For oseltamivir-like treatment (Tamiflu), `"0.25"` represents a 25% hospitalization risk reduction,
+or 75% relative risk, for treated people. Treated people can still be
+hospitalized: SEITHRD moves `T -> H` or `T -> R`, and this parameter reduces
+only the realized `T -> H` risk. If omitted, the default is `1.0`, meaning
+complete protection from hospitalization for treated people. Set an explicit
+smaller value, such as `0.25`, when modeling partial protection.
+
+The treated hospitalization branch is anchored to the original symptomatic
+hospitalization clock, `IS_to_H_days`. Internally, the model uses
+`target_rate = 1 / IS_to_H_days` for both untreated `IS -> H` and treated
+`T -> H`; treatment changes the desired realized hospitalization proportion,
+not the baseline hospitalization clock itself.
+
+For example, suppose a low-risk age group has the following parameters and
+the default complete protection has been overridden with partial protection:
+
+```json
+"IS_to_H_days": "3.0",
+"IS_to_R_days": "7.0",
+"T_to_R_days": "5.0",
+"prop_IS_to_H_lowrisk": ["0.10"],
+"antiviral_effectiveness_hosp": "0.25"
+```
+
+Untreated symptomatic people have an eventual hospitalization proportion of
+`0.10`, so about 100 of 1,000 people in `IS` would eventually move to `H`.
+For treated people, the model computes:
+
+```text
+treated hospitalization proportion = 0.10 * (1 - 0.25) = 0.075
+```
+
+So about 75 of 1,000 people in `T` would eventually move to `H`, while the
+remaining treated exits go to `R`. The model still uses the original
+`IS_to_H_days` rate for the `T -> H` target clock, then adjusts the competing
+`T -> H` versus `T -> R` branch multipliers so the realized treated
+hospitalization proportion is `0.075`.
+
+With the numbers above, the `T -> H` target rate is still
+`1 / IS_to_H_days = 1 / 3 = 0.333` per day before branch weighting. The
+competing-clock adjustment combines that target clock with
+`T -> R = 1 / T_to_R_days = 1 / 5 = 0.200` per day and chooses branch
+weights that realize 7.5% hospitalized among treated people. Treatment does
+not replace `IS_to_H_days`; it lowers the realized hospitalization proportion
+relative to the untreated `IS` pathway and shortens the recovery clock from
+`IS_to_R_days = 7.0` to `T_to_R_days = 5.0`.
 
 ### `antiviral_capacity_proportion`
 
@@ -125,11 +198,17 @@ Each `day` is an integer simulation day and each `amount` is a dose count.
 Multiple entries on the same day are combined. A negative release day is
 reassigned to day 0 with a warning. If no eligible people are available,
 unused doses roll forward to the next day. If omitted, the stockpile is empty.
+The configured `amount` is the number of doses entering the stockpile on that
+day; it is not noised or sampled.
 
 On each release day, doses are distributed among nodes in proportion to each
 node's currently eligible population. Within a node, doses are allocated
 proportionally among eligible age/risk/vaccination groups and then applied
-according to `compartment_priority`.
+according to `compartment_priority`. Fractional proportional shares are turned
+into integer transfer counts with deterministic rounding and availability
+limits. The only reason fewer people move into `T` than the release amount is
+that doses are limited by eligibility, capacity, stockpile decay, or available
+people in the prioritized compartments.
 
 ## Disease Parameters
 
@@ -140,6 +219,7 @@ Disease parameters then describe treated people:
 | `T_to_R_days` | Average duration from treated infectious to recovered. |
 | `rel_inf_T_to_I` | Relative infectiousness of treated people compared with untreated `I`. |
 | `rel_inf_T_to_IS` | Relative infectiousness of treated people compared with symptomatic `IS` in SEITHRD. |
+| `antiviral_effectiveness_hosp` | Antiviral-model parameter that reduces `T -> H` risk in SEITHRD; scalar or one value per age group. Defaults to `1.0`, complete protection from hospitalization. |
 
 In SEITRS and SEITHRD, if the compartment list includes `T` but no antiviral
 model is configured, the simulator warns. Those models can still run, but no
@@ -148,7 +228,9 @@ people enter `T`.
 There are no disease-model rates such as `E_to_T_days` or `I_to_T_days`.
 Movement into `T` is fully determined by released doses, daily capacity,
 the population in `compartment_priority`. In SEITRS and SEITHRD,
-movement out of `T` is controlled by `T_to_R_days`.
+movement out of `T` is controlled by `T_to_R_days`; SEITHRD also allows
+treated people to enter `H`, with risk reduced by
+`antiviral_effectiveness_hosp`.
 
 ## Gillespie SEATIRD
 
@@ -156,10 +238,9 @@ SEATIRD already contains `T`, and `T` means **Treated**, consistently with the
 other antiviral-capable models. Anyone in `T` is assumed to be receiving an
 antiviral.
 
-Unlike SEITRS and SEITHRD, SEATIRD has a built-in queued `A -> T` event.
-Therefore, SEATIRD can assign people to antiviral treatment even when no
-stockpile model is configured. Every infection receives its queued individual
-trajectory when it enters `E`, including whether it will enter `T`.
+In the Gillespie stochastic SEATIRD model, untreated infection trajectories do
+not enter `T`. Natural progression uses `E -> A -> I` or exits from `A` to
+`R/D`; stockpile allocation is the only route into `T`.
 
 When the optional stockpile model allocates an antiviral dose to someone in
 `E`, `A`, or `I`, the simulator:
@@ -168,8 +249,7 @@ When the optional stockpile model allocates an antiviral dose to someone in
 2. marks the person's old source-compartment event trajectory as stale;
 3. queues a new trajectory beginning in `T`.
 
-Both built-in and stockpile-created `T` entries follow the existing SEATIRD
-competing events:
+Stockpile-created `T` entries follow the existing SEATIRD competing events:
 `T -> I`, `T -> R`, or `T -> D`. It uses `chi`, `gamma`, and `nu`; SEATIRD does
 not use `T_to_R_days`.
 

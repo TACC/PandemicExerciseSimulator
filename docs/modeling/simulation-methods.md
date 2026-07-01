@@ -7,6 +7,9 @@ The simulator contains several numerical methods. A model name ending in
 The travel model is separate from the disease model. The available binomial
 travel model is stochastic, so a deterministic disease model can still produce
 different network-level results across realizations when travel is enabled.
+Vaccine and antiviral stockpile releases are deterministic scheduled counts:
+they transfer fixed numbers of doses or people where eligible, and do not add
+another random draw to the simulation.
 
 ## Method Summary
 
@@ -26,10 +29,13 @@ events such as:
 
 ```{math}
 E \rightarrow A,\quad
-A \rightarrow T,\quad
+A \rightarrow I,\quad
 T \rightarrow I,\quad
 A,T,I \rightarrow R \text{ or } D.
 ```
+
+The `T` compartment is entered only through stockpile-allocated antiviral
+treatment. Natural untreated progression bypasses `T`.
 
 Because each infected person creates several scheduled events, runtime grows
 with population size and epidemic size. This model can become impractical for

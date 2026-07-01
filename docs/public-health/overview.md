@@ -31,6 +31,9 @@ The output can be used as a comparison between scenarios or a starting point for
   such as occupational exposure for frontline workers, are not yet available
 - Vaccination has unvaccinated and vaccinated groups but no waning, boosters,
   or multiple vaccine products
+- Vaccine stockpile eligibility by age and hospitalization-risk group is fixed
+  for a scenario. The simulator does not currently model staged rollout from
+  one target group to another during the same run.
 - The daily stochastic models use Poisson transitions. Alternative
   distributions for superspreading, such as a negative binomial force of
   infection, are not currently implemented

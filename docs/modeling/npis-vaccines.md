@@ -116,7 +116,8 @@ Q_d = \sum_{r:d_r^\ast=d} q_r.
 
 The lag therefore shifts when people move from the unvaccinated susceptible
 group to the vaccinated susceptible group. It is not a separate partially
-protected state.
+protected state. The release amount $Q_d$ is deterministic: it is the fixed
+sum of configured stockpile entries for that effective day, not a random draw.
 
 ## Age And Risk Eligibility
 
@@ -133,6 +134,17 @@ For age group $a$, the configured priority value selects risk groups:
 
 These values define eligibility, not ordering. Doses are allocated
 proportionally among eligible populations.
+
+If enough doses, capacity, susceptible headroom, and adherence headroom are
+available, every eligible susceptible person can be vaccinated. Targeting a
+subgroup is therefore a scenario design choice, not a hidden priority queue:
+people outside the configured age/risk eligibility are excluded from that run.
+For example, a scenario can make all high-risk people eligible and also make
+everyone in the 65-and-older age group eligible. The current vaccine stockpile
+model does not support staged expansion of eligibility as the simulation
+progresses, such as high-risk people first and everyone later. To compare
+rollout targets, run separate scenarios with different eligibility vectors and
+release schedules.
 
 ## Allocation Among Nodes
 
@@ -161,6 +173,7 @@ r_n = x_n-\lfloor x_n\rfloor.
 This is the largest-remainder method. It preserves integer allocations while
 keeping them as close as possible to population-proportional shares, 
 i.e. having 50.35% of the population requires us to choose how to allocate 0.35% of doses.
+No random sampling is used in this node-allocation step.
 
 The network eligibility denominator is calculated when the vaccine strategy
 is initialized. It includes all disease compartments, so ordinary disease
@@ -255,7 +268,8 @@ v_g = \left\lfloor \min(y_g,H_g) \right\rfloor.
 Remaining whole doses are assigned by largest fractional remainder to groups
 that still have adherence and susceptible headroom. Doses that cannot be used
 because of capacity, eligibility, susceptibility, or adherence roll to the
-next day.
+next day. This within-node allocation is deterministic: it transfers fixed
+integer counts where eligible people are available.
 
 Vaccination then conserves population by moving:
 
@@ -331,6 +345,8 @@ after hospitalization. It reduces deaths indirectly by reducing movement into
 
 - Vaccine protection does not wane
 - Only susceptible people are vaccinated
+- Vaccine age/risk eligibility is fixed at scenario start; staged rollout to
+  new target groups during the same run is not currently represented
 - There are two vaccine groups: unvaccinated and vaccinated; boosters and
   multiple products are not represented
 - NPI effectiveness modifies beta but does not change contact matrices,

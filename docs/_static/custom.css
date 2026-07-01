@@ -30,16 +30,41 @@
   overflow-wrap: normal;
 }
 
+/* Keep display math inside the readable content column. */
+.rst-content div.math,
+.rst-content .math {
+  max-width: 100%;
+}
+
+.rst-content mjx-container[display="true"] {
+  max-width: 100%;
+  overflow: visible;
+  text-align: center;
+}
+
+.rst-content mjx-container[display="true"] mjx-math {
+  max-width: 100%;
+}
+
 /* Visually separate complete model equation systems from surrounding prose. */
 .rst-content .ode-system {
   margin: 0 0 24px;
   padding: 14px 20px;
-  overflow-x: auto;
+  max-width: 100%;
+  overflow: visible;
   background: #f3f4f5;
   border: 1px solid #d9dde1;
   border-left: 4px solid #9aa4ad;
+  box-sizing: border-box;
 }
 
 .rst-content .ode-system .math {
   margin: 0;
+  text-align: center;
+}
+
+@media screen and (max-width: 768px) {
+  .rst-content .ode-system {
+    padding: 12px 14px;
+  }
 }

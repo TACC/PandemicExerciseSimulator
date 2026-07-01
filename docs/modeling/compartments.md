@@ -92,7 +92,7 @@ IA \rightarrow R.
 | `rel_inf_IP_to_IS` | Infectiousness of `IP` relative to `IS`. |
 | `rel_inf_IA_to_IS` | Infectiousness of `IA` relative to `IS`. |
 | `relative_susceptibility` | Optional age-specific susceptibility multipliers; defaults to all 1.0. |
-| `T_to_R_days` | SEITHRD mean treated duration before recovery. |
+| `T_to_R_days` | SEITHRD mean treated duration before recovery for treated people who are not hospitalized. |
 | `rel_inf_T_to_IS` | SEITHRD infectiousness of `T` relative to `IS`; scalar or one value per age group. |
 
 The configured split proportions are intended as eventual outcomes. When two
@@ -111,15 +111,15 @@ Euler updates with the same parameter meanings.
 | `R0` | Transmission target used with `beta_scale`. |
 | `beta_scale` | Calibration divisor; baseline beta is `R0 / beta_scale`. |
 | `tau` | Mean duration from `E` to `A`. |
-| `kappa` | Mean duration from `A` to built-in treatment `T`. |
+| `kappa` | Mean duration from `A` to symptomatic infectious `I` in stochastic SEATIRD; deterministic SEATIRD still uses it for `A -> T`. |
 | `chi` | Mean duration from `T` to symptomatic infectious `I`. |
 | `gamma` | Recovery-period parameter for infectious `A`, `T`, and `I`. |
 | `nu` | Age-specific low-risk mortality-rate parameter. High-risk values are currently nine times the configured values. |
 | `sigma` | Age-specific relative susceptibility. |
 
 SEATIRD currently treats `A`, `T`, and `I` as equally infectious in its contact
-process. Unlike SEITRS and SEITHRD, its built-in `A -> T` path is part of the
-disease trajectory and does not require a released antiviral stockpile. 
+process. In the Gillespie stochastic model, `T` is entered only through
+released antiviral stockpile allocation.
 
 SEATIRD is a legacy model from when the original code base was in C++. We do not recommend using this model as
 it's parameterization does not emulate the real-world well. However, it is a good example of a Gillespie model
@@ -141,12 +141,18 @@ people from `E` or `I` into `T` subject to available doses and prioritization.
 This is deliberate: treatment is an intervention constrained by stockpile
 availability, not a spontaneous clinical transition.
 
-The same rule applies to SEITHRD: eligible people can move from `E`, `IA`,
-`IP`, or `IS` into `T` when antiviral doses are allocated. The disease model
-then moves `T -> R` according to `T_to_R_days`.
+The same rule applies to SEITHRD. For routine treatment, eligible people
+should usually move from `IS` into `T` when antiviral doses are allocated.
+Set `IS_to_R_days` to the untreated symptomatic recovery duration and
+`T_to_R_days` to the treated duration; for example, `7` and `5` represent a
+2-day antiviral reduction. Including `E`, `IA`, or `IP` in
+`compartment_priority` changes the scenario toward prophylaxis or early
+treatment, so treated infectious time is no longer directly comparable to
+strict `IS` treatment. The disease model then moves `T -> H` or `T -> R`.
+`antiviral_effectiveness_hosp` reduces the treated hospitalization risk; for
+example, `0.25` represents a 25% risk reduction, or 75% relative risk, and
+does not eliminate hospitalization.
 
-In SEATIRD, people can enter treatment through the model's built-in queued
-`A -> T` event. This event assigns antiviral treatment even without an
-antiviral stockpile configuration. The optional stockpile model can also move
-eligible `E`, `A`, or `I` people into `T`; their old queued path is invalidated
-and a new `T -> I/R/D` path is drawn.
+In Gillespie SEATIRD, people enter treatment only through stockpile allocation.
+The stockpile model can move eligible `E`, `A`, or `I` people into `T`; their
+old queued path is invalidated and a new `T -> I/R/D` path is drawn.
