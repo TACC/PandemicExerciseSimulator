@@ -5,6 +5,7 @@
   "metadata_tags": {
     "creator": "YOUR_NAME",
     "disease": ["DISEASE"],
+    "antiviral": ["Tamiflu", "oseltamivir"],
     "sim_day_0": null,
     "notes": ["PLACEHOLDER"]
   },
@@ -30,9 +31,9 @@
         "6.8",
         "6.55"
       ],
-      "IS_to_R_days": "2.0",
+      "IS_to_R_days": "7.0",
       "IA_to_R_days": "2.3",
-      "T_to_R_days": "5",
+      "T_to_R_days": "5.0",
       "prop_E_to_IA": [
         "0.25",
         "0.25",
@@ -103,7 +104,8 @@
         "1.0",
         "1.0"
       ],
-      "compartment_priority": ["IS", "IP", "IA", "E"],
+      "compartment_priority": ["IS"],
+      "antiviral_effectiveness_hosp": "0.25",
       "antiviral_capacity_proportion": "1.0",
       "antiviral_half_life_days": null,
       "antiviral_stockpile": [
