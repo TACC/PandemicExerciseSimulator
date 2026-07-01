@@ -5,9 +5,8 @@
   "metadata_tags": {
     "creator": "YOUR_NAME",
     "disease": ["DISEASE"],
-    "antiviral": ["Tamiflu", "oseltamivir"],
     "sim_day_0": null,
-    "notes": ["PLACEHOLDER"]
+    "notes": ["Tamiflu", "oseltamivir"]
   },
   "data": {
     "population": "../data/STATE/county_pop_by_age_STATE_2019-2023ACS.csv",
