@@ -32,7 +32,7 @@ class AntiviralStockpileStrategy(Antiviral):
         self.compartment_priority = [
             str(label).strip().upper()
             for label in self.parameters.antiviral_parameters.get(
-                "compartment_priority", ["I", "E"]
+                "compartment_priority", ["I"]
             )
         ]
         for label in self.compartment_priority:
