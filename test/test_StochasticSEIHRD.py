@@ -44,9 +44,9 @@ def make_params(compartments, antiviral_parameters=None):
             "IS_to_H_days": "3.0",
             "H_to_D_days": "5.0",
             "H_to_R_days": ["4.0"],
-            "IS_to_R_days": "2.0",
+            "IS_to_R_days": "7.0",
             "IA_to_R_days": "2.0",
-            "T_to_R_days": "2.0",
+            "T_to_R_days": "5.0",
             "prop_E_to_IA": ["0.25"],
             "prop_IS_to_H_lowrisk": ["0.1"],
             "prop_H_to_D": ["0.05"],
@@ -91,6 +91,7 @@ def test_seithrd_model_caps_transitions_so_compartments_never_go_negative():
         999.0,
         999.0,
         999.0,
+        999.0,
         rng=HugePoissonRng(),
     )
 
@@ -99,7 +100,55 @@ def test_seithrd_model_caps_transitions_so_compartments_never_go_negative():
     assert np.isclose(tomorrow.sum(), y.sum())
 
 
-def test_seihrd_with_t_moves_t_to_r_without_creating_t():
+def test_seithrd_model_splits_t_to_h_and_r():
+    y = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0])
+
+    daily_change = SEITHRD_model(
+        y,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.2,
+        0.5,
+        rng=FloorPoissonRng(),
+    )
+
+    tomorrow = y + daily_change
+    assert tomorrow[5] == 2.0
+    assert tomorrow[6] == 4.0
+    assert tomorrow[7] == 4.0
+
+
+def test_seihrd_with_t_reduces_but_does_not_eliminate_hospitalization():
+    model, node = make_model(
+        ["S", "E", "IA", "IP", "IS", "H", "T", "R", "D"],
+        antiviral_parameters={
+            "antiviral_stockpile": [],
+            "antiviral_effectiveness_hosp": "0.25",
+        },
+    )
+    group = GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.U.value)
+    node.compartments.set_compartment_vector_for(
+        group,
+        np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 100.0, 0.0, 0.0]),
+    )
+
+    model.simulate(node, time=1, vaccine_model=DummyVax())
+
+    result = node.compartments.get_compartment_vector_for(group)
+    assert result[Compartments.H.value] > 0.0
+    assert result[Compartments.H.value] < 10.0
+    assert result[Compartments.T.value] > 0.0
+    assert result[Compartments.R.value] > 0.0
+
+
+def test_seihrd_antiviral_effectiveness_hosp_defaults_to_complete_protection():
     model, node = make_model(
         ["S", "E", "IA", "IP", "IS", "H", "T", "R", "D"],
         antiviral_parameters={"antiviral_stockpile": []},
@@ -107,14 +156,15 @@ def test_seihrd_with_t_moves_t_to_r_without_creating_t():
     group = GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.U.value)
     node.compartments.set_compartment_vector_for(
         group,
-        np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0]),
+        np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 100.0, 0.0, 0.0]),
     )
 
     model.simulate(node, time=1, vaccine_model=DummyVax())
 
     result = node.compartments.get_compartment_vector_for(group)
-    assert result[Compartments.T.value] == 5.0
-    assert result[Compartments.R.value] == 5.0
+    assert model.antiviral_effectiveness_hosp == [1.0]
+    assert result[Compartments.H.value] == 0.0
+    assert result[Compartments.R.value] > 0.0
 
 
 def test_stochastic_seihrd_uses_treated_variant_when_t_compartment_exists(monkeypatch):
@@ -174,4 +224,16 @@ def test_seihrd_t_compartment_with_antivirals_requires_t_to_r_days():
     parent = DiseaseModel(params, npis, now=0.0)
 
     with pytest.raises(ValueError, match="T_to_R_days is required"):
+        parent.get_child("seihrd-stochastic")
+
+
+def test_seihrd_rejects_invalid_antiviral_effectiveness_hosp():
+    params = make_params(
+        ["S", "E", "IA", "IP", "IS", "H", "T", "R", "D"],
+        antiviral_parameters={"antiviral_effectiveness_hosp": "1.5"},
+    )
+    npis = SimpleNamespace(schedule=np.zeros((2, 1, 1)))
+    parent = DiseaseModel(params, npis, now=0.0)
+
+    with pytest.raises(ValueError, match="antiviral_effectiveness_hosp"):
         parent.get_child("seihrd-stochastic")
