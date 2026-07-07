@@ -19,7 +19,7 @@ index order.
 | `IA` | Infectious asymptomatic. |
 | `IP` | Infectious pre-symptomatic. |
 | `IS` | Infectious symptomatic. |
-| `A` | Asymptomatic infectious in SEATIRD. |
+| `A` | Asymptomatic infectious in SEAITRD. |
 | `H` | Hospitalized. |
 | `T` | Treated with an antiviral. |
 | `R` | Recovered or otherwise removed from active infection. |
@@ -40,7 +40,7 @@ values.
 | SEIR | `S, E, I, R` | Use a SEIRS implementation without `immune_period_days`, or set it to 0. |
 | SEIRS | `S, E, I, R` | Adds waning immunity through `R -> S`. |
 | SEITRS | `S, E, I, T, R` | Adds treated infectious `T`; People moved into `T` by antiviral stockpile release. |
-| SEATIRD | `S, E, A, T, I, R, D` | Gillespie model where `T` is treated and part of the queued infection trajectory. |
+| SEAITRD | `S, E, A, I, R, D`; add `T` for antiviral treatment | Gillespie and deterministic model family where treated `T` is populated by antiviral stockpile release. |
 | SEIHRD | `S, E, IA, IP, IS, H, R, D` | Separates infectious into asymptomatic, pre-symptomatic, symptomatic; hospitalization, recovered and death not infectious. |
 | SEITHRD | `S, E, IA, IP, IS, H, T, R, D` | SEIHRD plus treated `T`. |
 
@@ -100,28 +100,29 @@ destinations have different exit rates, the simulator adjusts the branch
 multipliers so the realized proportion still matches the requested value. See
 [Mathematical Reference](math.md), under **Competing Clocks**.
 
-## SEATIRD Parameters
+## SEAITRD Parameters
 
-SEATIRD uses `S, E, A, T, I, R, D`. Its stochastic Gillespie implementation creates an
-individual event queue, while its deterministic implementation uses daily
-Euler updates with the same parameter meanings.
+SEAITRD uses `S, E, A, I, R, D` without antivirals and
+`S, E, A, I, T, R, D` when treatment is enabled. Its stochastic Gillespie
+implementation creates an individual event queue, while its deterministic
+implementation uses daily Euler updates with the same parameter meanings.
 
 | Parameter | Description |
 | --- | --- |
 | `R0` | Transmission target used with `beta_scale`. |
 | `beta_scale` | Calibration divisor; baseline beta is `R0 / beta_scale`. |
 | `tau` | Mean duration from `E` to `A`. |
-| `kappa` | Mean duration from `A` to symptomatic infectious `I` in stochastic SEATIRD; deterministic SEATIRD still uses it for `A -> T`. |
-| `chi` | Mean duration from `T` to symptomatic infectious `I`. |
-| `gamma` | Recovery-period parameter for infectious `A`, `T`, and `I`. |
+| `kappa` | Mean duration from `A` to symptomatic infectious `I`. |
+| `chi` | Retained for stochastic parameter compatibility; deterministic `T` entry is controlled by stockpile allocation, not a daily disease rate. |
+| `gamma` | Recovery-period parameter for infectious `I` and treated `T`. |
 | `nu` | Age-specific low-risk mortality-rate parameter. High-risk values are currently nine times the configured values. |
 | `sigma` | Age-specific relative susceptibility. |
 
-SEATIRD currently treats `A`, `T`, and `I` as equally infectious in its contact
+SEAITRD currently treats `A`, `I`, and `T` as equally infectious in its contact
 process. In the Gillespie stochastic model, `T` is entered only through
 released antiviral stockpile allocation.
 
-SEATIRD is a legacy model from when the original code base was in C++. We do not recommend using this model as
+SEAITRD is a legacy model from when the original code base was in C++. We do not recommend using this model as
 it's parameterization does not emulate the real-world well. However, it is a good example of a Gillespie model
 and may be of use to students, developers, or those interested in comparing model runtimes/limitations.
 
@@ -153,6 +154,6 @@ strict `IS` treatment. The disease model then moves `T -> H` or `T -> R`.
 example, `0.25` represents a 25% risk reduction, or 75% relative risk, and
 does not eliminate hospitalization.
 
-In Gillespie SEATIRD, people enter treatment only through stockpile allocation.
-The stockpile model can move eligible `E`, `A`, or `I` people into `T`; their
-old queued path is invalidated and a new `T -> I/R/D` path is drawn.
+In Gillespie SEAITRD, people enter treatment only through stockpile allocation.
+The stockpile model can move configured eligible `E`, `A`, or `I` people into
+`T`; their old queued path is invalidated and a new `T -> R/D` path is drawn.

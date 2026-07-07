@@ -11,7 +11,7 @@
 # Design notes:
 #   - Disease/travel model parameters are stored as namespaced JSON strings,
 #     not individual columns, to avoid name collisions across model types
-#     (e.g. sigma has different meanings in SEATIRD vs other models).
+#     (e.g. sigma has different meanings in SEAITRD vs other models).
 #   - Each intervention type gets an explicit _used boolean flag.
 #   - Parquet compression (zstd) handles sparse simulation data automatically;
 #     columns of zeros cost almost nothing in file size.

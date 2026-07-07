@@ -181,6 +181,53 @@ def test_antiviral_priority_can_treat_exposed_before_infectious():
     assert result[Compartments.T.value] == 12.0
 
 
+def test_seaitrd_antiviral_priority_can_include_exposed_asymptomatic_and_infectious():
+    net = Network(["S", "E", "A", "I", "T", "R", "D"])
+    node = Node(0, 0, 0, PopulationCompartments([100], [0.0]))
+    net._add_node(node)
+    group = GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.U.value)
+    node.compartments.set_compartment_vector_for(
+        group,
+        np.array([80.0, 2.0, 3.0, 0.0, 5.0, 0.0, 0.0]),
+    )
+
+    params = make_params([{"day": "0", "amount": "10"}])
+    params.antiviral_parameters["compartment_priority"] = ["I", "A", "E"]
+
+    strat = Antiviral(params).get_child("stockpile-age-risk", network=net)
+    strat.distribute_antivirals_to_nodes(net, day=0)
+    strat.distribute_antivirals_to_population(node, day=0)
+
+    result = node.compartments.get_compartment_vector_for(group)
+    assert result[Compartments.E.value] == 0.0
+    assert result[Compartments.A.value] == 0.0
+    assert result[Compartments.I.value] == 0.0
+    assert result[Compartments.T.value] == 10.0
+
+
+def test_seaitrd_antiviral_default_priority_is_infectious_only():
+    net = Network(["S", "E", "A", "I", "T", "R", "D"])
+    node = Node(0, 0, 0, PopulationCompartments([100], [0.0]))
+    net._add_node(node)
+
+    params = make_params([{"day": "0", "amount": "10"}])
+    del params.antiviral_parameters["compartment_priority"]
+
+    strat = Antiviral(params).get_child("stockpile-age-risk", network=net)
+
+    assert strat.compartment_priority == ["I"]
+
+
+def test_antiviral_default_priority_is_infectious_only_for_all_models():
+    net = make_network_with_t()
+    params = make_params([{"day": "0", "amount": "10"}])
+    del params.antiviral_parameters["compartment_priority"]
+
+    strat = Antiviral(params).get_child("stockpile-age-risk", network=net)
+
+    assert strat.compartment_priority == ["I"]
+
+
 def test_antiviral_strategy_requires_t_compartment():
     net = Network(["S", "E", "I", "R"])
     node = Node(0, 0, 0, PopulationCompartments([100], [0.0]))

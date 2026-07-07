@@ -15,9 +15,9 @@
     "high_risk_ratios": "../data/STATE/state_STATE_high-risk-ratios-flu-only.csv"
   },
   "disease_model": {
-    "identity": "seatird-stochastic",
+    "identity": "seaitrd-deterministic",
     "parameters": {
-      "compartments": ["S", "E", "A", "T", "I", "R", "D"],
+      "compartments": ["S", "E", "A", "I", "R", "D"],
       "R0": "3",
       "beta_scale": "14",
       "tau": "7",

@@ -250,30 +250,32 @@ the original `IS_to_H_days` rate. The recovery clock is also shortened from
 `IS_to_R_days = 7` to `T_to_R_days = 5`, representing a 2-day antiviral
 reduction in symptomatic duration for people treated after entering `IS`.
 
-### SEATIRD
+### SEAITRD
 
-The deterministic SEATIRD mean-flow system uses $\tau$ for `E -> A`,
-$\kappa$ for `A -> T`, $\chi$ for `T -> I`, $\gamma$ for recovery, and
-$\nu$ for mortality:
+The deterministic SEAITRD mean-flow system uses $\tau$ for `E -> A`,
+$\kappa$ for `A -> I`, $\gamma$ for recovery, and $\nu$ for mortality. It has
+no disease-rate flow into `T`; antiviral stockpile allocation is the only
+source of treated people:
 
 :::{container} ode-system
 ```{math}
 \begin{aligned}
 \dot S &= -F, \\
 \dot E &= F - \tau E, \\
-\dot A &= \tau E - (\kappa+\gamma+\nu)A, \\
-\dot T &= \kappa A - (\chi+\gamma+\nu)T, \\
-\dot I &= \chi T - (\gamma+\nu)I, \\
-\dot R &= \gamma(A+T+I), \\
-\dot D &= \nu(A+T+I).
+\dot A &= \tau E - \kappa A, \\
+\dot I &= \kappa A - (\gamma+\nu)I, \\
+\dot T &= -(\gamma+\nu)T, \\
+\dot R &= \gamma(I+T), \\
+\dot D &= \nu(I+T).
 \end{aligned}
 ```
 :::
 
-The stochastic SEATIRD model uses a Gillespie-style queue of individual events
+The stochastic SEAITRD model uses a Gillespie-style queue of individual events
 rather than numerically solving this ODE system. Its untreated trajectory
 bypasses `T` with `A -> I`; optional stockpile treatment replaces an eligible
-person's queued trajectory with a newly drawn trajectory beginning in `T`.
+source compartment's queued trajectory with a newly drawn trajectory beginning
+in `T`.
 
 ## SEIRS Daily Transitions
 
@@ -374,21 +376,22 @@ T &\rightarrow H \text{ or } R.
 \end{aligned}
 ```
 
-As with SEITRS, the disease model has no rate into `T`. Antiviral allocation
-creates the possible treatment movements:
+As with SEITRS, the disease model has no rate into `T`. With the SEITHRD
+antiviral input template's routine-treatment `compartment_priority` of
+`["IS"]`, antiviral allocation creates:
 
 ```{math}
 \begin{aligned}
-\Delta_{E \to T}^{AV},\quad
-\Delta_{IA \to T}^{AV},\quad
-\Delta_{IP \to T}^{AV},\quad
 \Delta_{IS \to T}^{AV}.
 \end{aligned}
 ```
 
-These are governed by `compartment_priority`, node allocation, daily capacity,
-and stockpile availability. Disease progression then moves treated people out
-of `T`:
+This is governed by `compartment_priority`, node allocation, daily capacity, and
+stockpile availability. If a scenario explicitly includes `E`, `IA`, or `IP` in
+`compartment_priority`, those existing SEITHRD compartments may also be
+allocated to `T`; that represents prophylaxis or early treatment rather than
+the routine treatment template. Disease progression then moves treated people
+out of `T`:
 
 ```{math}
 \begin{aligned}
@@ -410,15 +413,15 @@ proportion, while the `T -> H` target rate remains
 treated people to recover directly. No stockpile release means no new `T`
 entries.
 
-## Gillespie SEATIRD Events
+## Gillespie SEAITRD Events
 
-SEATIRD is event-driven rather than a daily Poisson compartment update. At
+SEAITRD is event-driven rather than a daily Poisson compartment update. At
 infection time, each person receives an event schedule:
 
 ```{math}
 E \rightarrow A,\quad
-A \rightarrow I \text{ or } R \text{ or } D,\quad
-T \rightarrow I \text{ or } R \text{ or } D,\quad
+A \rightarrow I,\quad
+T \rightarrow R \text{ or } D,\quad
 I \rightarrow R \text{ or } D.
 ```
 
@@ -435,8 +438,15 @@ I \xrightarrow{\text{dose}} T.
 ```
 
 For each stockpile-allocated dose, the old source trajectory is marked stale
-and a new `T` trajectory is drawn. There is no daily antiviral transition
-rate. Every event moves one person out of one compartment and into another.
+and a new `T` trajectory is drawn. The treated death clock uses:
+
+```{math}
+\nu_T = \nu(1 - e_{AV,D}),
+```
+
+where $e_{AV,D}$ is `antiviral_effectiveness_death`. There is no daily
+antiviral transition rate. Every event moves one person out of one compartment
+and into another.
 Therefore, if $N_{c,\mathrm{before}}$ and $N_{c,\mathrm{after}}$ are the
 counts in compartment $c$ immediately before and after one event:
 
@@ -450,7 +460,7 @@ the same one person. An event is discarded if its source person was already
 moved by treatment.
 
 Progression events are reconciled after treatment. Contact events remain in the
-existing group-level contact queue because SEATIRD currently applies the same
+existing group-level contact queue because SEAITRD currently applies the same
 contact-generation process across `A`, `T`, and `I`.
 
 ## Competing Clocks

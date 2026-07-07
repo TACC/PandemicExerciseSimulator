@@ -1,5 +1,5 @@
 {
-  "output_dir_path": "seatird-stochastic",
+  "output_dir_path": "seaitrd-stochastic",
   "number_of_realizations": "5",
   "data": {
     "population": "data/test/county_age_matrix_small.csv",
@@ -8,9 +8,9 @@
     "high_risk_ratios": "data/test/county_high_risk_ratios.csv"
   },
   "disease_model": {
-    "identity": "seatird-stochastic",
+    "identity": "seaitrd-stochastic",
     "parameters": {
-      "compartments": ["S", "E", "A", "T", "I", "R", "D"],
+      "compartments": ["S", "E", "A", "I", "T", "R", "D"],
       "R0": "5",
       "beta_scale": "10",
       "tau": "1.2",

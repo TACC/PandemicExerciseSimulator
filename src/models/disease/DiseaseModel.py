@@ -43,12 +43,12 @@ class DiseaseModel:
 
     def get_child(self, disease_model:str):
         self.disease_model = disease_model
-        if self.disease_model == 'seatird-deterministic':
-            from .DeterministicSEATIRD import DeterministicSEATIRD
-            return DeterministicSEATIRD(self)
-        elif self.disease_model == 'seatird-stochastic':
-            from .StochasticSEATIRD import StochasticSEATIRD
-            return StochasticSEATIRD(self)
+        if self.disease_model == 'seaitrd-deterministic':
+            from .DeterministicSEAITRD import DeterministicSEAITRD
+            return DeterministicSEAITRD(self)
+        elif self.disease_model == 'seaitrd-stochastic':
+            from .StochasticSEAITRD import StochasticSEAITRD
+            return StochasticSEAITRD(self)
         elif self.disease_model == 'seirs-deterministic':
             from .DeterministicSEIRS import DeterministicSEIRS
             return DeterministicSEIRS(self)

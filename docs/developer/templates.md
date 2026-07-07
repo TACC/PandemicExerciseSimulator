@@ -54,7 +54,7 @@ files from separate executions.
 Current useful templates include:
 
 - `INPUT_SEIRS-STOCH_BASELINE.json`
-- `INPUT_SEATIRD-STOCH_ANTIVIRAL.json`
+- `INPUT_SEAITRD-STOCH_ANTIVIRAL.json`
 - `INPUT_SEITRS-STOCH_BASELINE.json`
 - `INPUT_SEITRS-DET_ANTIVIRAL.json`
 - `INPUT_SEIHRD-STOCH_STATE_R0-2.2_BASELINE.json`
@@ -70,6 +70,8 @@ that match the SEIHRD compartment labels. Use `IS_to_R_days = 7.0` and
 `["IS"]` as the default SEITHRD `compartment_priority` unless the template is
 specifically for prophylaxis.
 
-SEATIRD always includes the Treated compartment `T`, but Gillespie stochastic
-SEATIRD enters `T` only through stockpile-constrained treatment from `E`, `A`,
-or `I`. Use `INPUT_SEATIRD-STOCH_ANTIVIRAL.json` for antiviral scenarios.
+The SEAITRD stochastic antiviral template includes the Treated compartment `T`,
+but SEAITRD enters `T` only through stockpile-constrained treatment from
+configured eligible compartments such as `I`, `A`, or `E`. The deterministic
+baseline template omits `T`; add `T` only for antiviral scenarios that release
+stockpile doses.

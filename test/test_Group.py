@@ -20,7 +20,7 @@ def test_access_before_set_raises():
     "labels, expect_members",
     [
         (["S", "E", "I", "R"], {"S", "E", "I", "R"}),
-        (["S", "E", "A", "T", "I", "R", "D"], {"S", "E", "A", "T", "I", "R", "D"}),
+        (["S", "E", "A", "I", "T", "R", "D"], {"S", "E", "A", "T", "I", "R", "D"}),
         ([" s ", "e", "i", "r "], {"S", "E", "I", "R"}),  # trims/uppercases
     ],
 )
@@ -69,12 +69,12 @@ def test_reconfigure_updates_proxy():
         _ = Compartments.A  # not present yet
 
     # Reconfigure to longer list (A,T,D present)
-    Group.set_compartments(["S", "E", "A", "T", "I", "R", "D"])
+    Group.set_compartments(["S", "E", "A", "I", "T", "R", "D"])
     assert hasattr(Compartments, "A")
     assert hasattr(Compartments, "T")
     assert hasattr(Compartments, "D")
     # Order respected
-    assert [m.name for m in Compartments] == ["S", "E", "A", "T", "I", "R", "D"]
+    assert [m.name for m in Compartments] == ["S", "E", "A", "I", "T", "R", "D"]
 
 
 def test_len_iter_repr_basic():

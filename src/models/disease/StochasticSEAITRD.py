@@ -16,40 +16,40 @@ from utils.RNGMath import rand_exp, rand_int, rand_mt, rand_exp_min1
 logger = logging.getLogger(__name__)
 
 
+def _draw_exit_time(rate: float, start_time: float) -> float:
+    if rate <= 0.0:
+        return float('inf')
+    return rand_exp_min1(rate) + start_time
+
+
 class Schedule:
 
     def __init__(self, disease_model:type[DiseaseModel], now:float, group:Type[Group]):
         """
         TAU      # Latency period in days (exposed to asymptomatic)
-        KAPPA    # Asymptomatic infectious period in days (asymptomatic to treatable)
-        CHI      # Treatable infectious period in days (treatable to infectious)
-        GAMMA    # Total infectious period in days (asymptomatic/treatable/infectious to recovered)
-        NU       # Mortality rate in 1/days (asymptomatic/treatable/infectious to deceased)
+        KAPPA    # Asymptomatic infectious period in days (asymptomatic to infectious)
+        CHI      # Retained for parameter compatibility; T no longer progresses to I
+        GAMMA    # Infectious/treated recovery rate
+        NU       # Infectious/treated mortality rate
 
         self._Ta         # Time from exposed to asymptomatic
-        self._Tt         # Time from asymptomatic to treatable
-        self._Ti         # Time from treatable to infectious
-        self._Td_a       # Time from asymptomatic to death
-        self._Td_ti      # Time from treatable/infectious to death
-        self._Tr_a       # Time from asymptomatic to recovered
-        self._Tr_ti      # Time from treatable/infectious to recovered
-        self._Trd_ati    # Time from A/T/I to R/D
+        self._Ti         # Time from asymptomatic to infectious
+        self._Tt         # Time treatment starts if T is entered by antivirals
+        self._Td_ti      # Time from treated/infectious to death
+        self._Tr_ti      # Time from treated/infectious to recovered
+        self._Trd_ati    # Time from A/I/T to R/D
         """
 
         self._Ta    = rand_exp_min1(disease_model.tau) + now
-        self._Tt    = rand_exp_min1(disease_model.kappa) + self._Ta
-        self._Ti    = disease_model.chi + self._Tt
-        self._Td_a  = rand_exp_min1(disease_model.nu_values[group.age][group.risk]) + self._Ta
-        self._Td_ti = rand_exp_min1(disease_model.nu_values[group.age][group.risk]) + self._Tt
-        self._Tr_a  = rand_exp_min1(disease_model.gamma) + self._Ta
-        self._Tr_ti = rand_exp_min1(disease_model.gamma) + self._Tt
+        self._Ti    = rand_exp_min1(disease_model.kappa) + self._Ta
+        self._Tt    = self._Ti
+        self._Td_ti = _draw_exit_time(disease_model.nu_values[group.age][group.risk], self._Ti)
+        self._Tr_ti = _draw_exit_time(disease_model.gamma, self._Ti)
 
-        # exit_asymptomatic_time means via recovery or death, not progression to symptomatic stage
-        self.exit_asymptomatic_time = min(self._Td_a, self._Tr_a)
-        if (self._Tt < self.exit_asymptomatic_time): self.exit_asymptomatic_time = float('inf')
+        self.exit_asymptomatic_time = float('inf')
         self.exit_infectious_time = min(self._Td_ti, self._Tr_ti)
 
-        self._Trd_ati = min(self.exit_asymptomatic_time, self.exit_infectious_time)
+        self._Trd_ati = self.exit_infectious_time
 
         return
        
@@ -57,22 +57,24 @@ class Schedule:
     def update(self, disease_model:type[DiseaseModel], now:float, group:Type[Group], compartment_num:int):
         """
         Used only when reinitializing events (e.g. deterministic to stochastic transition)
-        S=0, E=1, A=2, T=3, I=4, R=5, D=6
+        S=0, E=1, A=2, I=3, T=4, R=5, D=6
         """
         assert int(compartment_num) > 0 and int(compartment_num) < 5
         self._Ta    = (rand_exp_min1(disease_model.tau) + now) if compartment_num < 2 else now
-        self._Tt    = (rand_exp_min1(disease_model.kappa) + self._Ta) if compartment_num < 3 else self._Ta
-        self._Ti    = (self._Tt + disease_model.chi) if compartment_num < 4 else self._Tt
-        self._Td_a  = (rand_exp_min1(disease_model.nu_values[group.age][group.risk])) + self._Ta if compartment_num < 3 else float('inf')
-        self._Td_ti = rand_exp_min1(disease_model.nu_values[group.age][group.risk]) + self._Tt
-        self._Tr_a  = (rand_exp_min1(disease_model.gamma)) if compartment_num < 3 else float('inf')
-        self._Tr_ti = rand_exp_min1(disease_model.gamma) + self._Tt
+        self._Ti    = (rand_exp_min1(disease_model.kappa) + self._Ta) if compartment_num < 3 else now
+        self._Tt    = now if compartment_num == Compartments.T.value else self._Ti
+        is_treated = compartment_num == Compartments.T.value
+        exit_start  = self._Tt if is_treated else self._Ti
+        death_rate = disease_model.nu_values[group.age][group.risk]
+        if is_treated:
+            death_rate *= (1.0 - disease_model.antiviral_effectiveness_death[group.age])
+        self._Td_ti = _draw_exit_time(death_rate, exit_start)
+        self._Tr_ti = _draw_exit_time(disease_model.gamma, exit_start)
         
-        self.exit_asymptomatic_time = min(self._Td_a, self._Tr_a)
-        if (self._Tt < self.exit_asymptomatic_time): self.exit_asymptomatic_time = float('inf')
+        self.exit_asymptomatic_time = float('inf')
         self.exit_infectious_time = min(self._Td_ti, self._Tr_ti)
 
-        self._Trd_ati = min(self.exit_asymptomatic_time, self.exit_infectious_time)
+        self._Trd_ati = self.exit_infectious_time
 
         return
 
@@ -80,15 +82,13 @@ class Schedule:
     def Ta(self):      return(self._Ta)
     def Tt(self):      return(self._Tt)
     def Ti(self):      return(self._Ti)
-    def Td_a(self):    return(self._Td_a)
     def Td_ti(self):   return(self._Td_ti)
-    def Tr_a(self):    return(self._Tr_a)
     def Tr_ti(self):   return(self._Tr_ti)
     def Trd_ati(self): return(self._Trd_ati)
 
 
 
-class StochasticSEATIRD(DiseaseModel):
+class StochasticSEAITRD(DiseaseModel):
 
     def __init__(self, disease_model:Type[DiseaseModel]):
         #self.is_stochastic = disease_model.is_stochastic
@@ -121,12 +121,21 @@ class StochasticSEATIRD(DiseaseModel):
         #   e.g.:    nu_values[age][risk]
         self.nu_values = np.array(self.nu_values).transpose().tolist()
 
+        self.antiviral_effectiveness_death = DiseaseModel.age_values(
+            self.parameters.antiviral_parameters.get('antiviral_effectiveness_death', 0.0),
+            self.parameters.number_of_age_groups,
+        )
+        if not all(0.0 <= eff <= 1.0 for eff in self.antiviral_effectiveness_death):
+            raise ValueError(
+                f"Found invalid antiviral_effectiveness_death values: {self.antiviral_effectiveness_death}"
+            )
+
         self.relative_susceptibility = []
         self.relative_susceptibility = [float(x) for x in self.parameters.disease_parameters['sigma']]
 
         self.npis_schedule = disease_model.npis_schedule
 
-        logger.info(f'instantiated StochasticSEATIRD object')
+        logger.info(f'instantiated StochasticSEAITRD object')
         logger.debug(f'{self.parameters}')
         return
 
@@ -139,7 +148,7 @@ class StochasticSEATIRD(DiseaseModel):
 
     def simulate(self, node:Type[Node], time:int, vaccine_model:Type[Vaccination]):
         """
-        Main simulation logic for stochastic SEATIRD model
+        Main simulation logic for stochastic SEAITRD model
 
         Args:
             node (Node): Movement between compartments happens within the given node
@@ -235,7 +244,7 @@ class StochasticSEATIRD(DiseaseModel):
         Replace pre-treatment queued trajectories with new trajectories from T.
 
         The antiviral stockpile moves aggregate compartment counts before this
-        disease step. SEATIRD is event-driven, so each moved person also needs
+        disease step. SEAITRD is event-driven, so each moved person also needs
         their old source event invalidated and a new T exit scheduled.
         """
         pending = node.pending_antiviral_transitions
@@ -274,32 +283,18 @@ class StochasticSEATIRD(DiseaseModel):
 
     def _initialize_asymptomatic_transitions(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule]):
         """
-        When an individual moves into Asymptomatic, they can either move to Treatable, Recovered, or
-        Deceased based on given Schedule
+        When an individual moves into Asymptomatic, queue progression to Infectious.
         """
-        if (schedule.Tt() < schedule.Td_a() and schedule.Tt() < schedule.Tr_a()):
-            # individual will progress from asymptomatic to treatable
-            node.add_transition_event(schedule.Ta(), schedule.Tt(), EventType.AtoT.name, group)
-            self._initialize_treatable_transitions(node, group, schedule)
-        elif (schedule.Tr_a() < schedule.Td_a()):
-            # individual will recover from asymptomatic
-            node.add_transition_event(schedule.Ta(), schedule.Tr_a(), EventType.AtoR.name, group)
-        else:
-            # individual will die while asymptomatic
-            node.add_transition_event(schedule.Ta(), schedule.Td_a(), EventType.AtoD.name, group)
+        node.add_transition_event(schedule.Ta(), schedule.Ti(), EventType.AtoI.name, group)
+        self._initialize_infectious_transitions(node, group, schedule)
         return
 
 
     def _initialize_treatable_transitions(self, node:Type[Node], group:Type[Group], schedule:Type[Schedule]):
         """
-        When an individual moves into Treatable, they can either move to Infectious, Recovered, or 
-        Deceased based on given Schedule
+        When an individual moves into Treated, they can either recover or die.
         """
-        if (schedule.Ti() < schedule.Td_ti() and schedule.Ti() < schedule.Tr_ti()):
-            # individual will progress from treatable to infectious
-            node.add_transition_event(schedule.Tt(), schedule.Ti(), EventType.TtoI.name, group)
-            self._initialize_infectious_transitions(node, group, schedule)
-        elif (schedule.Tr_ti() < schedule.Td_ti()):
+        if (schedule.Tr_ti() < schedule.Td_ti()):
             # individual will recover while treatable
             node.add_transition_event(schedule.Tt(), schedule.Tr_ti(), EventType.TtoR.name, group)
         else:
@@ -381,23 +376,9 @@ class StochasticSEATIRD(DiseaseModel):
             else:
                 self._unqueue_event(node, Compartments.A.value, this_event.origin)
 
-        elif this_type == 'AtoT':
+        elif this_type == 'AtoI':
             if self._keep_event(node, Compartments.A.value, this_event, initial_compartments):
-                self._transition(node, Compartments.A.value, Compartments.T.value, this_event.origin)
-            else:
-                self._unqueue_event(node, Compartments.T.value, this_event.origin)
-
-        elif this_type == 'AtoR':
-            if self._keep_event(node, Compartments.A.value, this_event, initial_compartments):
-                self._transition(node, Compartments.A.value, Compartments.R.value, this_event.origin)
-
-        elif this_type == 'AtoD':
-            if self._keep_event(node, Compartments.A.value, this_event, initial_compartments):
-                self._transition(node, Compartments.A.value, Compartments.D.value, this_event.origin)
-
-        elif this_type == 'TtoI':
-            if self._keep_event(node, Compartments.T.value, this_event, initial_compartments):
-                self._transition(node, Compartments.T.value, Compartments.I.value, this_event.origin)
+                self._transition(node, Compartments.A.value, Compartments.I.value, this_event.origin)
             else:
                 self._unqueue_event(node, Compartments.I.value, this_event.origin)
 

@@ -87,7 +87,7 @@ should be calibrated to untreated natural history. The intervention then
 changes realized transmission during simulation by moving people into treated
 compartments with lower infectiousness.
 
-SEATIRD is currently a special case: it uses the configured
+SEAITRD is currently a special case: it uses the configured
 `beta = R0 / beta_scale` relationship rather than the general
 next-generation-matrix estimator.
 

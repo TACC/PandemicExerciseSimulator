@@ -159,7 +159,7 @@ disease-model behavior because it has one county-equivalent. Delaware is a
 small three-county test of both disease and travel behavior. Large states such
 as Texas take much longer.
 
-The Gillespie SEATIRD model schedules individual events. Its runtime grows
+The Gillespie SEAITRD model schedules individual events. Its runtime grows
 poorly with realistic population sizes and large epidemics, so use small
 populations or short, carefully targeted validation runs before attempting
 population-scale scenarios.

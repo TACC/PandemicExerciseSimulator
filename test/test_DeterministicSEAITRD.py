@@ -3,7 +3,7 @@ import numpy as np
 from types import SimpleNamespace
 
 from src.models.disease.DiseaseModel import DiseaseModel
-from src.models.disease.DeterministicSEATIRD import SEATIRD_model, DeterministicSEATIRD
+from src.models.disease.DeterministicSEAITRD import SEAITRD_model, DeterministicSEAITRD
 from src.models.treatments.NonPharmaInterventions import NonPharmaInterventions
 from src.baseclasses.Network import Network
 from src.baseclasses.Node import Node
@@ -22,12 +22,13 @@ def make_network_with_population(pop=100):
     net._add_node(node)
     return net
 
-def make_params(num_age_grp=2):
+def make_params(num_age_grp=2, compartments=None):
     params = SimpleNamespace(
         number_of_age_groups=num_age_grp,
         np_contact_matrix=np.eye(num_age_grp, dtype=float),
         high_risk_ratios=[0.0] * num_age_grp,
         disease_parameters={
+            "compartments": compartments or ["S", "E", "A", "I", "T", "R", "D"],
             "R0":    "1.0",
             "beta_scale": "1.0",
             "tau":   "4.0",
@@ -49,7 +50,7 @@ class DummyVax:
 
 def test_two_days_transmission():
     # Lots of set-up
-    compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
+    compartment_labels = ["S", "E", "A", "I", "T", "R", "D"]
     network = Network(compartment_labels)
     groups  = [10, 10]; high_risk_ratios = [0.0, 0.0]  # all low-risk for simplicity
     pc      = PopulationCompartments(age_group_pops=groups, high_risk_ratios=high_risk_ratios)
@@ -69,7 +70,7 @@ def test_two_days_transmission():
     npi = NonPharmaInterventions([], simulation_days.day, 1, 2)
     vax = DummyVax([0.0])
     parent = DiseaseModel(params, npi, 0)
-    disease_model = DeterministicSEATIRD(parent)
+    disease_model = DeterministicSEAITRD(parent)
     disease_model.set_initial_conditions(initial, network, vax)
 
     # Simulate: 1 day, 1 node, 2 age groups
@@ -98,8 +99,8 @@ def test_two_days_transmission():
     S_total, E_total, A_total, *_ = snapshot
 
     expected_snapshot_day2 = {
-        "S": 18.8875, "E": 0.675, "A": 0.25, "T": 0.0625,
-        "I": 0.0, "R": 0.0625, "D": 0.0625
+        "S": 18.8882002, "E": 0.6742998, "A": 0.375, "I": 0.0625,
+        "T": 0.0, "R": 0.0, "D": 0.0
     }
     expected_vec = np.array([expected_snapshot_day2[lbl] for lbl in compartment_labels], dtype=float)
 
@@ -109,19 +110,19 @@ def test_two_days_transmission():
     )
 
 def test_euler_step_mass_conservation():
-    # Initial compartments: S, E, A, T, I, R, D
+    # Initial compartments: S, E, A, I, T, R, D
     y = np.array([9.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
     # Parameters (very simple ones)
     transmission_rate = 0.0  # No new infections
     tau = 1.0  # Latent period
     kappa = 1.0  # Asymptomatic period
-    chi = 1.0  # Treatable period
+    chi = 1.0  # Retained for compatibility; treatment entry is stockpile-controlled
     gamma = 1.0  # Symptomatic period
     nu = 0.0  # No deaths
 
     # Euler time step forward of difference
-    y_diff = SEATIRD_model(y, transmission_rate, tau, kappa, chi, gamma, nu)
+    y_diff = SEAITRD_model(y, transmission_rate, tau, kappa, chi, gamma, nu)
     # New y values after 1 time step forward
     y_new = y + y_diff
 
@@ -129,3 +130,51 @@ def test_euler_step_mass_conservation():
     np.testing.assert_allclose(np.sum(y), np.sum(y_new), atol=1e-6)
 
 
+def test_deterministic_seaitrd_has_no_natural_i_to_t_flow():
+    # chi is intentionally high; T should still only be stockpile-controlled.
+    y = np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0])
+
+    y_diff = SEAITRD_model(
+        y,
+        transmission_prob=0.0,
+        tau=1.0,
+        kappa=1.0,
+        chi=10.0,
+        gamma=0.0,
+        nu=0.0,
+    )
+
+    assert y_diff[3] == 0.0
+    assert y_diff[4] == 0.0
+
+
+def test_deterministic_seaitrd_existing_t_exits_without_new_t_entry():
+    y = np.array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+
+    y_diff = SEAITRD_model(
+        y,
+        transmission_prob=0.0,
+        tau=1.0,
+        kappa=1.0,
+        chi=10.0,
+        gamma=1.0,
+        nu=0.0,
+    )
+
+    np.testing.assert_allclose(y_diff, np.array([0.0, 0.0, 0.0, 0.0, -1.0, 1.0, 0.0]))
+
+
+def test_deterministic_seaitrd_supports_omitting_t_compartment():
+    y = np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0])
+
+    y_diff = SEAITRD_model(
+        y,
+        transmission_prob=0.0,
+        tau=1.0,
+        kappa=1.0,
+        chi=10.0,
+        gamma=0.0,
+        nu=0.0,
+    )
+
+    np.testing.assert_allclose(y_diff, np.array([0.0, -1.0, 1.0, 0.0, 0.0, 0.0]))

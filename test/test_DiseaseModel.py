@@ -26,9 +26,9 @@ def make_dummy_input(tmp_path):
    contact_file.write_text("1,0\n0,1\n")   # 2x2 identity matrix
 
    return SimpleNamespace(
-      disease_model="seatird-stochastic",
+      disease_model="seaitrd-stochastic",
       disease_parameters={
-         "compartments": ["S", "E", "A", "T", "I", "R", "D"],
+         "compartments": ["S", "E", "A", "I", "T", "R", "D"],
          "R0": "1.0",
          "beta_scale": "1.0",
          "tau": "4.0",
@@ -68,7 +68,7 @@ def make_params(tmp_path):
 
 
 def make_network():
-   compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
+   compartment_labels = ["S", "E", "A", "I", "T", "R", "D"]
    net = Network(compartment_labels)
    node = Node(
       node_index=0,
@@ -84,7 +84,7 @@ def test_node_specific_npi_effect(tmp_path):
    params = make_params(tmp_path)
    params.beta = 1.0
 
-   compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
+   compartment_labels = ["S", "E", "A", "I", "T", "R", "D"]
    network = Network(compartment_labels)
 
    fips_ids = [113, 141, 201, 300, 400]

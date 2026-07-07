@@ -15,14 +15,14 @@ another random draw to the simulation.
 
 | Method | Models | Population representation | Main runtime driver |
 | --- | --- | --- | --- |
-| Gillespie-style event queue | `seatird-stochastic` | Individual people and scheduled events | Total infections and events in the queue |
+| Gillespie-style event queue | `seaitrd-stochastic` | Individual people and scheduled events | Total infections and events in the queue |
 | Daily Poisson tau-leaping | `seir-stochastic`, `seirs-stochastic`, `seitrs-stochastic`, `seihrd-stochastic`, and SEITHRD configurations | Integer compartment counts | Nodes, demographic groups, and simulation days |
-| Daily Euler update | `seirs-deterministic`, including SEIR and SEITRS compartment configurations; `seatird-deterministic` | Fractional compartment counts | Nodes, demographic groups, and simulation days |
+| Daily Euler update | `seirs-deterministic`, including SEIR and SEITRS compartment configurations; `seaitrd-deterministic` | Fractional compartment counts | Nodes, demographic groups, and simulation days |
 | Binomial travel | `binomial` travel with any disease model | Integer new exposures | Origin-destination node pairs |
 
-## Gillespie-Style SEATIRD
+## Gillespie-Style SEAITRD
 
-`seatird-stochastic` assigns a queued infection trajectory when a person enters
+`seaitrd-stochastic` assigns a queued infection trajectory when a person enters
 `E`. Waiting times are sampled with `rand_exp_min1`, which enforces at least one
 day in each sampled stage. The queue then processes one-person progression
 events such as:
@@ -30,12 +30,12 @@ events such as:
 ```{math}
 E \rightarrow A,\quad
 A \rightarrow I,\quad
-T \rightarrow I,\quad
-A,T,I \rightarrow R \text{ or } D.
+I,T \rightarrow R \text{ or } D.
 ```
 
 The `T` compartment is entered only through stockpile-allocated antiviral
-treatment. Natural untreated progression bypasses `T`.
+treatment from configured eligible compartments such as `I`, `A`, or `E`.
+Natural untreated progression bypasses `T`.
 
 Because each infected person creates several scheduled events, runtime grows
 with population size and epidemic size. This model can become impractical for
@@ -60,7 +60,7 @@ Each draw is capped by the people remaining in the source compartment. For
 competing exits, the implementation draws from the remaining population so
 compartments cannot become negative.
 
-Tau-leaping is much faster than the individual SEATIRD queue because it tracks
+Tau-leaping is much faster than the individual SEAITRD queue because it tracks
 counts rather than a separate trajectory for every infected person. Runtime is
 usually more sensitive to the number of counties, demographic groups, and
 realizations than to the absolute population count.

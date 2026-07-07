@@ -215,8 +215,9 @@ members or close contacts.
 | --- | --- | --- | --- |
 | `identity` | Yes | None | Antiviral allocation strategy. The supported value is `"stockpile-age-risk"`. |
 | `age_risk_priority_groups` | No | All `1.0` | Eligibility for each age and hospitalization-risk group. Allowed values are `0.0`, `0.5`, and `1.0`, with the same meanings as vaccination. |
-| `compartment_priority` | No | `["I", "E"]` | Disease compartments whose members can receive treatment, in treatment order within a demographic group. Every label must exist in the selected disease model. |
+| `compartment_priority` | No | `["I"]` | Disease compartments whose members can receive treatment, in treatment order within a demographic group. Every label must exist in the selected disease model. |
 | `antiviral_effectiveness_hosp` | No | `1.0` | SEITHRD reduction in hospitalization risk for treated people, from `0.0` to `1.0`, relative to the untreated `IS -> H` realized proportion. The default means complete protection from hospitalization; a value of `0.25` means 25% risk reduction, or 75% relative risk. |
+| `antiviral_effectiveness_death` | No | `0.0` | Gillespie SEAITRD reduction in mortality risk for treated people, from `0.0` to `1.0`, applied to the `T -> D` mortality intensity. A value of `0.25` means 25% risk reduction, or 75% relative risk. |
 | `antiviral_capacity_proportion` | No | `1.0` | Maximum fraction of a node's total population that can begin treatment per day. |
 | `antiviral_half_life_days` | No | `null` | Positive stockpile half-life in days. Use `null` to disable decay. This affects unused doses, not people already in `T`. |
 | `antiviral_stockpile` | No | Empty list | Dose releases. Each entry requires an integer simulation `day` and a dose `amount`. Same-day entries are combined and negative days are reassigned to day 0. |
@@ -228,7 +229,8 @@ Common eligible compartments are:
 | SEITRS, stochastic or deterministic | `["I", "E"]` |
 | SEITHRD routine treatment | `["IS"]` |
 | SEITHRD prophylaxis scenario | `["IS", "IP", "IA", "E"]` |
-| Gillespie SEATIRD | `["I", "A", "E"]` |
+| Gillespie SEAITRD default | `["I"]` |
+| Gillespie SEAITRD early treatment scenario | `["I", "A", "E"]` |
 
 The stockpile parameters control movement **into** `T`. Disease model
 parameters control what happens after treatment begins:
@@ -238,7 +240,8 @@ parameters control what happens after treatment begins:
 | `T_to_R_days` | SEITRS and SEITHRD | Average number of days from treated to recovered. |
 | `rel_inf_T_to_I` | SEITRS | Infectiousness of `T` relative to untreated `I`. |
 | `rel_inf_T_to_IS` | SEITHRD | Infectiousness of `T` relative to symptomatic `IS`. |
-| `chi`, `gamma`, and `nu` | SEATIRD | Existing queued-event parameters governing `T -> I`, `T -> R`, and `T -> D`. |
+| `gamma` and `nu` | SEAITRD | Existing queued-event parameters governing `T -> R` and `T -> D`. |
+| `antiviral_effectiveness_death` | SEAITRD | Reduction in treated `T -> D` mortality risk. |
 
 For SEITRS and SEITHRD, no one enters `T` without stockpile allocation. There
 are no disease-rate parameters that move people into treatment. In SEITHRD,
@@ -248,9 +251,9 @@ untreated symptomatic people have a 10% eventual hospitalization proportion,
 `antiviral_effectiveness_hosp = 0.25` makes the treated eventual
 hospitalization proportion 7.5%.
 
-In Gillespie SEATIRD, `T` is also stockpile-constrained: untreated queued
+In Gillespie SEAITRD, `T` is also stockpile-constrained: untreated queued
 trajectories bypass `T`, and released doses create resource-constrained routes
-from `E`, `A`, or `I` into `T`.
+from configured eligible compartments such as `I`, `A`, or `E` into `T`.
 
 See [Antiviral Stockpile Model](../modeling/antivirals.md) for validation rules,
 allocation behavior, and model-specific details.

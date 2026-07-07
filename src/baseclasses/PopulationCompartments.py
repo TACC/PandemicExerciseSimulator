@@ -71,7 +71,7 @@ class PopulationCompartments:
             group (Group): group where transition should happen
             num_to_expose (float): number of people to move from S=>E
 
-        Note: Not currently used in StochasticSEATIRD; a similarly named method
+        Note: Not currently used in StochasticSEAITRD; a similarly named method
               exists in that class for this functionality
         """
         if num_to_expose < 0:

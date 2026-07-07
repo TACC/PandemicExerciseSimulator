@@ -178,7 +178,7 @@ def test_build_hash_payload():
       contact_data_file="../data/Texas/contact.csv",
       flow_data_file="../data/Texas/flow.csv",
       high_risk_ratios_file="../data/Texas/risk.csv",
-      disease_model="seatird-stochastic",
+      disease_model="seaitrd-stochastic",
       travel_model="binomial",
       vaccine_model=None,
       antiviral_model=None,
@@ -198,7 +198,7 @@ def test_build_hash_payload():
    )
 
    assert out["data"]["population"] == "data/Texas/pop.csv"
-   assert out["disease_model"]["identity"] == "seatird-stochastic"
+   assert out["disease_model"]["identity"] == "seaitrd-stochastic"
    assert out["travel_model"]["identity"] == "binomial"
    assert out["disease_model"]["runtime_attributes"] == {"public_attr": 1.0}
    assert out["vaccine_model"]["runtime_attributes"] == {}
@@ -219,7 +219,7 @@ def test_build_executed_config(tmp_path, monkeypatch):
       high_risk_ratios_file="risk.csv",
       output_dir_path="orig_out",
       batch_num="123",
-      disease_model="seatird-stochastic",
+      disease_model="seaitrd-stochastic",
       travel_model="binomial",
       vaccine_model=None,
       antiviral_model=None,
