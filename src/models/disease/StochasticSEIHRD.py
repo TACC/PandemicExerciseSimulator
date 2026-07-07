@@ -161,13 +161,14 @@ def SEITHRD_model(y,
                   H_to_D_rate,       # H => D,
                   H_to_R_rate,       # H => R,
                   IA_to_R_rate,      # IA => R,
+                  T_to_H_rate,       # T => H,
                   T_to_R_rate,       # T => R,
                   rng):
     """
     SEIHRD model with a treated T compartment.
 
     Antivirals move eligible compartments into T outside this disease step. The
-    disease model only progresses existing T to R.
+    disease model progresses existing T to H or R.
     """
 
     S, E, IA, IP, IS, H, T, R, D = map(int, y)
@@ -180,7 +181,8 @@ def SEITHRD_model(y,
     rate_HD = max(H_to_D_rate, 0.0)
     rate_HR = max(H_to_R_rate, 0.0)
     lam_IAR = max(IA_to_R_rate, 0.0) * IA
-    lam_TR = max(T_to_R_rate, 0.0) * T
+    rate_TH = max(T_to_H_rate, 0.0)
+    rate_TR = max(T_to_R_rate, 0.0)
 
     max_new_infections = min(rng.poisson(lam_inf), S)
     total_e_out = min(rng.poisson(lam_EIPIA), E)
@@ -188,7 +190,6 @@ def SEITHRD_model(y,
     e_to_ip = total_e_out - e_to_ia
     ip_to_is = min(rng.poisson(lam_IPIS), IP)
     ia_to_r = min(rng.poisson(lam_IAR), IA)
-    t_to_r = min(rng.poisson(lam_TR), T)
 
     is_to_h = min(rng.poisson(rate_ISH * IS), IS)
     remaining_IS = IS - is_to_h
@@ -198,13 +199,17 @@ def SEITHRD_model(y,
     remaining_H = H - h_to_d
     h_to_r = min(rng.poisson(rate_HR * remaining_H), remaining_H)
 
+    t_to_h = min(rng.poisson(rate_TH * T), T)
+    remaining_T = T - t_to_h
+    t_to_r = min(rng.poisson(rate_TR * remaining_T), remaining_T)
+
     dS_dt  = -max_new_infections
     dE_dt  = max_new_infections - e_to_ia - e_to_ip
     dIA_dt = e_to_ia - ia_to_r
     dIP_dt = e_to_ip - ip_to_is
     dIS_dt = ip_to_is - is_to_h - is_to_r
-    dH_dt  = is_to_h - h_to_d - h_to_r
-    dT_dt  = -t_to_r
+    dH_dt  = is_to_h + t_to_h - h_to_d - h_to_r
+    dT_dt  = -t_to_h - t_to_r
     dR_dt  = is_to_r + h_to_r + ia_to_r + t_to_r
     dD_dt  = h_to_d
 
@@ -245,6 +250,14 @@ class StochasticSEIHRD(DiseaseModel):
                 self.parameters.disease_parameters.get('rel_inf_T_to_IS', 1.0),
                 num_age_grps,
             )
+            self.antiviral_effectiveness_hosp = DiseaseModel.age_values(
+                self.parameters.antiviral_parameters.get('antiviral_effectiveness_hosp', 1.0),
+                num_age_grps,
+            )
+            if not all(0.0 <= eff <= 1.0 for eff in self.antiviral_effectiveness_hosp):
+                raise ValueError(
+                    f"Found invalid antiviral_effectiveness_hosp values: {self.antiviral_effectiveness_hosp}"
+                )
             if not self.parameters.antiviral_parameters:
                 logger.warning(
                     "T compartment specified without an antiviral_model; no people will enter T unless antiviral stockpile is released."
@@ -268,6 +281,21 @@ class StochasticSEIHRD(DiseaseModel):
                 for p in risk_group_props
             ]
             self.prop_IS_to_H.append(corrected_for_this_risk)
+
+        if self.has_treated_compartment:
+            self.prop_T_to_H = []
+            for risk_group_props in [lowrisk, highrisk]:
+                corrected_for_this_risk = [
+                    DiseaseModel.adjust_two_way_split_proportion(
+                        desired_realized_fraction=(
+                            p * (1.0 - self.antiviral_effectiveness_hosp[age])
+                        ),
+                        competing_rate=self.T_to_R_rate,
+                        target_rate=self.IS_to_H_rate,
+                    )
+                    for age, p in enumerate(risk_group_props)
+                ]
+                self.prop_T_to_H.append(corrected_for_this_risk)
 
         #---------------------------------
         # H → D vs R proportion correction
@@ -382,6 +410,10 @@ class StochasticSEIHRD(DiseaseModel):
             IS_to_H_rate =      self.prop_IS_to_H[focal_group.risk][focal_group.age] * self.IS_to_H_rate \
                             * (1 - vaccine_effectiveness_hosp)
             IS_to_R_rate = (1 - self.prop_IS_to_H[focal_group.risk][focal_group.age]) * self.IS_to_R_rate
+            if self.has_treated_compartment:
+                T_to_H_rate =      self.prop_T_to_H[focal_group.risk][focal_group.age] * self.IS_to_H_rate \
+                                * (1 - vaccine_effectiveness_hosp)
+                T_to_R_rate = (1 - self.prop_T_to_H[focal_group.risk][focal_group.age]) * self.T_to_R_rate
             H_to_D_rate  = self.prop_H_to_D[focal_group.age] * self.H_to_D_rate
             H_to_R_rate  = (1 - self.prop_H_to_D[focal_group.age]) * self.H_to_R_rates[focal_group.age]
 
@@ -432,7 +464,8 @@ class StochasticSEIHRD(DiseaseModel):
             if self.has_treated_compartment:
                 model_parameters = (
                     *model_parameters,
-                    self.T_to_R_rate,
+                    T_to_H_rate,
+                    T_to_R_rate,
                 )
                 daily_change = SEITHRD_model(focal_group_compartments_today, *model_parameters, rng=self.rng)
             else:
