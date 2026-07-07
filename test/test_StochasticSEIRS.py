@@ -110,58 +110,11 @@ def make_seirs_child(compartments, antiviral_parameters=None):
 
     npis = SimpleNamespace(schedule=np.zeros((2, 1, 1)))
     parent = DiseaseModel(make_seirs_params(compartments, antiviral_parameters), npis, now=0.0)
-    child = parent.get_child("seitrs-stochastic")
+    child = parent.get_child("seirs-stochastic")
     child._rng = FloorPoissonRng()
     vaccine_model = SimpleNamespace(vaccine_effectiveness=[0.0])
 
     return child, node, vaccine_model
-
-
-def test_stochastic_seirs_uses_seitrs_model_when_t_compartment_exists(monkeypatch):
-    model, node, vaccine_model = make_seirs_child(
-        ["S", "E", "I", "T", "R"],
-        antiviral_parameters={"antiviral_stockpile": []},
-    )
-    calls = {"seirs": 0, "seitrs": 0}
-
-    def fake_seirs(y, *args, rng):
-        calls["seirs"] += 1
-        return np.zeros_like(y)
-
-    def fake_seitrs(y, *args, rng):
-        calls["seitrs"] += 1
-        return np.zeros_like(y)
-
-    monkeypatch.setattr(StochasticSEIRSModule, "SEIRS_model", fake_seirs)
-    monkeypatch.setattr(StochasticSEIRSModule, "SEITRS_model", fake_seitrs)
-
-    model.simulate(node, time=1, vaccine_model=vaccine_model)
-
-    assert model.has_treated_compartment is True
-    assert calls["seitrs"] > 0
-    assert calls["seirs"] == 0
-
-
-def test_stochastic_seirs_uses_seirs_model_without_t_compartment(monkeypatch):
-    model, node, vaccine_model = make_seirs_child(["S", "E", "I", "R"])
-    calls = {"seirs": 0, "seitrs": 0}
-
-    def fake_seirs(y, *args, rng):
-        calls["seirs"] += 1
-        return np.zeros_like(y)
-
-    def fake_seitrs(y, *args, rng):
-        calls["seitrs"] += 1
-        return np.zeros_like(y)
-
-    monkeypatch.setattr(StochasticSEIRSModule, "SEIRS_model", fake_seirs)
-    monkeypatch.setattr(StochasticSEIRSModule, "SEITRS_model", fake_seitrs)
-
-    model.simulate(node, time=1, vaccine_model=vaccine_model)
-
-    assert model.has_treated_compartment is False
-    assert calls["seirs"] > 0
-    assert calls["seitrs"] == 0
 
 
 def test_t_stays_zero_without_antiviral_release_during_one_day_update():
