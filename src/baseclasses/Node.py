@@ -22,6 +22,8 @@ class Node:
         self.antiviral_stockpile = 0.
         self.stochastic = True
         self.events = []    # list of event objects
+        self.requires_antiviral_event_reconciliation = False
+        self.pending_antiviral_transitions = []
         
         # the contact counter struct is a 3-dimensional array of ints
         # the fields are [number of age groups][risk group size][vaccinated group size]
@@ -135,4 +137,3 @@ class Node:
         Return total population across all groups and compartments of Node
         """
         return self.compartments.total_population
-

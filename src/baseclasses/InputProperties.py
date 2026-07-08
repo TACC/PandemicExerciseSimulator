@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from typing import List
+from uuid6 import uuid7
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +18,15 @@ class InputProperties:
 
         # simulation control
         self.output_dir_path        = input['output_dir_path']
+
+        batch_val = str(input["batch_num"]).strip()
+        if batch_val.upper() == "GENERATE": # allow for any capitalization of "Generate"
+            self.batch_num = str(uuid7())
+        else:
+            self.batch_num = batch_val
+
         if "realization_range" in input:
             rr = input['realization_range']
-            self.batch_num = input['batch_num']
             # convert strings like "0","49" → ints
             if (not isinstance(rr, (list, tuple))) or len(rr) != 2:
                 raise ValueError("realization_range must be a 2-element list like [start, end].")
@@ -35,7 +42,6 @@ class InputProperties:
             self.realization_indices: List[int] = list(range(start, end + 1))
 
         elif "number_of_realizations" in input:
-            self.batch_num = 0
             n = int(input["number_of_realizations"])
             if n <= 0:
                 raise ValueError("number_of_realizations must be a positive integer.")
@@ -49,6 +55,9 @@ class InputProperties:
 
         # legacy convenience: total number of realizations/simulations to do
         self.number_of_realizations = len(self.realization_indices)
+
+        # tags
+        self.tags = input.get('metadata_tags', {})
 
         # data files
         self.population_data_file         = input['data']['population']
@@ -71,8 +80,9 @@ class InputProperties:
         self.non_pharma_interventions = input.get('non_pharma_interventions', [])
 
         # antivirals (optional)
-        #self.antiviral_model = input['antiviral_model']['identity']
-        #self.antiviral_parameters = input['antiviral_model']['parameters']
+        antiviral_input = input.get('antiviral_model', {})  # returns {} if not present
+        self.antiviral_model = antiviral_input.get('identity', None)
+        self.antiviral_parameters = antiviral_input.get('parameters', {})
         
         # vaccines (optional)
         vaccine_input = input.get('vaccine_model', {})  # returns {} if not present
@@ -109,8 +119,8 @@ class InputProperties:
                 f'\n## NON-PHARMACEUTICAL INTERVENTIONS ##\n'
                 f'non_pharma_interventions={self.non_pharma_interventions}\n'
                 f'\n## ANTIVIRALS ##\n'
-                #f'antiviral_model={self.vaccine_model}\n'
-                #f'antiviral_parameters={self.vaccine_parameters}\n'
+                f'antiviral_model={self.antiviral_model}\n'
+                f'antiviral_parameters={self.antiviral_parameters}\n'
                 f'\n## VACCINES ##\n'
                 f'vaccine_model={self.vaccine_model}\n'
                 f'vaccine_parameters={self.vaccine_parameters}\n'
@@ -137,6 +147,5 @@ class InputProperties:
                 return False
         
         return True
-
 
 

@@ -43,16 +43,16 @@ class DiseaseModel:
 
     def get_child(self, disease_model:str):
         self.disease_model = disease_model
-        if self.disease_model == 'seatird-deterministic':
-            from .DeterministicSEATIRD import DeterministicSEATIRD
-            return DeterministicSEATIRD(self)
-        elif self.disease_model == 'seatird-stochastic':
-            from .StochasticSEATIRD import StochasticSEATIRD
-            return StochasticSEATIRD(self)
+        if self.disease_model == 'seaitrd-deterministic':
+            from .DeterministicSEAITRD import DeterministicSEAITRD
+            return DeterministicSEAITRD(self)
+        elif self.disease_model == 'seaitrd-stochastic':
+            from .StochasticSEAITRD import StochasticSEAITRD
+            return StochasticSEAITRD(self)
         elif self.disease_model == 'seirs-deterministic':
             from .DeterministicSEIRS import DeterministicSEIRS
             return DeterministicSEIRS(self)
-        elif self.disease_model == 'seirs-stochastic':
+        elif self.disease_model in 'seirs-stochastic':
             from .StochasticSEIRS import StochasticSEIRS
             return StochasticSEIRS(self)
         elif self.disease_model == 'seihrd-stochastic':
@@ -133,6 +133,19 @@ class DiseaseModel:
         return beta
 
     @staticmethod
+    def age_values(raw_value, num_age_grps: int) -> list[float]:
+        """
+        Normalize a scalar or age-specific sequence into one float per age group.
+        """
+        if isinstance(raw_value, (list, tuple, np.ndarray)):
+            values = [float(x) for x in raw_value]
+            if len(values) != num_age_grps:
+                raise ValueError(f"Expected {num_age_grps} age-specific values, got {len(values)}.")
+            return values
+
+        return [float(raw_value)] * num_age_grps
+
+    @staticmethod
     def spectral_radius(K: np.ndarray) -> float:
         """
         R0 = spectral radius (rho) of K (dominant eigenvalue).
@@ -145,9 +158,128 @@ class DiseaseModel:
         # Numerical noise can introduce tiny imaginary parts; take real component.
         return float(np.max(eigvals.real))
 
+    @staticmethod
+    def estimate_baseline_beta(
+        contact_matrix: list[list[float]],
+        R0: float,
+        w: np.ndarray,
+        susceptibility: np.ndarray | None = None,
+    ) -> float:
+        """
+        Compute beta so that rho(beta * S * C * diag(w)) = R0.
+
+        Here C is the contact matrix, S is an optional diagonal relative
+        susceptibility matrix, and w is the per-age infectiousness-duration
+        weight implied by the disease progression model.
+        """
+        C = np.array(contact_matrix, dtype=float)
+        w = np.asarray(w, dtype=float)
+        n = C.shape[0]
+        assert C.shape == (n, n), "contact_matrix must be square"
+        assert w.shape == (n,), "w must be length-n"
+
+        if susceptibility is None:
+            S_mat = np.eye(n)
+        else:
+            s = np.asarray(susceptibility, dtype=float)
+            assert s.shape == (n,), "susceptibility must be length-n"
+            S_mat = np.diag(s)
+
+        M = S_mat @ C @ np.diag(w)
+        rho = DiseaseModel.spectral_radius(M)
+        if rho <= 0:
+            raise ValueError("Spectral radius is non-positive; check inputs (C, w, susceptibility).")
+
+        return R0 / rho
+
+    @staticmethod
+    def build_NGM(
+        beta: float,
+        contact_matrix: np.ndarray,
+        w: np.ndarray,
+        susceptibility: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """
+        Construct a next-generation matrix from beta and infectiousness weights.
+        """
+        C = np.asarray(contact_matrix, dtype=float)
+        w = np.asarray(w, dtype=float)
+        n = C.shape[0]
+        S_mat = np.diag(susceptibility) if susceptibility is not None else np.eye(n)
+        return beta * (S_mat @ C @ np.diag(w))
+
+    @staticmethod
+    def adjust_two_way_split_proportion(
+        *,
+        desired_realized_fraction: float,
+        competing_rate: float,
+        target_rate: float,
+    ) -> float:
+        """
+        Compute the split multiplier for a two-way competing-clock split.
+
+        If the target branch has rate eta and the competing branch has rate
+        gamma, this returns pi such that:
+
+            pi * eta / (pi * eta + (1 - pi) * gamma) == desired_realized_fraction
+
+        The returned value is intended to be used as:
+            target flow    = pi * eta * compartment_level
+            competing flow = (1 - pi) * gamma * compartment_level
+        """
+        if not (0.0 <= desired_realized_fraction <= 1.0):
+            raise ValueError("desired_realized_fraction must be in [0, 1].")
+        if competing_rate <= 0.0 or target_rate <= 0.0:
+            raise ValueError("Rates must be positive.")
+
+        return DiseaseModel.adjust_competing_clock_split_proportions(
+            desired_realized_fractions=[
+                desired_realized_fraction,
+                1.0 - desired_realized_fraction,
+            ],
+            rates=[target_rate, competing_rate],
+        )[0]
+
+    @staticmethod
+    def adjust_competing_clock_split_proportions(
+        *,
+        desired_realized_fractions: list[float],
+        rates: list[float],
+    ) -> list[float]:
+        """
+        Compute split multipliers for competing clocks.
+
+        For branch rates r_i and desired realized fractions p_i, returns
+        multipliers pi_i that sum to 1 and satisfy:
+
+            pi_i * r_i / sum_j(pi_j * r_j) == p_i
+
+        Accepts any number of branches greater than one so
+        the two-way helper can share the same implementation.
+        """
+        if len(desired_realized_fractions) != len(rates):
+            raise ValueError("desired_realized_fractions and rates must have the same length.")
+        if len(rates) < 2:
+            raise ValueError("At least two competing rates are required.")
+        if any(p < 0.0 or p > 1.0 for p in desired_realized_fractions):
+            raise ValueError("All desired realized fractions must be in [0, 1].")
+        if not np.isclose(sum(desired_realized_fractions), 1.0):
+            raise ValueError("desired_realized_fractions must sum to 1.")
+        if any(rate <= 0.0 for rate in rates):
+            raise ValueError("Rates must be positive.")
+
+        inverse_rate_weights = [
+            desired_fraction / rate
+            for desired_fraction, rate in zip(desired_realized_fractions, rates)
+        ]
+        denominator = sum(inverse_rate_weights)
+        if denominator <= 0.0:
+            raise ValueError("At least one desired realized fraction must be positive.")
+
+        return [weight / denominator for weight in inverse_rate_weights]
+
     def simulate(self):
         pass
 
     def reinitialize_events(self):
         pass
-

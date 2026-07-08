@@ -9,7 +9,7 @@ import time
 import csv
 from pathlib import Path
 from secrets import token_bytes
-from numpy.random import SeedSequence, default_rng
+from numpy.random import SeedSequence
 
 from baseclasses.Day import Day
 from baseclasses.InputProperties import InputProperties
@@ -18,28 +18,37 @@ from baseclasses.Network import Network
 from baseclasses.TravelFlow import TravelFlow
 from baseclasses.Writer import Writer
 
+from utils.ConfigExport import build_executed_config, write_metadata_json
+
 from models.disease.DiseaseModel import DiseaseModel
 from models.travel.TravelModel import TravelModel
 from models.treatments.NonPharmaInterventions import NonPharmaInterventions
+from models.treatments.Antiviral import Antiviral
 from models.treatments.Vaccination import Vaccination
 
-parser = argparse.ArgumentParser()
-parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNING',
-                    help='set log level to DEBUG, INFO, WARNING, ERROR, or CRITICAL')
-parser.add_argument('-d', '--days', type=int, required=False, default=365,
-                    help='set number of days to simulate')
-parser.add_argument('-i', '--input_filename', type=str, required=True,
-                    help='path and name of input simulation properties json file')
-args = parser.parse_args()
-
 format_str=f'[%(asctime)s] %(filename)s:%(funcName)s:%(lineno)s - %(levelname)s: %(message)s'
-logging.basicConfig(level=args.loglevel, format=format_str)
 logger = logging.getLogger(__name__)
+
+
+def build_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-l', '--loglevel', type=str, required=False, default='WARNING',
+                        help='set log level to DEBUG, INFO, WARNING, ERROR, or CRITICAL')
+    parser.add_argument('-d', '--days', type=int, required=False, default=365,
+                        help='set number of days to simulate')
+    parser.add_argument('-i', '--input_filename', type=str, required=True,
+                        help='path and name of input simulation properties json file')
+    return parser
+
+
+def parse_args(argv=None):
+    return build_parser().parse_args(argv)
 
 
 def run( simulation_days:Type[Day],
          parameters:Type[ModelParameters],
          network:Type[Network],
+         antiviral_model:Type[Antiviral],
          vaccine_model:Type[Vaccination],
          disease_model: Type[DiseaseModel],
          travel_model:Type[TravelModel],
@@ -53,8 +62,10 @@ def run( simulation_days:Type[Day],
 
     # Distribute any day 0 or less vaccines to nodes and within populations
     vaccine_model.distribute_vaccines_to_nodes(network, day=0)
+    antiviral_model.distribute_antivirals_to_nodes(network, day=0)
     for node in network.nodes:
         vaccine_model.distribute_vaccines_to_population(node, day=0)
+        antiviral_model.distribute_antivirals_to_population(node, day=0)
 
     # Write initial conditions
     writer.write_csv(0, network) if writer.total_sims > 1 else writer.write_json(0, network)
@@ -64,6 +75,7 @@ def run( simulation_days:Type[Day],
     for day in range(1, simulation_days.day+1):
         # Distribute vaccines from network stockpile to individual nodes and zero-out
         vaccine_model.distribute_vaccines_to_nodes(network, day)
+        antiviral_model.distribute_antivirals_to_nodes(network, day)
 
         # Run distributions, treatments, stockpiles, and disease simulation for each node
         for node in network.nodes:
@@ -71,6 +83,7 @@ def run( simulation_days:Type[Day],
             vaccine_model.distribute_vaccines_to_population(node, day)
 
             # apply antivirals
+            antiviral_model.distribute_antivirals_to_population(node, day)
 
             # simulate one step
             disease_model.simulate(node, day, vaccine_model)
@@ -101,31 +114,22 @@ def run( simulation_days:Type[Day],
     return
 
 
-def main():
+def main(cli_args=None):
     """
     Main entry point to PandemicExerciseSimulator
     """
+    args = cli_args if cli_args is not None else parse_args()
+    logging.basicConfig(level=args.loglevel, format=format_str)
     logger.info(f'entered main loop')
 
     # Read input properties file
     # Can be pre-generated from template, or generated in GUI
     simulation_properties = InputProperties(args.input_filename)
 
-    # Create output directory
-    output_dir = simulation_properties.output_dir_path
-    os.makedirs(output_dir, exist_ok=True)
-    logger.info(f'Created output directory: {output_dir}')
-
-    # Copy input file to output directory to remember which file generated output
-    input_file_path = os.path.abspath(args.input_filename)
-    copied_input_path = os.path.join(output_dir, 'input.json')
-    shutil.copyfile(input_file_path, copied_input_path)
-    logger.info(f'Copied input file to: {copied_input_path}')
-
     # Also used for exporting day-by-day summary information
     realization_indices = simulation_properties.realization_indices
     realization_number = int(len(realization_indices))
-    batch_num = int(simulation_properties.batch_num)
+    batch_num = simulation_properties.batch_num
     
     # Initialize Model Parameters class instance
     # This is a subset of the simulation properties, and contains data from a
@@ -156,6 +160,8 @@ def main():
     npis.pre_process(network)
 
     # Initialize antiviral model
+    antiviral_parent = Antiviral(parameters)
+    antiviral_model = antiviral_parent.get_child(simulation_properties.antiviral_model, network)
 
     # Initialize vaccine model
     vaccine_parent = Vaccination(parameters)
@@ -175,6 +181,43 @@ def main():
     base_seed = int.from_bytes(token_bytes(16), "little")  # 128-bit
     parent_seedseq = SeedSequence(base_seed)
     child_seedseq = parent_seedseq.spawn(realization_number)
+
+    # Create output directory
+    executed_config = build_executed_config(
+        simulation_properties=simulation_properties,
+        parameters=parameters,
+        disease_model=disease_model,
+        travel_model=travel_model,
+        npi_model=npis,
+        antiviral_model=antiviral_model,
+        vaccine_model=vaccine_model,
+        node_count=network.get_number_of_nodes(),
+        base_seed=base_seed,
+        cli_args=args
+    )
+
+    # Create output directory
+    if simulation_properties.output_dir_path.upper() == "GENERATE":
+        simulation_properties.output_dir_path = executed_config["output_dir_path"]
+    os.makedirs(simulation_properties.output_dir_path, exist_ok=True)
+    logger.info(f'Created output directory: {simulation_properties.output_dir_path}')
+
+    # Copy original input file to output directory with batch-specific name
+    input_file_path = os.path.abspath(args.input_filename)
+    copied_input_path = os.path.join(
+        simulation_properties.output_dir_path,
+        f"input_batch-{simulation_properties.batch_num}.json"
+    )
+    shutil.copyfile(input_file_path, copied_input_path)
+    logger.info(f"Copied input file to: {copied_input_path}")
+
+    # Write canonical input file based on resolved parameters actually used
+    write_metadata_json(
+        executed_config=executed_config,
+        output_dir=simulation_properties.output_dir_path,
+        batch_num=simulation_properties.batch_num,
+        logger=logger
+    )
 
     # Run time output file
     csv_time_path = Path(simulation_properties.output_dir_path) / f"simulation_times_batch-{batch_num}.csv"
@@ -197,6 +240,7 @@ def main():
         run( simulation_days,
              parameters,
              network_copy,
+             antiviral_model,
              vaccine_model,
              disease_model,
              travel_model,
@@ -207,15 +251,14 @@ def main():
 
         # Write a time results as soon as sim completes to handle unfinished jobs
         with open(csv_time_path, "a", newline="") as f:
-            fieldnames = ["sim_num", "time_seconds"]
+            fieldnames = ["sim_id", "time_seconds"]
             csv_writer = csv.DictWriter(f, fieldnames=fieldnames)
             # write header if file is empty
             if f.tell() == 0:
                 csv_writer.writeheader()
-            csv_writer.writerow({"sim_num": r, "time_seconds": elapsed})
+            csv_writer.writerow({"sim_id": r, "time_seconds": elapsed})
     return
 
 
 if __name__ == '__main__':
     main()
-

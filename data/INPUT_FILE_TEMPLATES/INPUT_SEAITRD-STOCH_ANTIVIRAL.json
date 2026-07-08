@@ -15,17 +15,34 @@
     "high_risk_ratios": "../data/STATE/state_STATE_high-risk-ratios-flu-only.csv"
   },
   "disease_model": {
-    "identity": "seirs-deterministic",
+    "identity": "seaitrd-stochastic",
     "parameters": {
-      "compartments": ["S", "E", "I", "R"],
+      "compartments": ["S", "E", "A", "I", "T", "R", "D"],
       "R0": "3",
-      "latent_period_days": "7",
-      "infectious_period_days": "14"
+      "beta_scale": "14",
+      "tau": "7",
+      "kappa": "2",
+      "gamma": "14.0281",
+      "chi": "3",
+      "nu": [
+        "0.002",
+        "0.002",
+        "0.002",
+        "0.002",
+        "0.002"
+      ],
+      "sigma": [
+        "1",
+        "1",
+        "1",
+        "1",
+        "1"
+      ]
     }
   },
   "travel_model": {
     "identity": "binomial",
-    "parameters":{
+    "parameters": {
       "rho": "1",
       "flow_reduction": [
         "1.0",
@@ -35,9 +52,13 @@
         "1.0"
       ],
       "traveling_compartments": {
+        "A": "1.0",
+        "T": "0.5",
         "I": "0.2"
       },
       "transmitting_compartments": {
+        "A": "1.0",
+        "T": "1.0",
         "I": "1.0"
       }
     }
@@ -50,6 +71,27 @@
     }
   ],
   "non_pharma_interventions": [],
-  "antiviral_model": {},
+  "antiviral_model": {
+    "identity": "stockpile-age-risk",
+    "parameters": {
+      "age_risk_priority_groups": [
+        "1.0",
+        "1.0",
+        "1.0",
+        "1.0",
+        "1.0"
+      ],
+      "compartment_priority": ["I"],
+      "antiviral_effectiveness_death": "0.25",
+      "antiviral_capacity_proportion": "1.0",
+      "antiviral_half_life_days": null,
+      "antiviral_stockpile": [
+        {
+          "day": "0",
+          "amount": "0"
+        }
+      ]
+    }
+  },
   "vaccine_model": {}
 }

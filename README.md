@@ -9,18 +9,29 @@ Depends on [Poetry](https://python-poetry.org/docs/#installation) for native ins
 After installing Poetry, do:
 
 ```
-$ git clone https://github.com/TACC/PandemicExerciseSimulator
+$ git clone https://github.com/TACC/PandemicExerciseSimulator.git
 $ cd PandemicExerciseSimulator/
 $ poetry install --no-root
 ```
 
 The above will create a virtual environment. You can automatically access the virtual
-environment by prefacing your commands with 'poetry run'. For example:
+environment by prefacing your commands with `poetry run`.
+
+State input files use paths beginning with `../data/`, so run them from the
+`data/` directory. Delaware has only three counties and is a faster example
+than Texas:
 
 ```
 $ poetry run python3 src/simulator.py --help
-$ poetry run python3 src/simulator.py -l INFO -d 10 -i data/Texas/INPUT_SEIHRD-STOCH_Texas_R0-2.2_BASELINE.json
+$ cd data
+$ poetry run python3 ../src/simulator.py -l INFO -d 10 -i Delaware/INPUT_SEIHRD-STOCH_Delaware_R0-2.2_BASELINE.json
 ```
+
+`-l INFO` selects normal progress logging; use `-l DEBUG` for detailed model
+diagnostics. `-d 10` sets the maximum simulation length to 10 days.
+`-i <file>` supplies the required input JSON. The equivalent long options are
+`--loglevel`, `--days`, and `--input_filename`.
+
 Each state has at least a baseline and vaccination template based on the 2024-25 influenza vaccination coverage
 time series and effectiveness. Details on this can be found in `scripts/5_vaccine_coverage_by_state.R`. We generated
 additional input files for Alabama as an example based on the templates available in `data/INPUT_FILE_TEMPLATES`.
@@ -37,10 +48,12 @@ As an alternative to Poetry, you can instead run a containerized version of the
 simulator with [Docker](https://docs.docker.com/engine/install/).
 
 ```
-$ docker build -t pes:0.1.0 .
-$ docker run --rm pes:0.1.0 python3 src/simulator.py --help
-$ docker run --rm pes:0.1.0 python3 src/simulator.py -l INFO -d 10 -i data/Texas/INPUT_SEIHRD-STOCH_Texas_R0-2.2_BASELINE.json
+$ docker build -t pes:latest .
+$ docker run --rm pes:latest python3 src/simulator.py --help
 ```
+
+`latest` labels the most recently built local image without coupling the
+quickstart command to a specific release number.
 
 ### Input Data Required:
 

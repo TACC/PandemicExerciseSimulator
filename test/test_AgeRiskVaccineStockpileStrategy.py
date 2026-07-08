@@ -6,13 +6,20 @@ from types import SimpleNamespace
 import sys, importlib
 GroupModule = importlib.import_module("src.baseclasses.Group")
 # ensure any alt path points to the same module
-sys.modules.setdefault("baseclasses.Group", GroupModule)
+sys.modules["baseclasses.Group"] = GroupModule
 
 from src.baseclasses.Network import Network
 from src.baseclasses.Node import Node
 from src.baseclasses.Group import RiskGroup, VaccineGroup, Compartments
 from src.baseclasses.PopulationCompartments import PopulationCompartments
 from src.models.treatments.Vaccination import Vaccination  # Adjust import based on your structure
+
+VaccinationModule = importlib.import_module("src.models.treatments.Vaccination")
+VaccinationModule.Compartments = Compartments
+try:
+    importlib.import_module("models.treatments.Vaccination").Compartments = Compartments
+except ModuleNotFoundError:
+    pass
 
 # still requires calling with printing more than stdout to the screen to see these debug messages
 # poetry run pytest -s test/test_AgeRiskVaccineStockpileStrategy.py
@@ -29,7 +36,7 @@ def test_distribute_vaccines_to_nodes_only_moves_stock():
             "vaccine_eff_lag_days": "0",
             "vaccine_stockpile": [{"day": "0", "amount": "100"}]
         })
-    compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
+    compartment_labels = ["S", "E", "A", "I", "T", "R", "D"]
     net = Network(compartment_labels) #type("MockNet", (), {"nodes": [n1, n2]})
     # Two nodes, 60 & 40 people
     n1 = Node(0, 0, 0, PopulationCompartments([60], [0.0]))
@@ -58,7 +65,7 @@ def test_distribute_vaccines_to_nodes_only_moves_stock():
 
 # Make a single node for tests below
 def make_network_with_population(pop=100):
-    compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
+    compartment_labels = ["S", "E", "A", "I", "T", "R", "D"]
     net = Network(compartment_labels)
     pc   = PopulationCompartments(age_group_pops=[pop], high_risk_ratios=[0.0])
     node = Node(node_index=0, node_id=0, fips_id=0, compartments=pc)
@@ -114,7 +121,7 @@ def test_stockpile_combines_negative_and_day0():
                 {"day": "-14", "amount": "100"},  # -> effective day = 0   → stays as 0
                 {"day": "0", "amount": "25"}      # -> effective day = 14  → too late, skip for this test
             ]})
-    compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
+    compartment_labels = ["S", "E", "A", "I", "T", "R", "D"]
     net = make_network_with_population()
     node = net.nodes[0]
     vaccine_parent = Vaccination(parameters=params)
@@ -241,3 +248,23 @@ def test_half_life_applies_only_after_day0_and_subinteger_loss():
     total_vax = node.compartments.get_compartment_vector_for(GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.V.value))
     assert float(sum(total_vax)) == 0.0
     assert 2 not in strat.node_stockpile_by_day[0]
+
+
+def test_half_life_accepts_numeric_string():
+    net = make_network_with_population()
+    params = SimpleNamespace(
+        number_of_age_groups=1,
+        vaccine_model="stockpile-age-risk",
+        vaccine_parameters={
+            "vaccine_half_life_days": "60",
+            "vaccine_adherence": ["1"],
+            "vaccine_effectiveness": ["1"],
+            "vaccine_eff_lag_days": "0",
+            "vaccine_stockpile": [],
+        },
+    )
+
+    strategy = Vaccination(parameters=params).get_child(params.vaccine_model, network=net)
+
+    assert strategy.vaccine_half_life_days == 60.0
+    assert strategy.daily_vaccine_wastage == pytest.approx(0.5 ** (1 / 60.0))
