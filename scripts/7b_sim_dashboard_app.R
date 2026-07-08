@@ -29,6 +29,9 @@ load_metadata <- function() {
   if (!file.exists(MASTER_CSV)) {
     return(tibble(
       scenario_hash = character(), batch_num = character(),
+      metadata_creator = character(), metadata_disease = character(),
+      metadata_sim_day_0 = character(), metadata_notes = character(),
+      metadata_tags_json = character(),
       geo_region = character(), disease_identity = character(),
       vaccine_used = logical(), antiviral_used = logical(),
       npi_used = logical(), attempt_realization_count = integer(),
@@ -36,7 +39,19 @@ load_metadata <- function() {
       created_at_utc = character()
     ))
   }
-  read_csv(MASTER_CSV, show_col_types = FALSE) %>%
+  metadata <- read_csv(MASTER_CSV, show_col_types = FALSE)
+  optional_tag_columns <- c(
+    "metadata_creator",
+    "metadata_disease",
+    "metadata_sim_day_0",
+    "metadata_notes",
+    "metadata_tags_json"
+  )
+  for (column in optional_tag_columns) {
+    if (!column %in% names(metadata)) metadata[[column]] <- NA_character_
+  }
+
+  metadata %>%
     mutate(
       created_at_utc = as.POSIXct(created_at_utc, tz = "UTC"),
       complete_pct   = round(100 * complete_realization_count /
@@ -119,7 +134,13 @@ ui <- page_navbar(
                            options = list(placeholder = "All regions")),
             selectizeInput("filter_disease", "Disease model",
                            choices = NULL, multiple = TRUE,
-                           options = list(placeholder = "All models"))
+                           options = list(placeholder = "All models")),
+            selectizeInput("filter_metadata_disease", "Disease tag",
+                           choices = NULL, multiple = TRUE,
+                           options = list(placeholder = "All disease tags")),
+            selectizeInput("filter_metadata_creator", "Creator",
+                           choices = NULL, multiple = TRUE,
+                           options = list(placeholder = "All creators"))
           ),
 
           accordion_panel(
@@ -280,6 +301,20 @@ server <- function(input, output, session) {
       selected = isolate(input$filter_disease),
       server = TRUE
     )
+
+    updateSelectizeInput(
+      session, "filter_metadata_disease",
+      choices = sort(unique(na.omit(df_all$metadata_disease))),
+      selected = isolate(input$filter_metadata_disease),
+      server = TRUE
+    )
+
+    updateSelectizeInput(
+      session, "filter_metadata_creator",
+      choices = sort(unique(na.omit(df_all$metadata_creator))),
+      selected = isolate(input$filter_metadata_creator),
+      server = TRUE
+    )
   })
   
   observe({
@@ -384,6 +419,12 @@ server <- function(input, output, session) {
     df <- meta()
     if (length(input$filter_region)  > 0) df <- dplyr::filter(df, geo_region       %in% input$filter_region)
     if (length(input$filter_disease) > 0) df <- dplyr::filter(df, disease_identity  %in% input$filter_disease)
+    if (length(input$filter_metadata_disease) > 0) {
+      df <- dplyr::filter(df, metadata_disease %in% input$filter_metadata_disease)
+    }
+    if (length(input$filter_metadata_creator) > 0) {
+      df <- dplyr::filter(df, metadata_creator %in% input$filter_metadata_creator)
+    }
     if (isTRUE(input$filter_vaccine))    df <- dplyr::filter(df, vaccine_used)
     if (isTRUE(input$filter_antiviral))  df <- dplyr::filter(df, antiviral_used)
     if (isTRUE(input$filter_npi))        df <- dplyr::filter(df, npi_used)
@@ -435,7 +476,9 @@ server <- function(input, output, session) {
         ),
         created = format(created_at_utc, "%Y-%m-%d %H:%M")
       ) %>%
-      select(parquet, geo_region, disease_identity, disease_R0, sim_days,
+      select(parquet, geo_region, metadata_creator, metadata_disease,
+             metadata_sim_day_0, metadata_notes,
+             disease_identity, disease_R0, sim_days,
              interventions, completion, mean_run_time_seconds, created, 
              batch_num, scenario_hash, total_parquet_file_size)
 
@@ -450,12 +493,14 @@ server <- function(input, output, session) {
         dom        = "Bfrtip",
         buttons    = list("colvis"),
         columnDefs = list(
-          list(visible = FALSE, targets = c(9, 10)),  # hide batch/hash cols
+          list(visible = FALSE, targets = c(5, 13, 14)),
           list(className = "dt-center", targets = 0)
         )
       ),
-      colnames = c("File Exists", "Region", "Model", "R0", "Run Day Max",
-                   "Interventions", "Sim Completion", "Mean Run Time (sec)", "Created", 
+      colnames = c("File Exists", "Region", "Creator", "Disease Tags",
+                   "Simulation Day 0", "Notes", "Model", "R0", "Run Day Max",
+                   "Interventions",
+                   "Sim Completion", "Mean Run Time (sec)", "Created",
                    "batch_num", "scenario_hash", "Total Parquet Size")
     ) %>%
       formatRound("mean_run_time_seconds", digits = 2)

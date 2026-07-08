@@ -10,15 +10,12 @@ logger = logging.getLogger(__name__)
 
 class EventType(Enum):
     EtoA=0    # exposed to asymptomatic
-    AtoT=1    # asymptomatic to treatable
-    AtoR=2    # asymptomatic to recovered
-    AtoD=3    # asymptomatic to deceased
-    TtoI=4    # treatable to infections
-    TtoR=5    # treatable to recovered
-    TtoD=6    # treatable to deceased
-    ItoR=7    # infectious to recovered
-    ItoD=8    # infectious to deceased
-    CONTACT=9
+    AtoI=1    # asymptomatic to infectious
+    TtoR=2    # treated to recovered
+    TtoD=3    # treated to deceased
+    ItoR=4    # infectious to recovered
+    ItoD=5    # infectious to deceased
+    CONTACT=6
 
 
 class Event:
@@ -44,5 +41,3 @@ class Event:
         other
         """
         return (True if self.time > other.time else False)
-
-

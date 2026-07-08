@@ -26,9 +26,9 @@ def make_dummy_input(tmp_path):
    contact_file.write_text("1,0\n0,1\n")   # 2x2 identity matrix
 
    return SimpleNamespace(
-      disease_model="seatird-stochastic",
+      disease_model="seaitrd-stochastic",
       disease_parameters={
-         "compartments": ["S", "E", "A", "T", "I", "R", "D"],
+         "compartments": ["S", "E", "A", "I", "T", "R", "D"],
          "R0": "1.0",
          "beta_scale": "1.0",
          "tau": "4.0",
@@ -68,7 +68,7 @@ def make_params(tmp_path):
 
 
 def make_network():
-   compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
+   compartment_labels = ["S", "E", "A", "I", "T", "R", "D"]
    net = Network(compartment_labels)
    node = Node(
       node_index=0,
@@ -84,7 +84,7 @@ def test_node_specific_npi_effect(tmp_path):
    params = make_params(tmp_path)
    params.beta = 1.0
 
-   compartment_labels = ["S", "E", "A", "T", "I", "R", "D"]
+   compartment_labels = ["S", "E", "A", "I", "T", "R", "D"]
    network = Network(compartment_labels)
 
    fips_ids = [113, 141, 201, 300, 400]
@@ -144,6 +144,56 @@ def test_spectral_radius_returns_largest_eigenvalue():
    assert DiseaseModel.spectral_radius(K) == 3.5
 
 
+def test_estimate_baseline_beta_matches_target_R0():
+   contact_matrix = np.array([[3.0, 1.0], [1.0, 2.0]])
+   susceptibility = np.array([1.0, 0.5])
+   w = np.array([4.0, 2.0])
+   R0 = 2.5
+
+   beta = DiseaseModel.estimate_baseline_beta(
+      contact_matrix,
+      R0,
+      w,
+      susceptibility,
+   )
+   K = DiseaseModel.build_NGM(beta, contact_matrix, w, susceptibility)
+
+   assert np.isclose(DiseaseModel.spectral_radius(K), R0)
+
+
+def test_adjust_two_way_split_proportion_realizes_desired_fraction():
+   target_rate = 1 / 3.0
+   competing_rate = 1 / 7.0
+   desired = 0.25
+
+   adjusted = DiseaseModel.adjust_two_way_split_proportion(
+      desired_realized_fraction=desired,
+      competing_rate=competing_rate,
+      target_rate=target_rate,
+   )
+
+   realized = adjusted * target_rate / (
+      adjusted * target_rate + (1 - adjusted) * competing_rate
+   )
+   assert np.isclose(realized, desired)
+
+
+def test_adjust_competing_clock_split_proportions_realizes_desired_fractions():
+   desired = [0.2, 0.3, 0.5]
+   rates = [1 / 2.0, 1 / 4.0, 1 / 9.0]
+
+   adjusted = DiseaseModel.adjust_competing_clock_split_proportions(
+      desired_realized_fractions=desired,
+      rates=rates,
+   )
+
+   realized_rates = np.array(adjusted) * np.array(rates)
+   realized = realized_rates / realized_rates.sum()
+
+   assert np.isclose(sum(adjusted), 1.0)
+   assert np.allclose(realized, desired)
+
+
 def test_group_cache_per_node_sums_to_one(tmp_path):
    params = make_params(tmp_path)
    npis = SimpleNamespace(schedule=[[[0.0, 0.0]]])
@@ -182,3 +232,16 @@ def test_get_child_raises_on_unknown_model(tmp_path):
 
    with pytest.raises(Exception, match="not recognized"):
       model.get_child("not-a-real-model")
+
+
+def test_age_values_expands_scalar_to_age_groups():
+   assert DiseaseModel.age_values("0.5", 3) == [0.5, 0.5, 0.5]
+
+
+def test_age_values_accepts_age_specific_sequence():
+   assert DiseaseModel.age_values(["0.1", 0.2, "0.3"], 3) == [0.1, 0.2, 0.3]
+
+
+def test_age_values_rejects_wrong_length_sequence():
+   with pytest.raises(ValueError, match="Expected 3 age-specific values"):
+      DiseaseModel.age_values(["0.1", "0.2"], 3)

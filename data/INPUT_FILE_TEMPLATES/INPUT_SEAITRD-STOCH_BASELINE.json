@@ -1,7 +1,13 @@
 {
-  "output_dir_path": "SEATIRD-DET-STATE_BASELINE",
+  "output_dir_path": "GENERATE",
   "realization_range": ["0", "99"],
-  "batch_num": "0",
+  "batch_num": "GENERATE",
+  "metadata_tags": {
+    "creator": "YOUR_NAME",
+    "disease": ["DISEASE"],
+    "sim_day_0": null,
+    "notes": ["PLACEHOLDER"]
+  },
   "data": {
     "population": "../data/STATE/county_pop_by_age_STATE_2019-2023ACS.csv",
     "contact": "../data/STATE/contact_matrix_STATE_Mistry2021_all.csv",
@@ -9,9 +15,9 @@
     "high_risk_ratios": "../data/STATE/state_STATE_high-risk-ratios-flu-only.csv"
   },
   "disease_model": {
-    "identity": "seatird-deterministic",
+    "identity": "seaitrd-stochastic",
     "parameters": {
-      "compartments": ["S", "E", "A", "T", "I", "R", "D"],
+      "compartments": ["S", "E", "A", "I", "T", "R", "D"],
       "R0": "3",
       "beta_scale": "14",
       "tau": "7",

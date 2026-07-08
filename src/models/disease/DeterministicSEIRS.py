@@ -3,7 +3,7 @@ import numpy as np
 import logging
 from typing import Type
 
-from baseclasses.Group import Group, RiskGroup, VaccineGroup
+from baseclasses.Group import Group, RiskGroup, VaccineGroup, Compartments
 from baseclasses.Node import Node
 from models.disease.DiseaseModel import DiseaseModel
 from models.treatments.Vaccination import Vaccination
@@ -26,14 +26,42 @@ def SEIRS_model(y, transmission_prob, sigma, gamma, omega):
    """
     S, E, I, R = y
 
-    # Prevent S from going negative by only removing as many people remain in the compartment
+    # Prevent compartments from going negative by only removing as many people remain.
     max_new_infections = min(transmission_prob * S, S)
-    dS_dt = -max_new_infections + omega * R
-    dE_dt = max_new_infections - sigma * E
-    dI_dt = sigma * E - gamma * I
-    dR_dt = gamma * I - omega * R
+    e_to_i = min(sigma * E, E)
+    i_to_r = min(gamma * I, I)
+    r_to_s = min(omega * R, R)
+
+    dS_dt = -max_new_infections + r_to_s
+    dE_dt = max_new_infections - e_to_i
+    dI_dt = e_to_i - i_to_r
+    dR_dt = i_to_r - r_to_s
 
     return np.array([dS_dt, dE_dt, dI_dt, dR_dt])
+
+
+def SEITRS_model(y, transmission_prob, sigma, gamma, T_to_R_rate, omega):
+    """
+    Deterministic SEITRS compartmental model.
+
+    Antivirals move people into T outside the disease model. This function only
+    advances disease progression from existing T to R.
+    """
+    S, E, I, T, R = y
+
+    max_new_infections = min(transmission_prob * S, S)
+    e_to_i = min(sigma * E, E)
+    i_to_r = min(gamma * I, I)
+    t_to_r = min(T_to_R_rate * T, T)
+    r_to_s = min(omega * R, R)
+
+    dS_dt = -max_new_infections + r_to_s
+    dE_dt = max_new_infections - e_to_i
+    dI_dt = e_to_i - i_to_r
+    dT_dt = -t_to_r
+    dR_dt = i_to_r + t_to_r - r_to_s
+
+    return np.array([dS_dt, dE_dt, dI_dt, dT_dt, dR_dt])
 
 class DeterministicSEIRS(DiseaseModel):
 
@@ -44,17 +72,45 @@ class DeterministicSEIRS(DiseaseModel):
         self.R0    = float(self.parameters.disease_parameters['R0'])
         self.sigma = 1 / float(self.parameters.disease_parameters['latent_period_days'])
         self.gamma = 1 / float(self.parameters.disease_parameters['infectious_period_days'])
+        compartment_labels = [
+            str(label).upper()
+            for label in self.parameters.disease_parameters.get('compartments', [])
+        ]
+        self.has_treated_compartment = "T" in compartment_labels
         immune_period = float(self.parameters.disease_parameters.get('immune_period_days', 0))
         if immune_period == 0 or not immune_period:
             self.omega = 0
         else:
             self.omega = 1 / immune_period
 
+        num_age_grps = self.parameters.number_of_age_groups
+        if self.has_treated_compartment:
+            t_to_r_days = self.parameters.disease_parameters.get('T_to_R_days', None)
+            if t_to_r_days is None:
+                if self.parameters.antiviral_parameters:
+                    raise ValueError("T_to_R_days is required when antiviral treatment can create T.")
+                logger.warning(
+                    "T compartment specified without T_to_R_days; defaulting T_to_R_days to infectious_period_days."
+                )
+                t_to_r_days = self.parameters.disease_parameters['infectious_period_days']
+            self.T_to_R_rate = 1 / float(t_to_r_days)
+            raw_rel_inf_T_to_I = self.parameters.disease_parameters.get(
+                'rel_inf_T_to_I',
+                1.0,
+            )
+            self.rel_inf_T_to_I = DiseaseModel.age_values(
+                raw_rel_inf_T_to_I,
+                num_age_grps,
+            )
+            if not self.parameters.antiviral_parameters:
+                logger.warning(
+                    "T compartment specified without an antiviral_model; no people will enter T unless antiviral stockpile is released."
+                )
+
         # beta is a required name for _calculate_beta_w_npi
         self.beta  = self.R0 * self.gamma / DiseaseModel.spectral_radius(self.parameters.np_contact_matrix)
 
         # Relative susceptibility required for travel model, make 1's if not specified
-        num_age_grps = self.parameters.number_of_age_groups
         self.relative_susceptibility = [
             float(x) for x in self.parameters.disease_parameters.get(
                 "relative_susceptibility", [1.0] * num_age_grps
@@ -63,7 +119,7 @@ class DeterministicSEIRS(DiseaseModel):
         # this isn't used, bc _calculate_beta_w_npi uses the schedule
         self.npis_schedule = disease_model.npis_schedule
 
-        logger.info(f'instantiated DeterministicSEATIRD object')
+        logger.info(f'instantiated DeterministicSEIRS object')
         logger.debug(f'{self.parameters}')
         return
 
@@ -120,9 +176,16 @@ class DeterministicSEIRS(DiseaseModel):
                 if contact_rate== 0:
                     continue
 
-                # contacted_group_compartments_today
-                S, E, I, R = compartments_today[(contacted_group.age, contacted_group.risk, contacted_group.vaccine)]
-                infectious_contacted = I
+                contacted_compartments = compartments_today[
+                    (contacted_group.age, contacted_group.risk, contacted_group.vaccine)
+                ]
+                if self.has_treated_compartment:
+                    I = contacted_compartments[Compartments.I.value]
+                    T = contacted_compartments[Compartments.T.value]
+                    infectious_contacted = I + self.rel_inf_T_to_I[contacted_group.age] * T
+                else:
+                    I = contacted_compartments[Compartments.I.value]
+                    infectious_contacted = I
 
                 # infectious_contacted/total_node_pop this captures the fraction of population we need to move from S -> E
                 # NOTE: Maybe an under-weighting if we should be doing age group specific: infectious_age/total_age_pop
@@ -135,18 +198,26 @@ class DeterministicSEIRS(DiseaseModel):
             transmission_prob = 1.0 - np.exp(-transmission_rate)
             #print(f"transmission probability: {transmission_prob}")
 
-            model_parameters = (
-                transmission_prob,     # S => E
-                self.sigma,            # E => I
-                self.gamma,            # I => R
-                self.omega             # R => S
-            )
+            if self.has_treated_compartment:
+                model_parameters = (
+                    transmission_prob,     # S => E
+                    self.sigma,            # E => I
+                    self.gamma,            # I => R
+                    self.T_to_R_rate,      # T => R
+                    self.omega             # R => S
+                )
+                daily_change = SEITRS_model(focal_group_compartments_today, *model_parameters)
+            else:
+                model_parameters = (
+                    transmission_prob,     # S => E
+                    self.sigma,            # E => I
+                    self.gamma,            # I => R
+                    self.omega             # R => S
+                )
+                daily_change = SEIRS_model(focal_group_compartments_today, *model_parameters)
 
             # Euler's Method solve of the system, can't do integer people
-            daily_change = SEIRS_model(focal_group_compartments_today, *model_parameters)
             compartments_tomorrow = focal_group_compartments_today + daily_change
             node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
 
         return
-
-

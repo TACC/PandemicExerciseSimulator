@@ -11,7 +11,7 @@
 # Design notes:
 #   - Disease/travel model parameters are stored as namespaced JSON strings,
 #     not individual columns, to avoid name collisions across model types
-#     (e.g. sigma has different meanings in SEATIRD vs other models).
+#     (e.g. sigma has different meanings in SEAITRD vs other models).
 #   - Each intervention type gets an explicit _used boolean flag.
 #   - Parquet compression (zstd) handles sparse simulation data automatically;
 #     columns of zeros cost almost nothing in file size.
@@ -119,6 +119,7 @@ parse_metadata <- function(path) {
 
   dm         <- m$disease_model %||% list()
   tm         <- m$travel_model  %||% list()
+  tags       <- m$metadata_tags %||% list()
   sim_times  <- parse_sim_times(path, m$batch_num %||% "")
   
   attempt_realization_count  <- safe_get(m, "realization_indices", "count") %||% NA_integer_
@@ -139,6 +140,11 @@ parse_metadata <- function(path) {
     scenario_hash              = m$scenario_hash   %||% NA_character_,
     batch_num                  = m$batch_num       %||% NA_character_,
     output_dir_path            = m$output_dir_path %||% NA_character_,
+    metadata_creator           = tags$creator   %||% NA_character_,
+    metadata_disease           = vec_to_str(tags$disease),
+    metadata_sim_day_0         = tags$sim_day_0 %||% NA_character_,
+    metadata_notes             = vec_to_str(tags$notes),
+    metadata_tags_json         = to_json_str(tags),
 
     realization_min            = safe_get(m, "realization_indices", "min")   %||% NA_integer_,
     realization_max            = safe_get(m, "realization_indices", "max")   %||% NA_integer_,
@@ -384,6 +390,11 @@ MASTER_COL_TYPES <- cols(
   scenario_hash              = col_character(),
   batch_num                  = col_character(),
   output_dir_path            = col_character(),
+  metadata_creator           = col_character(),
+  metadata_disease           = col_character(),
+  metadata_sim_day_0         = col_character(),
+  metadata_notes             = col_character(),
+  metadata_tags_json         = col_character(),
 
   realization_min            = col_integer(),
   realization_max            = col_integer(),
@@ -447,6 +458,23 @@ MASTER_COL_TYPES <- cols(
 #### Load existing master ######################################################
 if (file.exists(MASTER_CSV)) {
   master <- read_csv(MASTER_CSV, show_col_types = FALSE)
+
+  optional_metadata_columns <- c(
+    "metadata_creator",
+    "metadata_disease",
+    "metadata_sim_day_0",
+    "metadata_notes",
+    "metadata_tags_json"
+  )
+  for (column in optional_metadata_columns) {
+    if (!column %in% names(master)) master[[column]] <- NA_character_
+  }
+  master <- master %>%
+    dplyr::select(-dplyr::any_of(c(
+      "scenario_name",
+      "scenario_group",
+      "scenario_description"
+    )))
   
   if (!"sim_completion" %in% names(master)) {
     master <- master %>%

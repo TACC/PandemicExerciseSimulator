@@ -1,17 +1,17 @@
 {
-  "output_dir_path": "SEATIRD-STOCH-STATE_BASELINE",
+  "output_dir_path": "SEAITRD-STOCH-Alabama_BASELINE",
   "realization_range": ["0", "99"],
   "batch_num": "0",
   "data": {
-    "population": "../data/STATE/county_pop_by_age_STATE_2019-2023ACS.csv",
-    "contact": "../data/STATE/contact_matrix_STATE_Mistry2021_all.csv",
-    "flow": "../data/STATE/STATE_Q4-2019_mobility-matrix.csv",
-    "high_risk_ratios": "../data/STATE/state_STATE_high-risk-ratios-flu-only.csv"
+    "population": "../data/Alabama/county_pop_by_age_Alabama_2019-2023ACS.csv",
+    "contact": "../data/Alabama/contact_matrix_Alabama_Mistry2021_all.csv",
+    "flow": "../data/Alabama/Alabama_Q4-2019_mobility-matrix.csv",
+    "high_risk_ratios": "../data/Alabama/state_Alabama_high-risk-ratios-flu-only.csv"
   },
   "disease_model": {
-    "identity": "seatird-stochastic",
+    "identity": "seaitrd-stochastic",
     "parameters": {
-      "compartments": ["S", "E", "A", "T", "I", "R", "D"],
+      "compartments": ["S", "E", "A", "I", "T", "R", "D"],
       "R0": "3",
       "beta_scale": "14",
       "tau": "7",
@@ -57,8 +57,8 @@
   },
   "initial_infected": [
     {
-      "county": "99999",
-      "infected": "1",
+      "county": "01073",
+      "infected": "6",
       "age_group": "2"
     }
   ],

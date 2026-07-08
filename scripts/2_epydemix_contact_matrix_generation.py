@@ -27,14 +27,14 @@ def to_population_name(state_hyphen: str) -> str:
     return f"United_States_{core}"
 
 current_directory_path = Path.cwd().parent / "data/"
-contact_settings = ["all"] # "work" not being used
+contact_settings = ["all"]
 for state in US_states:
     state_name = to_population_name(state)
     # Load population data for States in the United States using the Mistry 2021 contact matrix
     population = load_epydemix_population(
         population_name  = state_name,
         contacts_source  = "mistry_2021",
-        layers           = contact_settings, # "home", "school", "community"
+        layers           = contact_settings, # "home", "work", "school", "community"
         age_group_mapping={"0-4": [ '0',  '1',  '2',  '3',  '4'],
                           "5-17": [ '5',  '6',  '7',  '8',  '9',
                                    '10', '11', '12', '13', '14',

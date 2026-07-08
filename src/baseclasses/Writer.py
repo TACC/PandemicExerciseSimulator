@@ -64,7 +64,9 @@ class Writer:
 
 
     def __str__(self) -> str:
-        return(f'Writer class: Output file handle to {self.output_filename}')
+        if self.total_sims == 1:
+            return f'Writer class: Output file handle to {self.output_filename}'
+        return f'Writer class: Output directory {self.output_dir}'
 
 
     def write_json(self, day:int, network:Type[Network]):
@@ -124,5 +126,4 @@ class Writer:
         network_row = {"sim_id": self.sim_id, "day": day, **totals}
         _write_dict_row(os.path.join(self.output_dir, f"network_batch-{self.batch_num}.csv"), network_row)
         return
-
 
