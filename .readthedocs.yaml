@@ -10,6 +10,9 @@ build:
     post_install:
       - poetry config virtualenvs.create false
       - poetry install --with docs --no-root
+    build:
+      html:
+        - poetry run sphinx-build -b html docs $READTHEDOCS_OUTPUT/html
 
 sphinx:
   configuration: docs/conf.py
