@@ -8,6 +8,7 @@ __pycache__/
 *.pyc
 *.swp
 *.xml
+_build/
 docs/_build/
 .Rproj.user
 .vscode/
