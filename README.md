@@ -31,6 +31,47 @@ additional input files for Alabama as an example based on the templates availabl
 $ poetry run pytest
 ```
 
+### Build And Preview Documentation:
+
+This branch includes Sphinx documentation in `docs/`. The docs dependencies are
+managed by Poetry in the `docs` dependency group. The project requires Python
+3.11 or newer for the pinned Sphinx version.
+
+If Poetry selects an older Python, point it at a supported interpreter first:
+
+```
+$ poetry env use python3
+```
+
+Install the project dependencies plus the documentation tools:
+
+```
+$ poetry install --with docs --no-root
+```
+
+Build the documentation once:
+
+```
+$ poetry run sphinx-build docs docs/_build/html
+```
+
+The generated HTML starts at:
+
+```
+docs/_build/html/index.html
+```
+
+To preview edits live while you work, run Sphinx autobuild from the repository
+root:
+
+```
+$ poetry run sphinx-autobuild docs docs/_build/html
+```
+
+By default, the live preview is served at `http://127.0.0.1:8000/`. Keep that
+command running while editing files under `docs/`; pages rebuild automatically
+when the docs source changes.
+
 ### Run Using Docker (Preferred):
 
 As an alternative to Poetry, you can instead run a containerized version of the
