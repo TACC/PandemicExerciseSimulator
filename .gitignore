@@ -8,6 +8,7 @@ __pycache__/
 *.pyc
 *.swp
 *.xml
+docs/_build/
 .Rproj.user
 .vscode/
 scripts/.Rhistory
