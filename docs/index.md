@@ -33,6 +33,7 @@ modeling/compartments
 modeling/simulation-methods
 modeling/math
 modeling/calibration
+modeling/county-age-initialization
 modeling/travel
 modeling/npis-vaccines
 modeling/antivirals
