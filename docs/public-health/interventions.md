@@ -229,8 +229,7 @@ Common eligible compartments are:
 | SEITRS, stochastic or deterministic | `["I", "E"]` |
 | SEITHRD routine treatment | `["IS"]` |
 | SEITHRD prophylaxis scenario | `["IS", "IP", "IA", "E"]` |
-| SEAITRD default | `["I"]` |
-| SEAITRD early treatment scenario | `["I", "A", "E"]` |
+| SEAITRD | `["I"]` |
 
 The stockpile parameters control movement **into** `T`. Disease model
 parameters control what happens after treatment begins:
@@ -240,7 +239,7 @@ parameters control what happens after treatment begins:
 | `T_to_R_days` | SEITRS, SEITHRD, and SEAITRD | Average number of days from treated to recovered. Required for SEAITRD because `T` is required. |
 | `rel_inf_T_to_I` | SEITRS | Infectiousness of `T` relative to untreated `I`. |
 | `rel_inf_T_to_IS` | SEITHRD | Infectiousness of `T` relative to symptomatic `IS`. |
-| `I_to_R_days` and `I_to_D_invdays` | SEAITRD | Untreated recovery duration and untreated mortality rate. |
+| `I_to_R_days`, `I_to_D_invdays`, and `highrisk_death_multiplier` | SEAITRD | Untreated recovery duration, low-risk mortality rate, and high-risk mortality multiplier. |
 | `antiviral_effectiveness_death` | SEAITRD | Reduction in treated `T -> D` mortality risk. |
 
 For SEITRS and SEITHRD, no one enters `T` without stockpile allocation. There
@@ -253,10 +252,9 @@ hospitalization proportion 7.5%.
 
 In SEAITRD, `T` is required by the disease model but still stockpile-constrained
 as a treatment state: untreated trajectories bypass `T`, and released doses
-create resource-constrained routes from configured eligible compartments such
-as `I`, `A`, or `E` into `T`. SEAITRD uses separate `I_to_R_days` and
-`T_to_R_days` values, so a 2-day reduction in treated infectious duration
-should be encoded directly as a shorter `T_to_R_days`.
+create resource-constrained `I -> T` treatment. SEAITRD uses separate
+`I_to_R_days` and `T_to_R_days` values, so a 2-day reduction in treated
+infectious duration should be encoded directly as a shorter `T_to_R_days`.
 
 See [Antiviral Stockpile Model](../modeling/antivirals.md) for validation rules,
 allocation behavior, and model-specific details.

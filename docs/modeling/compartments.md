@@ -124,9 +124,9 @@ strict `IS` treatment. The disease model then moves `T -> H` or `T -> R`.
 example, `0.25` represents a 25% risk reduction, or 75% relative risk, and
 does not eliminate hospitalization.
 
-In SEAITRD, people enter treatment only through stockpile allocation.
-The stockpile model can move configured eligible `E`, `A`, or `I` people into
-`T`; their old queued path is invalidated and a new `T -> R/D` path is drawn.
+In SEAITRD, people enter treatment only through stockpile allocation. The
+stockpile model moves eligible `I` people into `T`; their old queued path is
+invalidated and a new `T -> R/D` path is drawn.
 
 ## SEIHRD And SEITHRD Parameters
 
@@ -215,9 +215,9 @@ SEAITRD compartment structure.
 | `A_to_I_days` | Mean duration from `A` to symptomatic infectious `I`. |
 | `I_to_R_days` | Mean untreated infectious duration before recovery. |
 | `T_to_R_days` | Mean treated infectious duration before recovery. Configure separately from `I_to_R_days`; a 2-day shorter treated course is represented directly here. |
-| `T_to_I_days` | Mean duration from `T` back to untreated infectious `I` when that transition is enabled by the SEAITRD implementation. |
-| `I_to_D_invdays` | Age-specific low-risk mortality rate per day for untreated `I`. High-risk values are currently nine times the configured values. |
-| `sigma` | Age-specific relative susceptibility. |
+| `I_to_D_invdays` | Age-specific low-risk mortality rate per day for untreated `I`. |
+| `highrisk_death_multiplier` | Multiplier applied to `I_to_D_invdays` to derive high-risk mortality rates. Use `9` for the current template behavior. |
+| `relative_susceptibility` | Age-specific susceptibility multipliers. |
 | `rel_inf_T_to_I` | Optional relative infectiousness of treated people compared with untreated `I`; defaults to 1.0. |
 
 SEAITRD currently treats `A`, `I`, and `T` as equally infectious in its contact

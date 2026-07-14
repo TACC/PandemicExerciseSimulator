@@ -10,9 +10,8 @@ who receives a dose.
 
 For SEITRS, eligible compartments are usually `E` and `I`. For SEITHRD, the
 antiviral-capable SEIHRD variant, eligible compartments can be `E`, `IA`, `IP`,
-and `IS`. For SEAITRD, eligible compartments can be `E`, `A`, and `I`; the
-`T` compartment is required in this model family even when no doses are
-released.
+and `IS`. For SEAITRD, the standard antiviral route is `I -> T`; the `T`
+compartment is required in this model family even when no doses are released.
 
 ## Complete Configuration
 
@@ -164,9 +163,11 @@ relative risk, for treated people. In SEAITRD, this parameter reduces
 the mortality intensity used for treated `T -> D` events:
 
 ```text
-treated mortality rate = I_to_D_invdays * (1 - antiviral_effectiveness_death)
+treated mortality rate = risk-specific I_to_D rate * (1 - antiviral_effectiveness_death)
 ```
 
+For high-risk SEAITRD groups, the risk-specific untreated rate is
+`I_to_D_invdays * highrisk_death_multiplier`.
 Set `0.0` to preserve the untreated SEAITRD mortality rate for treated people.
 Set `1.0` only when treated people should have no `T -> D` event.
 
@@ -263,8 +264,8 @@ In the Gillespie stochastic SEAITRD model, untreated infection trajectories do
 not enter `T`. Natural progression uses `E -> A -> I`; `A` behaves like a
 pre-symptomatic compartment and does not recover or die directly.
 
-When the optional stockpile model allocates an antiviral dose to someone in a
-configured eligible compartment such as `I`, `A`, or `E`, the simulator:
+When the optional stockpile model allocates an antiviral dose to someone in
+`I`, the simulator:
 
 1. moves one person into `T`;
 2. marks the person's old source-compartment event trajectory as stale;
@@ -273,7 +274,8 @@ configured eligible compartment such as `I`, `A`, or `E`, the simulator:
 Stockpile-created `T` entries follow the existing SEAITRD competing events:
 `T -> R` or `T -> D`. Treated recovery uses `T_to_R_days`, while untreated
 recovery uses `I_to_R_days`. Treated mortality is derived from
-`I_to_D_invdays * (1 - antiviral_effectiveness_death)`.
+the risk-specific untreated mortality rate and
+`antiviral_effectiveness_death`.
 
 SEAITRD contact events are stored at the demographic-group level, not linked to
 person identifiers. Antiviral reconciliation replaces progression events but

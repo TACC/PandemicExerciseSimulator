@@ -255,16 +255,19 @@ reduction in symptomatic duration for people treated after entering `IS`.
 The deterministic SEAITRD mean-flow system uses transition-style input names:
 `E_to_A_days`, `A_to_I_days`, `I_to_R_days`, `T_to_R_days`, and
 `I_to_D_invdays`. Inputs ending in `_days` are durations that become rates;
-`I_to_D_invdays` is already a per-day mortality rate. SEAITRD requires `T`,
-but has no disease-rate flow into `T`; antiviral stockpile allocation is the
-only source of newly treated people.
+`I_to_D_invdays` is already a per-day low-risk mortality rate.
+`highrisk_death_multiplier` multiplies that rate for high-risk groups.
+SEAITRD requires `T`, but has no disease-rate flow into `T`; antiviral
+stockpile allocation is the only source of newly treated people.
 
 Let $r_{EA}=1/\text{E_to_A_days}$,
 $r_{AI}=1/\text{A_to_I_days}$,
 $r_{IR}=1/\text{I_to_R_days}$,
 $r_{TR}=1/\text{T_to_R_days}$,
-$r_{ID}=\text{I_to_D_invdays}$, and
-$r_{TD}=r_{ID}(1-e_{AV,D})$, where $e_{AV,D}$ is
+$r_{ID,g}=\text{I_to_D_invdays}$ for low-risk groups and
+$r_{ID,g}=\text{I_to_D_invdays}\times\text{highrisk_death_multiplier}$ for
+high-risk groups, and
+$r_{TD,g}=r_{ID,g}(1-e_{AV,D})$, where $e_{AV,D}$ is
 `antiviral_effectiveness_death`.
 
 :::{container} ode-system
@@ -273,10 +276,10 @@ $r_{TD}=r_{ID}(1-e_{AV,D})$, where $e_{AV,D}$ is
 \dot S &= -F, \\
 \dot E &= F - r_{EA} E, \\
 \dot A &= r_{EA} E - r_{AI} A, \\
-\dot I &= r_{AI} A - (r_{IR}+r_{ID})I, \\
-\dot T &= -(r_{TR}+r_{TD})T, \\
+\dot I &= r_{AI} A - (r_{IR}+r_{ID,g})I, \\
+\dot T &= -(r_{TR}+r_{TD,g})T, \\
 \dot R &= r_{IR}I+r_{TR}T, \\
-\dot D &= r_{ID}I+r_{TD}T.
+\dot D &= r_{ID,g}I+r_{TD,g}T.
 \end{aligned}
 ```
 :::
@@ -443,20 +446,19 @@ allocated.
 The optional stockpile model adds external queue edits:
 
 ```{math}
-E \xrightarrow{\text{dose}} T,\quad
-A \xrightarrow{\text{dose}} T,\quad
 I \xrightarrow{\text{dose}} T.
 ```
 
-For each stockpile-allocated dose, the old source trajectory is marked stale
-and a new `T` trajectory is drawn. The treated death clock uses:
+For each stockpile-allocated dose, the old `I` trajectory is marked stale and
+a new `T` trajectory is drawn. The treated death clock uses:
 
 ```{math}
 \nu_T = \nu(1 - e_{AV,D}),
 ```
 
 where $\nu$ is the configured `I_to_D_invdays` rate and $e_{AV,D}$ is
-`antiviral_effectiveness_death`. There is no daily
+`antiviral_effectiveness_death`. For high-risk groups, $\nu$ first includes
+`highrisk_death_multiplier`. There is no daily
 antiviral transition rate. Every event moves one person out of one compartment
 and into another.
 Therefore, if $N_{c,\mathrm{before}}$ and $N_{c,\mathrm{after}}$ are the

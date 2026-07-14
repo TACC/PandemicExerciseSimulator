@@ -34,8 +34,8 @@ I,T \rightarrow R \text{ or } D.
 ```
 
 The `T` compartment is entered only through stockpile-allocated antiviral
-treatment from configured eligible compartments such as `I`, `A`, or `E`.
-Natural untreated progression bypasses `T`.
+treatment. The standard SEAITRD antiviral route is `I -> T`; natural untreated
+progression bypasses `T`.
 
 Because each infected person creates several scheduled events, runtime grows
 with population size and epidemic size. This model can become impractical for

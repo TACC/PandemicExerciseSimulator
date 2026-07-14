@@ -74,9 +74,9 @@ specifically for prophylaxis.
 SEAITRD templates must always include the Treated compartment `T` in
 `disease_model.parameters.compartments`, for both deterministic and stochastic
 SEAITRD. This is the main difference from the other model families. SEAITRD
-enters `T` only through stockpile-constrained treatment from configured
-eligible compartments such as `I`, `A`, or `E`; if no antiviral doses are
-released, `T` remains empty. SEAITRD templates should provide `I_to_R_days` and
-`T_to_R_days` separately, `I_to_D_invdays` for untreated mortality, and
-`antiviral_effectiveness_death` in antiviral scenarios so treated mortality can
-be derived.
+enters `T` only through stockpile-constrained `I -> T` treatment; if no
+antiviral doses are released, `T` remains empty. SEAITRD templates should
+provide `I_to_R_days` and `T_to_R_days` separately, `I_to_D_invdays` for
+low-risk untreated mortality, `highrisk_death_multiplier` for high-risk
+untreated mortality, and `antiviral_effectiveness_death` in antiviral scenarios
+so treated mortality can be derived.
