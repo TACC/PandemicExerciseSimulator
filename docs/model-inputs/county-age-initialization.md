@@ -1,8 +1,11 @@
-# County-Age Initial Infection Fitting
+# County-Age Initial Exposure Fitting
 
 This page documents the Delaware manuscript example used to derive county- and age-specific initial conditions from state-level incident influenza hospitalization data.
 
-The simulator input field is named `initial_infected`, but for SEIHRD-family models the current implementation places those people in the low-risk, unvaccinated `E` compartment. The quantities below are therefore low-risk-equivalent initial exposed people, indexed by county and age group.
+The simulator input field is named `initial_exposed`. The implementation places
+those people in the low-risk, unvaccinated `E` compartment. The quantities
+below are therefore low-risk-equivalent initial exposed people, indexed by
+county and age group.
 
 ## Delaware Example
 
@@ -14,7 +17,7 @@ The example starts simulations on August 9, 2025 and uses the Delaware age-strat
 | `10003` | New Castle |
 | `10005` | Sussex |
 
-The script `scripts/6b_derive_initial_infections.R` estimates an initial exposure table and writes a complete runnable test input under `data/Delaware_TEST/`.
+The script `scripts/6b_derive_initial_exposures.R` estimates an initial exposure table and writes a complete runnable test input under `data/Delaware_TEST/`.
 
 ## State Hospitalizations To State Initial Exposed
 
@@ -152,7 +155,7 @@ The table below shows how Delaware county allocations change under three exponen
 
 ## Generated Initial Conditions
 
-The default script writes the following `initial_infected` entries for the Delaware test input:
+The default script writes the following `initial_exposed` entries for the Delaware test input:
 
 ```json
 [
@@ -169,12 +172,12 @@ The total initial low-risk exposed count is 238. The nonzero age groups reflect 
 
 ## Generated Files
 
-Running `scripts/6b_derive_initial_infections.R` writes:
+Running `scripts/6b_derive_initial_exposures.R` writes:
 
 ```text
-data/Delaware/derived_initial_infected_Delaware_2025-08-09.csv
-data/Delaware/derived_initial_infected_Delaware_2025-08-09.json
-data/Delaware/derived_initial_infected_Delaware_2025-08-09_method.csv
+data/Delaware/derived_initial_exposed_Delaware_2025-08-09.csv
+data/Delaware/derived_initial_exposed_Delaware_2025-08-09.json
+data/Delaware/derived_initial_exposed_Delaware_2025-08-09_method.csv
 data/Delaware_TEST/INPUT_SEIHRD-STOCH_Delaware_TEST_R0-2.2_BASELINE.json
 ```
 
