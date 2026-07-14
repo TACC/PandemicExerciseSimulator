@@ -79,19 +79,24 @@ The simulator requires the data from the following folder:
 * **State_Q\*-2019_mobility-matrix.csv:** County x County mobility matrix of the fraction of the population that visits the other counties per day. 
   * Must be ordered to match fips order of population file, i.e. sequential FIPS codes of counties.
 * **State_quarterly-2019_mobility.csv** Non-matrix form of mobility data with column labels, file the matrices are derived from.
-* **State_quarterly-2019_county-connection-ranking.csv:** Ranking of connectivity of counties by quarter to help you decide on where to initialize infections.
+* **State_quarterly-2019_county-connection-ranking.csv:** Ranking of connectivity of counties by quarter to help you decide on where to initialize exposures.
 
 
 ### Parameters Required:
 
 Examples of required parameter inputs per model are available in `data/INPUT_FILE_TEMPLATES`
 
-There also must be at least one county with one initial infected person. Provide the
-county FIPS (as listed in the population file), number of initial infected, and the age
-group index of the infected. All people will be initialized in the low severity risk group of Exposed compartment. 
-If you initialize more than the people available the model will only infect susceptibles available after vaccinations are distributed.
+Disease transition inputs are named for the movement they control. Values ending
+in `_days`, such as `E_to_I_days` or `T_to_R_days`, are durations that the model
+converts internally to rates. Values ending in `_invdays`, such as
+`I_to_D_invdays`, are already rates per day.
+
+There also must be at least one county with one initial exposed person. Provide the
+county FIPS (as listed in the population file), number of initial exposures, and the age
+group index. All people will be initialized in the low severity risk group of the Exposed compartment.
+If you initialize more than the people available the model will only expose susceptibles available after vaccinations are distributed.
 ```
-"initial_infected": [
+"initial_exposed": [
     {
       "county": "1",
       "infected": "100",
@@ -99,6 +104,22 @@ If you initialize more than the people available the model will only infect susc
     }
 ]
 ```
+
+### Disease Model Family Differences
+
+`T` is the treated infectious compartment. In the SEAITRD family
+(`seaitrd-deterministic` and `seaitrd-stochastic`), `T` is part of the model
+definition and is required in `disease_model.parameters.compartments`. SEAITRD
+inputs should provide separate recovery durations for untreated and treated
+infectious people with `I_to_R_days` and `T_to_R_days`. Baseline mortality is
+provided as `I_to_D_invdays`; when SEAITRD is run with an antiviral model,
+`antiviral_effectiveness_death` is also required and the treated death rate is
+derived from `I_to_D_invdays * (1 - antiviral_effectiveness_death)`.
+
+Other model families keep `T` optional. For SEIRS, SEITRS, and SEIHRD inputs,
+omit `T` when the scenario does not model treatment. Include `T` only when an
+antiviral process can move people into the treated compartment, and provide the
+corresponding treated-transition inputs such as `T_to_R_days`.
 
 ### Optional Parameters
 
@@ -162,6 +183,14 @@ To shift a long time series you can simply alter the `vaccine_eff_lag_days`.
       ]
     }
 ```
+
+**Antivirals:** Antiviral stockpile models can move people from configured
+eligible disease compartments into `T`. In SEAITRD-family inputs, symptomatic
+infectious and treated recovery are configured separately with `I_to_R_days`
+and `T_to_R_days`, while baseline mortality is supplied as `I_to_D_invdays`.
+When an antiviral model is configured for SEAITRD, provide
+`antiviral_effectiveness_death`; the treated mortality rate is derived as
+`I_to_D_invdays * (1 - antiviral_effectiveness_death)`.
 
 
 

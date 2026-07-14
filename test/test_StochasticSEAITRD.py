@@ -31,15 +31,22 @@ def make_params(antiviral_parameters=None):
             "compartments": ["S", "E", "A", "I", "T", "R", "D"],
             "R0": "1.0",
             "beta_scale": "1.0",
-            "tau": "2.0",
-            "kappa": "2.0",
-            "gamma": "4.0",
-            "chi": "2.0",
-            "nu": ["0.01"],
+            "E_to_A_days": "2.0",
+            "A_to_I_days": "2.0",
+            "I_to_R_days": "4.0",
+            "T_to_R_days": "2.0",
+            "T_to_I_days": "2.0",
+            "I_to_D_invdays": ["0.01"],
             "sigma": ["1.0"],
         },
         antiviral_parameters=antiviral_parameters or {},
     )
+
+
+def make_params_with_compartments(compartments):
+    params = make_params()
+    params.disease_parameters["compartments"] = compartments
+    return params
 
 
 def make_model(pop=10, antiviral_parameters=None):
@@ -88,6 +95,27 @@ def test_transition_preserves_population_and_never_allows_negative_source():
         model._transition(node, Compartments.E.value, Compartments.A.value, group)
 
     assert_population_invariants(node, 3)
+
+
+def test_stochastic_seaitrd_requires_t_compartment():
+    network = Network(["S", "E", "A", "I", "R", "D"])
+    node = Node(
+        node_index=0,
+        node_id=0,
+        fips_id=0,
+        compartments=PopulationCompartments([10], [0.0]),
+    )
+    network._add_node(node)
+
+    npis = SimpleNamespace(schedule=np.zeros((3, 1, 1)))
+    parent = DiseaseModel(
+        make_params_with_compartments(["S", "E", "A", "I", "R", "D"]),
+        npis,
+        now=0.0,
+    )
+
+    with pytest.raises(ValueError, match="SEAITRD requires the T compartment"):
+        parent.get_child("seaitrd-stochastic")
 
 
 def test_exposure_moves_only_available_people_and_queues_trajectories(monkeypatch):
@@ -198,6 +226,7 @@ def test_antiviral_allocation_replaces_old_queue_with_t_trajectories(monkeypatch
     antiviral_parameters = {
         "age_risk_priority_groups": ["1"],
         "compartment_priority": ["I", "A", "E"],
+        "antiviral_effectiveness_death": "0.25",
         "antiviral_stockpile": [{"day": "0", "amount": "10"}],
     }
     model, network, node, group = make_model(
@@ -257,6 +286,7 @@ def test_no_antiviral_release_leaves_queue_and_t_unchanged():
         antiviral_parameters={
             "age_risk_priority_groups": ["1"],
             "compartment_priority": ["I"],
+            "antiviral_effectiveness_death": "0.25",
             "antiviral_stockpile": [],
         },
     )
@@ -286,6 +316,11 @@ def test_antiviral_effectiveness_death_rejects_invalid_values():
         make_model(antiviral_parameters={"antiviral_effectiveness_death": "1.5"})
 
 
+def test_antiviral_effectiveness_death_required_with_antivirals():
+    with pytest.raises(ValueError, match="antiviral_effectiveness_death is required"):
+        make_model(antiviral_parameters={"antiviral_stockpile": []})
+
+
 def test_treated_schedule_reduces_death_rate(monkeypatch):
     model, _, _, group = make_model(
         antiviral_parameters={"antiviral_effectiveness_death": "0.25"}
@@ -306,7 +341,7 @@ def test_treated_schedule_reduces_death_rate(monkeypatch):
     schedule.update(model, now=10.0, group=group, compartment_num=Compartments.T.value)
 
     assert draws[0] == pytest.approx((0.0075, 10.0))
-    assert draws[1] == pytest.approx((0.25, 10.0))
+    assert draws[1] == pytest.approx((0.5, 10.0))
 
 
 def test_schedule_draws_complete_competing_event_times(monkeypatch):

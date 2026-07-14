@@ -38,6 +38,17 @@ The vaccination method in the model is a "stockpile release", so each week $n$ v
 ## State-specific Dirs
 Each state-specific directory has the files needed to run a SEIHRD model with and without vaccination parameterized for H1N1. For Alabama alone we also provide examples of other models. All input files are based on templates available in `INPUT_FILE_TEMPLATES`. We assume epidemics begin on Oct. 1 (day0 parameter in `5_vaccine_coverage_by_state.R`) and last 212 days (simulation_days parameter in `6_create_input_files_and_parallel_commands.R`). 
 
-The initial infected are placed in the largest age group (low risk, 18-49yr) based on 1 per 1M of the state population, always rounding up to the nearest integer. The lower the initial infected the more stochasticity in final epidemic size. For example, Alaska's population was less than 1M in the in the 2019-2023 5-yr ACS, so only 1 person seeds the simulation. The likelihood a single person can infect enough people to start an epidemic depends on the inter-node mobility, within-node contact structure, disease itself (e.g. R0), and everyone's susceptibility to infection (usually 1 for all ages). 
+The input templates use transition-style names for disease parameters. Inputs
+ending in `_days` are durations, while inputs ending in `_invdays` are rates per
+day. The SEAITRD templates always include the treated infectious compartment
+`T`; that compartment is required for the SEAITRD deterministic and stochastic
+model family. SEAITRD inputs provide `I_to_R_days` and `T_to_R_days` separately,
+and antiviral SEAITRD scenarios also provide `antiviral_effectiveness_death` so
+treated mortality can be derived from the baseline `I_to_D_invdays`. In the
+SEIRS, SEITRS, and SEIHRD families, `T` remains optional and should only be
+included when the scenario models treatment or antiviral movement into a treated
+compartment.
+
+The initial exposed are placed in the largest age group (low risk, 18-49yr) based on 1 per 1M of the state population, always rounding up to the nearest integer. The lower the initial exposed count the more stochasticity in final epidemic size. For example, Alaska's population was less than 1M in the in the 2019-2023 5-yr ACS, so only 1 person seeds the simulation. The likelihood a single person can expose enough people to start an epidemic depends on the inter-node mobility, within-node contact structure, disease itself (e.g. R0), and everyone's susceptibility to infection (usually 1 for all ages). 
 
 Running `6_create_input_files_and_parallel_commands.R` generates the output directory `../US_STATES` with `state_commands.txt` of every command needed to run all 50 states + DC under no intervention (baseline) and seasonal vaccination strategies. Before launching a job on TACC it's best to copy one line from `state_commands.txt` and ensure it runs successfully. 

@@ -237,15 +237,15 @@ class StochasticSEIHRD(DiseaseModel):
         ]
         self.has_treated_compartment = "T" in compartment_labels
         if self.has_treated_compartment:
-            t_to_r_days = self.parameters.disease_parameters.get('T_to_R_days', None)
-            if t_to_r_days is None:
+            if 'T_to_R_days' in self.parameters.disease_parameters:
+                self.T_to_R_rate = 1 / float(self.parameters.disease_parameters['T_to_R_days'])
+            else:
                 if self.parameters.antiviral_parameters:
                     raise ValueError("T_to_R_days is required when antiviral treatment can create T.")
                 logger.warning(
                     "T compartment specified without T_to_R_days; defaulting T_to_R_days to IS_to_R_days."
                 )
-                t_to_r_days = self.parameters.disease_parameters['IS_to_R_days']
-            self.T_to_R_rate = 1 / float(t_to_r_days)
+                self.T_to_R_rate = self.IS_to_R_rate
             self.rel_inf_T_to_IS = DiseaseModel.age_values(
                 self.parameters.disease_parameters.get('rel_inf_T_to_IS', 1.0),
                 num_age_grps,

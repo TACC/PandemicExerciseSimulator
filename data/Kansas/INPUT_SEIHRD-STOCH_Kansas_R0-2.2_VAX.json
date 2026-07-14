@@ -86,7 +86,7 @@
       }
     }
   },
-  "initial_infected": [
+  "initial_exposed": [
     {
       "county": "20091",
       "infected": "3",

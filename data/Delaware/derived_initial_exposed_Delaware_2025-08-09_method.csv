@@ -1,0 +1,6 @@
+sim_start_date,lookahead_weeks,age_label,calibration_inc_hosp,first_nonzero_hosp_week,prop_E_to_IA,prop_IS_to_H_lowrisk,lowrisk_exposed_to_hosp_probability,raw_state_initial_exposed,state_initial_exposed,population_power,mobility_power,min_state_exposed_per_active_age
+2025-08-09,8,0-4,2,2025-09-20,0.25,0.0132,0.009899999999999999,202.02020202020205,202,1,0.25,1
+2025-08-09,8,5-17,0,NA,0.25,0.0099,0.007425000000000001,0,0,1,0.25,1
+2025-08-09,8,18-49,0,NA,0.3,0.0295,0.020649999999999998,0,0,1,0.25,1
+2025-08-09,8,50-64,0,NA,0.3,0.0594,0.04158,0,0,1,0.25,1
+2025-08-09,8,65+,2,2025-08-30,0.3,0.0802,0.05613999999999999,35.625222657641615,36,1,0.25,1

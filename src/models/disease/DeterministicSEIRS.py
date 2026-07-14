@@ -70,14 +70,14 @@ class DeterministicSEIRS(DiseaseModel):
         self.parameters = disease_model.parameters
 
         self.R0    = float(self.parameters.disease_parameters['R0'])
-        self.sigma = 1 / float(self.parameters.disease_parameters['latent_period_days'])
-        self.gamma = 1 / float(self.parameters.disease_parameters['infectious_period_days'])
+        self.sigma = 1 / float(self.parameters.disease_parameters['E_to_I_days'])
+        self.gamma = 1 / float(self.parameters.disease_parameters['I_to_R_days'])
         compartment_labels = [
             str(label).upper()
             for label in self.parameters.disease_parameters.get('compartments', [])
         ]
         self.has_treated_compartment = "T" in compartment_labels
-        immune_period = float(self.parameters.disease_parameters.get('immune_period_days', 0))
+        immune_period = float(self.parameters.disease_parameters.get('R_to_S_days', 0))
         if immune_period == 0 or not immune_period:
             self.omega = 0
         else:
@@ -85,15 +85,15 @@ class DeterministicSEIRS(DiseaseModel):
 
         num_age_grps = self.parameters.number_of_age_groups
         if self.has_treated_compartment:
-            t_to_r_days = self.parameters.disease_parameters.get('T_to_R_days', None)
-            if t_to_r_days is None:
+            if 'T_to_R_days' in self.parameters.disease_parameters:
+                self.T_to_R_rate = 1 / float(self.parameters.disease_parameters['T_to_R_days'])
+            else:
                 if self.parameters.antiviral_parameters:
                     raise ValueError("T_to_R_days is required when antiviral treatment can create T.")
                 logger.warning(
-                    "T compartment specified without T_to_R_days; defaulting T_to_R_days to infectious_period_days."
+                    "T compartment specified without T_to_R_days; defaulting T_to_R_days to I_to_R_days."
                 )
-                t_to_r_days = self.parameters.disease_parameters['infectious_period_days']
-            self.T_to_R_rate = 1 / float(t_to_r_days)
+                self.T_to_R_rate = self.gamma
             raw_rel_inf_T_to_I = self.parameters.disease_parameters.get(
                 'rel_inf_T_to_I',
                 1.0,

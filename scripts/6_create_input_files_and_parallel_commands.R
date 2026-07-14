@@ -65,8 +65,8 @@ county_per_state = county_df %>%
   group_by(STATE_NAME) %>%
   summarise(num_county = n(), .groups = "drop")
 
-# Get all county initial infected
-county_init_inf = read_csv("../data/POPULATION/all_US_initial_infected.csv") %>%
+# Get all county initial exposed
+county_init_inf = read_csv("../data/POPULATION/all_US_initial_exposed.csv") %>%
   drop_na() %>%
   #dplyr::select("fips", "age_group", "pop", "STATE_NAME", "COUNTY_NAME", "STATE_FIPS", "init_inf_per_1M") %>%
   left_join(county_per_state, by="STATE_NAME") %>%
@@ -99,8 +99,8 @@ for(i in 1:total_states){
   
   state_template_copy = base_template
   state_template = replace_STATE_tokens(state_template_copy, state_dir = single_state$STATE_NAME_DIR)
-  state_template$initial_infected[[1]]$county   = single_state$fips
-  state_template$initial_infected[[1]]$infected = single_state$init_inf_per_1M
+  state_template$initial_exposed[[1]]$county   = single_state$fips
+  state_template$initial_exposed[[1]]$infected = single_state$init_inf_per_1M
   
   write_json(state_template, single_state$BASE_OUTPUT_FILE_PATH, 
              auto_unbox = TRUE, pretty = TRUE, null = "null")
@@ -121,8 +121,8 @@ for(i in 1:total_states){
   
   state_template_copy = vax_template
   state_template = replace_STATE_tokens(state_template_copy, state_dir = single_state$STATE_NAME_DIR)
-  state_template$initial_infected[[1]]$county   = single_state$fips
-  state_template$initial_infected[[1]]$infected = single_state$init_inf_per_1M
+  state_template$initial_exposed[[1]]$county   = single_state$fips
+  state_template$initial_exposed[[1]]$infected = single_state$init_inf_per_1M
   
   state_template$vaccine_model$parameters$vaccine_stockpile <- make_stockpile_json(state_vax_ts)
   
@@ -153,7 +153,6 @@ all_commands_script = base_commands_script %>%
 write.table(all_commands_script,
             "../US_States/state_commands.txt",
             sep = "", col.names = FALSE,  row.names = FALSE, quote = FALSE)
-
 
 
 

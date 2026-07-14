@@ -10,43 +10,54 @@ from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
-def SEAITRD_model(y, transmission_prob, tau, kappa, chi, gamma, nu):
+def SEAITRD_model(
+    y,
+    transmission_prob,
+    E_to_A_rate,
+    A_to_I_rate,
+    T_to_I_rate,
+    I_to_R_rate,
+    T_to_R_rate,
+    I_to_D_rate,
+    T_to_D_rate,
+):
     """
     SEAITRD compartmental model ODE function.
     Parameters:
         y (List[float]): Current values for compartments [S, E, A, I, T, R, D]
-                         or [S, E, A, I, R, D] when T is omitted
         transmission_prob (float): beta modified by NPIs, vaccine effectiveness, contact rate, relative susceptibility (sigma),
                                    has (A+I+T)/N hidden in it to do node based proportion of population infectious
                                    Transmission rate converted to probability to keep between 0 and 1
-        tau (float): 1/Latency period in days (exposed to asymptomatic)
-        kappa (float): 1/Asymptomatic infectious period in days (asymptomatic to infectious)
-        chi (float): Retained for input compatibility; treatment is stockpile-controlled
-        gamma (float): 1/symptomatic infectious/treated period in days to recovered
-        nu (float): Mortality rate in 1/days (infectious/treated to deceased)
+        E_to_A_rate (float): Exposed to asymptomatic rate in 1/days
+        A_to_I_rate (float): Asymptomatic to infectious rate in 1/days
+        T_to_I_rate (float): Retained for input compatibility; treatment is stockpile-controlled
+        I_to_R_rate (float): Infectious recovery rate in 1/days
+        T_to_R_rate (float): Treated recovery rate in 1/days
+        I_to_D_rate (float): Infectious mortality rate in 1/days
+        T_to_D_rate (float): Treated mortality rate in 1/days
     Returns:
        List[float]: Derivatives in the same compartment order as y.
    """
-    has_treated_compartment = len(y) == 7
-    if has_treated_compartment:
-        S, E, A, I, T, R, D = y
-    else:
-        S, E, A, I, R, D = y
-        T = 0.0
+    if len(y) != 7:
+        raise ValueError("SEAITRD requires compartments [S, E, A, I, T, R, D].")
+    S, E, A, I, T, R, D = y
 
     # Prevent S from going negative by only removing as many people remain in the compartment
     max_new_infections = min(transmission_prob * S, S)
-    e_to_a = min(tau * E, E)
-    a_to_i = min(kappa * A, A)
+    e_to_a = min(E_to_A_rate * E, E)
+    a_to_i = min(A_to_I_rate * A, A)
 
-    infectious_exit_rate = gamma + nu
+    infectious_exit_rate = I_to_R_rate + I_to_D_rate
     infectious_exit = min(infectious_exit_rate * I, I)
-    treated_exit = min(infectious_exit_rate * T, T)
-    recovery_share = gamma / infectious_exit_rate if infectious_exit_rate > 0 else 0.0
+    infectious_recovery_share = I_to_R_rate / infectious_exit_rate if infectious_exit_rate > 0 else 0.0
 
-    i_to_r = recovery_share * infectious_exit
+    treated_exit_rate = T_to_R_rate + T_to_D_rate
+    treated_exit = min(treated_exit_rate * T, T)
+    treated_recovery_share = T_to_R_rate / treated_exit_rate if treated_exit_rate > 0 else 0.0
+
+    i_to_r = infectious_recovery_share * infectious_exit
     i_to_d = infectious_exit - i_to_r
-    t_to_r = recovery_share * treated_exit
+    t_to_r = treated_recovery_share * treated_exit
     t_to_d = treated_exit - t_to_r
 
     dS_dt = -max_new_infections
@@ -59,9 +70,7 @@ def SEAITRD_model(y, transmission_prob, tau, kappa, chi, gamma, nu):
     dR_dt = i_to_r + t_to_r
     dD_dt = i_to_d + t_to_d
 
-    if has_treated_compartment:
-        return np.array([dS_dt, dE_dt, dA_dt, dI_dt, dT_dt, dR_dt, dD_dt])
-    return np.array([dS_dt, dE_dt, dA_dt, dI_dt, dR_dt, dD_dt])
+    return np.array([dS_dt, dE_dt, dA_dt, dI_dt, dT_dt, dR_dt, dD_dt])
 
 class DeterministicSEAITRD(DiseaseModel):
 
@@ -75,30 +84,59 @@ class DeterministicSEAITRD(DiseaseModel):
 
         # the following four parameters are provided by users as periods (units = days),
         # but then stored here as rates (units = 1/days)
-        self.tau            = 1/float(self.parameters.disease_parameters['tau'])
-        self.kappa          = 1/float(self.parameters.disease_parameters['kappa'])
-        self.gamma          = 1/float(self.parameters.disease_parameters['gamma'])
-        self.chi            = 1/float(self.parameters.disease_parameters['chi'])
+        self.E_to_A_rate    = 1/float(self.parameters.disease_parameters['E_to_A_days'])
+        self.A_to_I_rate    = 1/float(self.parameters.disease_parameters['A_to_I_days'])
+        self.I_to_R_rate    = 1/float(self.parameters.disease_parameters['I_to_R_days'])
+        self.T_to_I_rate    = 1/float(self.parameters.disease_parameters['T_to_I_days'])
 
         compartment_labels = [
             str(label).upper()
             for label in self.parameters.disease_parameters.get('compartments', [])
         ]
-        self.has_treated_compartment = "T" in compartment_labels
+        if "T" not in compartment_labels:
+            raise ValueError("SEAITRD requires the T compartment.")
         self.compartment_index = {
             label: index
             for index, label in enumerate(compartment_labels)
         }
+        if 'T_to_R_days' in self.parameters.disease_parameters:
+            self.T_to_R_rate = 1 / float(self.parameters.disease_parameters['T_to_R_days'])
+        else:
+            antiviral_parameters = getattr(self.parameters, "antiviral_parameters", {})
+            if antiviral_parameters:
+                raise ValueError("T_to_R_days is required when antiviral treatment can create T.")
+            logger.warning(
+                "T compartment specified without T_to_R_days; defaulting T_to_R_days to I_to_R_days."
+            )
+            self.T_to_R_rate = self.I_to_R_rate
 
-        # the user enters one nu value for each age group, assumed to be low risk
+        # the user enters one I_to_D rate value for each age group, assumed to be low risk
         # population. use multiplier 9x to derive values for high risk population
-        self.nu_values      = [[],[]]
-        self.nu_values[0]   = [float(x)   for x in self.parameters.disease_parameters['nu']]
-        self.nu_values[1]   = [float(x)*9 for x in self.parameters.disease_parameters['nu']]
+        self.I_to_D_rates_by_risk      = [[],[]]
+        self.I_to_D_rates_by_risk[0]   = [float(x)   for x in self.parameters.disease_parameters['I_to_D_invdays']]
+        self.I_to_D_rates_by_risk[1]   = [float(x)*9 for x in self.parameters.disease_parameters['I_to_D_invdays']]
 
-        # transpose nu_values so that we can access values in the order we are used to
-        #   e.g.:    nu_values[age][risk]
-        self.nu_values = np.array(self.nu_values).transpose().tolist()
+        # Transpose rates so that we can access values as rates[age][risk].
+        self.I_to_D_rates_by_risk = np.array(self.I_to_D_rates_by_risk).transpose().tolist()
+
+        antiviral_parameters = getattr(self.parameters, "antiviral_parameters", {})
+        if antiviral_parameters and 'antiviral_effectiveness_death' not in antiviral_parameters:
+            raise ValueError("antiviral_effectiveness_death is required when antiviral treatment can create T.")
+        self.antiviral_effectiveness_death = DiseaseModel.age_values(
+            antiviral_parameters.get('antiviral_effectiveness_death', 0.0),
+            self.parameters.number_of_age_groups,
+        )
+        if not all(0.0 <= eff <= 1.0 for eff in self.antiviral_effectiveness_death):
+            raise ValueError(
+                f"Found invalid antiviral_effectiveness_death values: {self.antiviral_effectiveness_death}"
+            )
+        self.T_to_D_rates_by_risk = [
+            [
+                I_to_D_rate * (1.0 - self.antiviral_effectiveness_death[age])
+                for I_to_D_rate in age_rates
+            ]
+            for age, age_rates in enumerate(self.I_to_D_rates_by_risk)
+        ]
 
         self.relative_susceptibility = []
         self.relative_susceptibility = [float(x) for x in self.parameters.disease_parameters['sigma']]
@@ -149,8 +187,8 @@ class DeterministicSEAITRD(DiseaseModel):
             if sum(focal_group_compartments_today) == 0:
                 continue  # skip empty groups
 
-            # Get nu as scalar needed for the model based on age and risk group
-            nu = float(self.nu_values[focal_group.age][focal_group.risk]) # nu is vector of values
+            I_to_D_rate = float(self.I_to_D_rates_by_risk[focal_group.age][focal_group.risk])
+            T_to_D_rate = float(self.T_to_D_rates_by_risk[focal_group.age][focal_group.risk])
 
             # Determine vaccine effect on focal group susceptibility
             # 1 is vaccinated subgroup, 0 unvaccinated subgroup
@@ -172,9 +210,8 @@ class DeterministicSEAITRD(DiseaseModel):
                 ]
                 A = contacted_compartments[self.compartment_index["A"]]
                 I = contacted_compartments[self.compartment_index["I"]]
-                infectious_contacted = A + I
-                if self.has_treated_compartment:
-                    infectious_contacted += contacted_compartments[self.compartment_index["T"]]
+                T = contacted_compartments[self.compartment_index["T"]]
+                infectious_contacted = A + I + T
 
                 # infectious_contacted/total_node_pop this captures the fraction of population we need to move from S -> E
                 # NOTE: Maybe an under-weighting if we should be doing age group specific: infectious_age/total_age_pop
@@ -189,11 +226,13 @@ class DeterministicSEAITRD(DiseaseModel):
 
             model_parameters = (
                 transmission_prob,     # S => E
-                self.tau,              # E => A
-                self.kappa,            # A => I
-                self.chi,              # retained; T entry is stockpile-controlled
-                self.gamma,            # I/T => R
-                nu                     # I/T => D
+                self.E_to_A_rate,      # E => A
+                self.A_to_I_rate,      # A => I
+                self.T_to_I_rate,      # retained; T entry is stockpile-controlled
+                self.I_to_R_rate,      # I => R
+                self.T_to_R_rate,      # T => R
+                I_to_D_rate,           # I => D
+                T_to_D_rate            # T => D
             )
 
             # Euler's Method solve of the system, can't do integer people

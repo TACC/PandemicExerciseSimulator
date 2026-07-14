@@ -19,9 +19,9 @@
     "parameters": {
       "compartments": ["S", "E", "I", "T", "R"],
       "R0": "3",
-      "latent_period_days": "1",
-      "infectious_period_days": "7",
-      "immune_period_days": "0",
+      "E_to_I_days": "1",
+      "I_to_R_days": "7",
+      "R_to_S_days": "0",
       "T_to_R_days": "5",
       "rel_inf_T_to_I": "0.5"
     }
@@ -47,7 +47,7 @@
       }
     }
   },
-  "initial_infected": [
+  "initial_exposed": [
     {
       "county": "99999",
       "infected": "1",

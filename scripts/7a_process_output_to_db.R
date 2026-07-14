@@ -187,7 +187,7 @@ parse_metadata <- function(path) {
     npi_identities             = npi_ids,
     npi_params_json            = to_json_str(npi_list),
 
-    initial_infected_json      = to_json_str(m$initial_infected),
+    initial_exposed_json      = to_json_str(m$initial_exposed),
     sim_days                   = safe_get(m, "cli_args", "days")     %||% NA_integer_,
     sim_loglevel               = safe_get(m, "cli_args", "loglevel") %||% NA_character_,
 
@@ -436,7 +436,7 @@ MASTER_COL_TYPES <- cols(
   npi_identities             = col_character(),
   npi_params_json            = col_character(),
 
-  initial_infected_json      = col_character(),
+  initial_exposed_json      = col_character(),
   sim_days                   = col_integer(),
   sim_loglevel               = col_character(),
 

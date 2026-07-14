@@ -73,8 +73,8 @@ class InputProperties:
         self.travel_model      = input['travel_model']['identity']
         self.travel_parameters = input['travel_model']['parameters']
 
-        # initial infected
-        self.initial     = input['initial_infected']
+        # initial exposed
+        self.initial     = input['initial_exposed']
 
         # non-pharmaceutical interventions (optional)
         self.non_pharma_interventions = input.get('non_pharma_interventions', [])
@@ -114,7 +114,7 @@ class InputProperties:
                 f'\n## TRAVEL MODEL ##\n'
                 f'travel_model={self.travel_model}\n'
                 f'travel_parameters={self.travel_parameters}\n'  
-                f'\n## INITIAL INFECTIONS ##\n'
+                f'\n## INITIAL EXPOSURES ##\n'
                 f'initial={self.initial}\n'
                 f'\n## NON-PHARMACEUTICAL INTERVENTIONS ##\n'
                 f'non_pharma_interventions={self.non_pharma_interventions}\n'
@@ -147,5 +147,4 @@ class InputProperties:
                 return False
         
         return True
-
 

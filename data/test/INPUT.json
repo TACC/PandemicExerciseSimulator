@@ -13,11 +13,12 @@
       "compartments": ["S", "E", "A", "I", "T", "R", "D"],
       "R0": "5",
       "beta_scale": "10",
-      "tau": "1.2",
-      "kappa": "1.9",
-      "gamma": "10",
-      "chi": "1.0",
-      "nu": [
+      "E_to_A_days": "1.2",
+      "A_to_I_days": "1.9",
+      "I_to_R_days": "10",
+      "T_to_R_days": "8",
+      "T_to_I_days": "1.0",
+      "I_to_D_invdays": [
         "0.0000223193", 
         "0.0000409747",
         "0.0000837293",
@@ -54,7 +55,7 @@
       }
     }
   },
-  "initial_infected": [
+  "initial_exposed": [
     {
       "county": "99001",
       "infected": "1",

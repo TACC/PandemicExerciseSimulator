@@ -23,7 +23,8 @@ to be refreshed.
 | 4a | `4a_flu_state_high_risk_by_age.R` | Estimates state-and-age influenza high-risk proportions using BRFSS and NSCH survey data. |
 | 4b | `4b_flu_county_high_risk_by_age.R` | Distributes state high-risk estimates to counties using CDC PLACES comorbidity burden, with SVI used for comparison. |
 | 5 | `5_vaccine_coverage_by_state.R` | Converts influenza coverage and effectiveness assumptions into weekly state vaccine-stockpile schedules. |
-| 6 | `6_create_input_files_and_parallel_commands.R` | Replaces `STATE` tokens in templates, inserts initial infections and vaccination schedules, writes `data/<STATE>/INPUT_*.json`, and creates parallel simulator commands. |
+| 6 | `6_create_input_files_and_parallel_commands.R` | Replaces `STATE` tokens in templates, inserts initial exposures and vaccination schedules, writes `data/<STATE>/INPUT_*.json`, and creates parallel simulator commands. |
+| 6b | `6b_derive_initial_exposures.R` | Delaware manuscript example deriving county-age low-risk exposures from age-stratified incident hospitalization data and writing `data/Delaware_TEST/INPUT_*.json`. |
 
 The orchestrator expects some private or external inputs:
 
@@ -111,6 +112,6 @@ Parquet data to CSV.
 Set `REPO_ROOT`, `MASTER_CSV`, and `PARQUET_ROOT` at the top of the file. Then
 open it in RStudio and select **Run App**.
 
-The Read the Docs page
-[`docs/developer/scripts.md`](../docs/developer/scripts.md) contains the shorter
-operational guide.
+The repository does not currently include a separate Read the Docs source tree;
+keep this file and `../data/README.md` in sync when script behavior, generated
+input fields, or model-family template rules change.

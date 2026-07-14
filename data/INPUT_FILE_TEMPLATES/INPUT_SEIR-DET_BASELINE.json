@@ -19,8 +19,8 @@
     "parameters": {
       "compartments": ["S", "E", "I", "R"],
       "R0": "3",
-      "latent_period_days": "7",
-      "infectious_period_days": "14"
+      "E_to_I_days": "7",
+      "I_to_R_days": "14"
     }
   },
   "travel_model": {
@@ -42,7 +42,7 @@
       }
     }
   },
-  "initial_infected": [
+  "initial_exposed": [
     {
       "county": "99999",
       "infected": "1",

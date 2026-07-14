@@ -31,11 +31,12 @@ def make_params(num_age_grp=2, compartments=None):
             "compartments": compartments or ["S", "E", "A", "I", "T", "R", "D"],
             "R0":    "1.0",
             "beta_scale": "1.0",
-            "tau":   "4.0",
-            "kappa": "4.0",
-            "gamma": "4.0",
-            "chi":   "4.0",
-            "nu":    ["0.25"] * num_age_grp,
+            "E_to_A_days":   "4.0",
+            "A_to_I_days": "4.0",
+            "I_to_R_days": "4.0",
+            "T_to_R_days": "2.0",
+            "T_to_I_days":   "4.0",
+            "I_to_D_invdays":    ["0.25"] * num_age_grp,
             "sigma": ["1.0"] * num_age_grp
         }
     )
@@ -88,7 +89,7 @@ def test_two_days_transmission():
     assert abs(S_total - expected_S_total) < 1e-6, f"Expected S={expected_S_total}, got {S_total}"
 
     # c) No more than 0.25 should have moved from E to A
-    # (with tau = 1/4, dt = 1.0, E -> A ~ E * tau * dt = 1 * (1/4) * 1 = 0.25)
+    # (with E_to_A_rate = 1/4, dt = 1.0, E -> A ~ E * E_to_A_rate * dt = 1 * (1/4) * 1 = 0.25)
     # so we assert that no more than 0.34 is in A
     assert A_total <= 0.25, f"Too much in A: got {A_total}"
 
@@ -115,14 +116,19 @@ def test_euler_step_mass_conservation():
 
     # Parameters (very simple ones)
     transmission_rate = 0.0  # No new infections
-    tau = 1.0  # Latent period
-    kappa = 1.0  # Asymptomatic period
-    chi = 1.0  # Retained for compatibility; treatment entry is stockpile-controlled
-    gamma = 1.0  # Symptomatic period
-    nu = 0.0  # No deaths
+    E_to_A_rate = 1.0  # Exposed to asymptomatic rate
+    A_to_I_rate = 1.0  # Asymptomatic to infectious rate
+    T_to_I_rate = 1.0  # Retained for compatibility; treatment entry is stockpile-controlled
+    I_to_R_rate = 1.0
+    T_to_R_rate = 1.0
+    I_to_D_rate = 0.0
+    T_to_D_rate = 0.0
 
     # Euler time step forward of difference
-    y_diff = SEAITRD_model(y, transmission_rate, tau, kappa, chi, gamma, nu)
+    y_diff = SEAITRD_model(
+        y, transmission_rate, E_to_A_rate, A_to_I_rate, T_to_I_rate,
+        I_to_R_rate, T_to_R_rate, I_to_D_rate, T_to_D_rate
+    )
     # New y values after 1 time step forward
     y_new = y + y_diff
 
@@ -131,17 +137,19 @@ def test_euler_step_mass_conservation():
 
 
 def test_deterministic_seaitrd_has_no_natural_i_to_t_flow():
-    # chi is intentionally high; T should still only be stockpile-controlled.
+    # T_to_I_rate is intentionally high; T should still only be stockpile-controlled.
     y = np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0])
 
     y_diff = SEAITRD_model(
         y,
         transmission_prob=0.0,
-        tau=1.0,
-        kappa=1.0,
-        chi=10.0,
-        gamma=0.0,
-        nu=0.0,
+        E_to_A_rate=1.0,
+        A_to_I_rate=1.0,
+        T_to_I_rate=10.0,
+        I_to_R_rate=0.0,
+        T_to_R_rate=0.0,
+        I_to_D_rate=0.0,
+        T_to_D_rate=0.0,
     )
 
     assert y_diff[3] == 0.0
@@ -154,27 +162,58 @@ def test_deterministic_seaitrd_existing_t_exits_without_new_t_entry():
     y_diff = SEAITRD_model(
         y,
         transmission_prob=0.0,
-        tau=1.0,
-        kappa=1.0,
-        chi=10.0,
-        gamma=1.0,
-        nu=0.0,
+        E_to_A_rate=1.0,
+        A_to_I_rate=1.0,
+        T_to_I_rate=10.0,
+        I_to_R_rate=0.25,
+        T_to_R_rate=1.0,
+        I_to_D_rate=0.0,
+        T_to_D_rate=0.0,
     )
 
     np.testing.assert_allclose(y_diff, np.array([0.0, 0.0, 0.0, 0.0, -1.0, 1.0, 0.0]))
 
 
-def test_deterministic_seaitrd_supports_omitting_t_compartment():
+def test_deterministic_seaitrd_rejects_omitting_t_compartment():
     y = np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0])
+
+    with pytest.raises(ValueError, match="SEAITRD requires compartments"):
+        SEAITRD_model(
+            y,
+            transmission_prob=0.0,
+            E_to_A_rate=1.0,
+            A_to_I_rate=1.0,
+            T_to_I_rate=10.0,
+            I_to_R_rate=0.0,
+            T_to_R_rate=0.0,
+            I_to_D_rate=0.0,
+            T_to_D_rate=0.0,
+        )
+
+
+def test_deterministic_seaitrd_requires_t_compartment():
+    params = make_params(compartments=["S", "E", "A", "I", "R", "D"])
+    npi = NonPharmaInterventions([], 1, 1, 2)
+    parent = DiseaseModel(params, npi, 0)
+
+    with pytest.raises(ValueError, match="SEAITRD requires the T compartment"):
+        DeterministicSEAITRD(parent)
+
+
+def test_deterministic_seaitrd_t_uses_separate_recovery_and_reduced_death_rates():
+    y = np.array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0])
 
     y_diff = SEAITRD_model(
         y,
         transmission_prob=0.0,
-        tau=1.0,
-        kappa=1.0,
-        chi=10.0,
-        gamma=0.0,
-        nu=0.0,
+        E_to_A_rate=1.0,
+        A_to_I_rate=1.0,
+        T_to_I_rate=10.0,
+        I_to_R_rate=0.25,
+        T_to_R_rate=0.5,
+        I_to_D_rate=0.25,
+        T_to_D_rate=0.125,
     )
 
-    np.testing.assert_allclose(y_diff, np.array([0.0, -1.0, 1.0, 0.0, 0.0, 0.0]))
+    expected = np.array([0.0, 0.0, 0.0, -0.5, -0.625, 0.75, 0.375])
+    np.testing.assert_allclose(y_diff, expected)
