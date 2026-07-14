@@ -252,21 +252,31 @@ reduction in symptomatic duration for people treated after entering `IS`.
 
 ### SEAITRD
 
-The deterministic SEAITRD mean-flow system uses $\tau$ for `E -> A`,
-$\kappa$ for `A -> I`, $\gamma$ for recovery, and $\nu$ for mortality. It has
-no disease-rate flow into `T`; antiviral stockpile allocation is the only
-source of treated people:
+The deterministic SEAITRD mean-flow system uses transition-style input names:
+`E_to_A_days`, `A_to_I_days`, `I_to_R_days`, `T_to_R_days`, and
+`I_to_D_invdays`. Inputs ending in `_days` are durations that become rates;
+`I_to_D_invdays` is already a per-day mortality rate. SEAITRD requires `T`,
+but has no disease-rate flow into `T`; antiviral stockpile allocation is the
+only source of newly treated people.
+
+Let $r_{EA}=1/\text{E_to_A_days}$,
+$r_{AI}=1/\text{A_to_I_days}$,
+$r_{IR}=1/\text{I_to_R_days}$,
+$r_{TR}=1/\text{T_to_R_days}$,
+$r_{ID}=\text{I_to_D_invdays}$, and
+$r_{TD}=r_{ID}(1-e_{AV,D})$, where $e_{AV,D}$ is
+`antiviral_effectiveness_death`.
 
 :::{container} ode-system
 ```{math}
 \begin{aligned}
 \dot S &= -F, \\
-\dot E &= F - \tau E, \\
-\dot A &= \tau E - \kappa A, \\
-\dot I &= \kappa A - (\gamma+\nu)I, \\
-\dot T &= -(\gamma+\nu)T, \\
-\dot R &= \gamma(I+T), \\
-\dot D &= \nu(I+T).
+\dot E &= F - r_{EA} E, \\
+\dot A &= r_{EA} E - r_{AI} A, \\
+\dot I &= r_{AI} A - (r_{IR}+r_{ID})I, \\
+\dot T &= -(r_{TR}+r_{TD})T, \\
+\dot R &= r_{IR}I+r_{TR}T, \\
+\dot D &= r_{ID}I+r_{TD}T.
 \end{aligned}
 ```
 :::
@@ -291,9 +301,9 @@ R \rightarrow S
 with rates:
 
 ```{math}
-\sigma = \frac{1}{\text{latent period}}, \quad
-\gamma = \frac{1}{\text{infectious period}}, \quad
-\omega = \frac{1}{\text{immune period}}.
+\sigma = \frac{1}{\text{E_to_I_days}}, \quad
+\gamma = \frac{1}{\text{I_to_R_days}}, \quad
+\omega = \frac{1}{\text{R_to_S_days}}.
 ```
 
 The stochastic transition counts are:
@@ -426,8 +436,9 @@ I \rightarrow R \text{ or } D.
 ```
 
 Here `T` means Treated, and anyone in `T` is assumed to be receiving an
-antiviral. Untreated event times are drawn when the infection trajectory is
-created, but `T` is only entered when an antiviral stockpile dose is allocated.
+antiviral. `T` is a required SEAITRD compartment, but untreated event times
+still bypass it. A person enters `T` only when an antiviral stockpile dose is
+allocated.
 
 The optional stockpile model adds external queue edits:
 
@@ -444,7 +455,8 @@ and a new `T` trajectory is drawn. The treated death clock uses:
 \nu_T = \nu(1 - e_{AV,D}),
 ```
 
-where $e_{AV,D}$ is `antiviral_effectiveness_death`. There is no daily
+where $\nu$ is the configured `I_to_D_invdays` rate and $e_{AV,D}$ is
+`antiviral_effectiveness_death`. There is no daily
 antiviral transition rate. Every event moves one person out of one compartment
 and into another.
 Therefore, if $N_{c,\mathrm{before}}$ and $N_{c,\mathrm{after}}$ are the

@@ -10,8 +10,9 @@ who receives a dose.
 
 For SEITRS, eligible compartments are usually `E` and `I`. For SEITHRD, the
 antiviral-capable SEIHRD variant, eligible compartments can be `E`, `IA`, `IP`,
-and `IS`. For Gillespie SEAITRD, eligible compartments can be `E`, `A`, and
-`I`.
+and `IS`. For SEAITRD, eligible compartments can be `E`, `A`, and `I`; the
+`T` compartment is required in this model family even when no doses are
+released.
 
 ## Complete Configuration
 
@@ -154,21 +155,20 @@ relative to the untreated `IS` pathway and shortens the recovery clock from
 
 ### `antiviral_effectiveness_death`
 
-This optional SEAITRD parameter is the treated relative reduction in mortality
+This SEAITRD antiviral parameter is the treated relative reduction in mortality
 risk. It accepts a scalar or one value per age group, with values from `0.0`
-to `1.0`.
+to `1.0`. Provide it when an antiviral model is configured for SEAITRD.
 
 For example, `"0.25"` represents a 25% mortality risk reduction, or 75%
-relative risk, for treated people. In Gillespie SEAITRD, this parameter reduces
-the mortality intensity used for newly drawn `T -> D` events:
+relative risk, for treated people. In SEAITRD, this parameter reduces
+the mortality intensity used for treated `T -> D` events:
 
 ```text
-treated mortality rate = nu * (1 - antiviral_effectiveness_death)
+treated mortality rate = I_to_D_invdays * (1 - antiviral_effectiveness_death)
 ```
 
-If omitted, the default is `0.0`, preserving the untreated SEAITRD mortality
-rate for treated people. Set `1.0` only when treated people should have no
-`T -> D` event.
+Set `0.0` to preserve the untreated SEAITRD mortality rate for treated people.
+Set `1.0` only when treated people should have no `T -> D` event.
 
 ### `antiviral_capacity_proportion`
 
@@ -237,7 +237,7 @@ Disease parameters then describe treated people:
 | `rel_inf_T_to_I` | Relative infectiousness of treated people compared with untreated `I`. |
 | `rel_inf_T_to_IS` | Relative infectiousness of treated people compared with symptomatic `IS` in SEITHRD. |
 | `antiviral_effectiveness_hosp` | Antiviral-model parameter that reduces `T -> H` risk in SEITHRD; scalar or one value per age group. Defaults to `1.0`, complete protection from hospitalization. |
-| `antiviral_effectiveness_death` | Antiviral-model parameter that reduces `T -> D` risk in Gillespie SEAITRD; scalar or one value per age group. Defaults to `0.0`, no mortality reduction. |
+| `antiviral_effectiveness_death` | Antiviral-model parameter that reduces `T -> D` risk in SEAITRD; scalar or one value per age group. Required when SEAITRD uses an antiviral model. |
 
 In SEITRS and SEITHRD, if the compartment list includes `T` but no antiviral
 model is configured, the simulator warns. Those models can still run, but no
@@ -248,13 +248,16 @@ Movement into `T` is fully determined by released doses, daily capacity,
 the population in `compartment_priority`. In SEITRS and SEITHRD,
 movement out of `T` is controlled by `T_to_R_days`; SEITHRD also allows
 treated people to enter `H`, with risk reduced by
-`antiviral_effectiveness_hosp`.
+`antiviral_effectiveness_hosp`. SEAITRD also uses `T_to_R_days`, separately
+from `I_to_R_days`, and derives treated mortality from `I_to_D_invdays` and
+`antiviral_effectiveness_death`.
 
-## Gillespie SEAITRD
+## SEAITRD
 
-SEAITRD already contains `T`, and `T` means **Treated**, consistently with the
-other antiviral-capable models. Anyone in `T` is assumed to be receiving an
-antiviral.
+SEAITRD requires `T`, and `T` means **Treated**, consistently with the other
+antiviral-capable models. Anyone in `T` is assumed to be receiving an
+antiviral, but no one enters `T` without stockpile allocation unless the input
+explicitly initializes that compartment.
 
 In the Gillespie stochastic SEAITRD model, untreated infection trajectories do
 not enter `T`. Natural progression uses `E -> A -> I`; `A` behaves like a
@@ -268,9 +271,9 @@ configured eligible compartment such as `I`, `A`, or `E`, the simulator:
 3. queues a new trajectory beginning in `T`.
 
 Stockpile-created `T` entries follow the existing SEAITRD competing events:
-`T -> R` or `T -> D`. It uses `gamma` and `nu`; SEAITRD does not use
-`T_to_R_days`. `antiviral_effectiveness_death` reduces the `nu` value used for
-treated `T -> D` timing.
+`T -> R` or `T -> D`. Treated recovery uses `T_to_R_days`, while untreated
+recovery uses `I_to_R_days`. Treated mortality is derived from
+`I_to_D_invdays * (1 - antiviral_effectiveness_death)`.
 
 SEAITRD contact events are stored at the demographic-group level, not linked to
 person identifiers. Antiviral reconciliation replaces progression events but
