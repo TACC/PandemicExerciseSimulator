@@ -17,7 +17,7 @@ On simulation day $d$, intervention-related operations occur in this order:
    infection
 
 Day-0 vaccine allocation occurs before initial output is written. Initial
-infections were already placed into the exposed compartment and are therefore
+exposures were already placed into the exposed compartment and are therefore
 not eligible for vaccination. For example, if you have a node with 1000 residents,
 900 susceptible and 100 exposed, you can allocate 1000 vaccines on day-0 but only
 900 could be distributed.

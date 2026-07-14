@@ -217,7 +217,7 @@ members or close contacts.
 | `age_risk_priority_groups` | No | All `1.0` | Eligibility for each age and hospitalization-risk group. Allowed values are `0.0`, `0.5`, and `1.0`, with the same meanings as vaccination. |
 | `compartment_priority` | No | `["I"]` | Disease compartments whose members can receive treatment, in treatment order within a demographic group. Every label must exist in the selected disease model. |
 | `antiviral_effectiveness_hosp` | No | `1.0` | SEITHRD reduction in hospitalization risk for treated people, from `0.0` to `1.0`, relative to the untreated `IS -> H` realized proportion. The default means complete protection from hospitalization; a value of `0.25` means 25% risk reduction, or 75% relative risk. |
-| `antiviral_effectiveness_death` | No | `0.0` | Gillespie SEAITRD reduction in mortality risk for treated people, from `0.0` to `1.0`, applied to the `T -> D` mortality intensity. A value of `0.25` means 25% risk reduction, or 75% relative risk. |
+| `antiviral_effectiveness_death` | Required for SEAITRD antivirals | None | SEAITRD reduction in mortality risk for treated people, from `0.0` to `1.0`, applied to the `T -> D` mortality intensity. A value of `0.25` means 25% risk reduction, or 75% relative risk. |
 | `antiviral_capacity_proportion` | No | `1.0` | Maximum fraction of a node's total population that can begin treatment per day. |
 | `antiviral_half_life_days` | No | `null` | Positive stockpile half-life in days. Use `null` to disable decay. This affects unused doses, not people already in `T`. |
 | `antiviral_stockpile` | No | Empty list | Dose releases. Each entry requires an integer simulation `day` and a dose `amount`. Same-day entries are combined and negative days are reassigned to day 0. |
@@ -229,18 +229,18 @@ Common eligible compartments are:
 | SEITRS, stochastic or deterministic | `["I", "E"]` |
 | SEITHRD routine treatment | `["IS"]` |
 | SEITHRD prophylaxis scenario | `["IS", "IP", "IA", "E"]` |
-| Gillespie SEAITRD default | `["I"]` |
-| Gillespie SEAITRD early treatment scenario | `["I", "A", "E"]` |
+| SEAITRD default | `["I"]` |
+| SEAITRD early treatment scenario | `["I", "A", "E"]` |
 
 The stockpile parameters control movement **into** `T`. Disease model
 parameters control what happens after treatment begins:
 
 | Disease parameter | Model | Description |
 | --- | --- | --- |
-| `T_to_R_days` | SEITRS and SEITHRD | Average number of days from treated to recovered. |
+| `T_to_R_days` | SEITRS, SEITHRD, and SEAITRD | Average number of days from treated to recovered. Required for SEAITRD because `T` is required. |
 | `rel_inf_T_to_I` | SEITRS | Infectiousness of `T` relative to untreated `I`. |
 | `rel_inf_T_to_IS` | SEITHRD | Infectiousness of `T` relative to symptomatic `IS`. |
-| `gamma` and `nu` | SEAITRD | Existing queued-event parameters governing `T -> R` and `T -> D`. |
+| `I_to_R_days` and `I_to_D_invdays` | SEAITRD | Untreated recovery duration and untreated mortality rate. |
 | `antiviral_effectiveness_death` | SEAITRD | Reduction in treated `T -> D` mortality risk. |
 
 For SEITRS and SEITHRD, no one enters `T` without stockpile allocation. There
@@ -251,9 +251,12 @@ untreated symptomatic people have a 10% eventual hospitalization proportion,
 `antiviral_effectiveness_hosp = 0.25` makes the treated eventual
 hospitalization proportion 7.5%.
 
-In Gillespie SEAITRD, `T` is also stockpile-constrained: untreated queued
-trajectories bypass `T`, and released doses create resource-constrained routes
-from configured eligible compartments such as `I`, `A`, or `E` into `T`.
+In SEAITRD, `T` is required by the disease model but still stockpile-constrained
+as a treatment state: untreated trajectories bypass `T`, and released doses
+create resource-constrained routes from configured eligible compartments such
+as `I`, `A`, or `E` into `T`. SEAITRD uses separate `I_to_R_days` and
+`T_to_R_days` values, so a 2-day reduction in treated infectious duration
+should be encoded directly as a shorter `T_to_R_days`.
 
 See [Antiviral Stockpile Model](../modeling/antivirals.md) for validation rules,
 allocation behavior, and model-specific details.

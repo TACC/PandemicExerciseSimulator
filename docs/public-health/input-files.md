@@ -9,7 +9,7 @@ Each simulation is controlled by one JSON file. The main sections are:
 | `data` | Paths to population, contact, mobility, and risk-ratio files. |
 | `disease_model` | Disease model identity and model parameters. |
 | `travel_model` | Travel model identity and travel parameters. |
-| `initial_infected` | Seed initial exposures to become infectious by county and age group. |
+| `initial_exposed` | Seed initial exposed people by county and age group. |
 | `non_pharma_interventions` | Optional transmission reductions by day, place, and age. |
 | `antiviral_model` | Optional daily antiviral stockpile release strategy. |
 | `vaccine_model` | Optional daily vaccine stockpile release strategy. |
@@ -56,7 +56,8 @@ The data directory for a state or region should contain:
 - `INPUT_*.json`: Simulation properties file
 - `contact_matrix_*_Mistry2021_all.csv`: Age-by-age daily contacts from all settings ("home", "work", "school", "community")
 - `county_pop_by_age_*.csv`: County population by age group
-- `*_high-risk-ratios-*.csv`: Age-specific high-risk proportions
+- `*_high-risk-ratios-*.csv`: Age-specific high-risk proportions; see
+  [County-Age High-Risk Ratio Derivation](../model-inputs/high-risk-ratios.md)
 - `*_mobility-matrix.csv`: County-by-county mobility matrix, examples based on pre-pandemic 2019 quarterly SafeGraph proportion population traveling
 
 The order of age groups must match between the population file, contact matrix,
@@ -69,13 +70,13 @@ infectious residents who expose visitors at their home node. Travel does not
 change node population counts. See
 [Binomial Travel Model](../modeling/travel.md) for all parameters and examples.
 
-## Initial Infections
+## Initial Exposures
 
-Initial infections are placed into the low-risk of hospitalization unvaccinated exposed
-compartment for the requested age group.
+Initial exposures are placed into the low-risk of hospitalization,
+unvaccinated `E` compartment for the requested age group.
 
 ```json
-"initial_infected": [
+"initial_exposed": [
   {
     "county": "48113",
     "infected": "10",
@@ -86,3 +87,7 @@ compartment for the requested age group.
 
 If more people are requested than are susceptible in that group, the simulator
 only exposes the available susceptible population.
+
+For the Delaware manuscript example that derives county-age initial exposures
+from state-level hospitalization observations, see
+[County-Age Initial Exposure Fitting](../model-inputs/county-age-initialization.md).

@@ -111,9 +111,9 @@ One realization is useful for checking that an input runs, but not for
 estimating a stochastic outcome. Begin with roughly 5 to 100 realizations,
 depending on runtime and variability, then increase the count when rare
 epidemic emergence or extinction dominates the result. Small populations,
-$R_0$ close to 1, or few initial infections will drive-up stochasticity.
+$R_0$ close to 1, or few initial exposures will drive-up stochasticity.
 
 For example, an $R_0$ below 1 should naturally decline without intervention.
-Conversely, seeding very few infections in a rural county may require hundreds
+Conversely, seeding very few exposures in a rural county may require hundreds
 or thousands of realizations to distinguish a failed introduction from a
 scenario where an epidemic can emerge.

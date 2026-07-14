@@ -27,16 +27,23 @@ public-health/outputs
 
 ```{toctree}
 :maxdepth: 2
-:caption: Modeling Reference
+:caption: PES Base-Code Modeling Reference
 
 modeling/compartments
 modeling/simulation-methods
 modeling/math
 modeling/calibration
-modeling/county-age-initialization
 modeling/travel
 modeling/npis-vaccines
 modeling/antivirals
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Model Input Derivations
+
+model-inputs/high-risk-ratios
+model-inputs/county-age-initialization
 ```
 
 ```{toctree}

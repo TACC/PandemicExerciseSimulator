@@ -259,14 +259,14 @@ Parquet files exist under `sim_data/<scenario_hash>/<batch_num>/`.
 
 ## Recommended Scenario Comparisons
 
-Keep a baseline scenario with no interventions except the initial infections.
+Keep a baseline scenario with no interventions except the initial exposures.
 Then compare:
 
 - Vaccination release timing and prioritization
 - Antiviral release timing and prioritization
 - NPI timing, duration, and age targeting
 - Mobility reductions
-- Alternate initial infection locations
+- Alternate initial exposure locations
 
 ## Naming Outputs
 

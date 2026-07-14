@@ -18,15 +18,15 @@ the scripts can also be run individually.
 
 | Step | Script | Primary result |
 | --- | --- | --- |
-| 1 | `1_county_age_pop_totals.R` | State directories, county population-by-age files, and initial-infection candidates. |
+| 1 | `1_county_age_pop_totals.R` | State directories, county population-by-age files, and initial-exposure candidates. |
 | 2 | `2_epydemix_contact_matrix_generation.py` | State age-contact matrices from Epydemix/Mistry data. |
 | 3a | `3a_ct_ak_crosswalks.R` | Geography crosswalks for Connecticut and Alaska boundary changes. |
 | 3b | `3b_county_mobility_timeseries_post2020census.R` | County mobility time series, quarterly matrices, and connectivity rankings. |
 | 4a | `4a_flu_state_high_risk_by_age.R` | State-and-age influenza high-risk proportions from BRFSS and NSCH. |
-| 4b | `4b_flu_county_high_risk_by_age.R` | County high-risk ratios using state estimates and CDC PLACES burden. |
+| 4b | `4b_flu_county_high_risk_by_age.R` | County high-risk ratios using state estimates and CDC PLACES burden; see [County-Age High-Risk Ratio Derivation](../model-inputs/high-risk-ratios.md). |
 | 5 | `5_vaccine_coverage_by_state.R` | State weekly vaccination stockpile schedules. |
 | 6 | `6_create_input_files_and_parallel_commands.R` | State-specific JSON inputs and parallel simulator commands. |
-| 6b | `6b_derive_initial_infections.R` | Delaware manuscript example deriving county-age low-risk exposures and writing a generated `data/Delaware_TEST/INPUT_*.json`. |
+| 6b | `6b_derive_initial_exposures.R` | Delaware manuscript example deriving county-age low-risk exposures and writing a generated `data/Delaware_TEST/INPUT_*.json`; see [County-Age Initial Exposure Fitting](../model-inputs/county-age-initialization.md). |
 
 The resulting state directory normally contains:
 

@@ -62,7 +62,8 @@ Current useful templates include:
 - `INPUT_SEIHRD-STOCH_ANTIVIRAL.json`
 
 SEITRS templates should include both a `T` compartment and an `antiviral_model`
-block when treatment is part of the scenario.
+block when treatment is part of the scenario. SEIRS, SEITRS, SEIHRD, and
+SEITHRD inputs can omit `T` when treatment is not modeled.
 SEITHRD templates should also include `T_to_R_days`, `rel_inf_T_to_IS`,
 `antiviral_effectiveness_hosp`, and antiviral `compartment_priority` values
 that match the SEIHRD compartment labels. Use `IS_to_R_days = 7.0` and
@@ -70,8 +71,12 @@ that match the SEIHRD compartment labels. Use `IS_to_R_days = 7.0` and
 `["IS"]` as the default SEITHRD `compartment_priority` unless the template is
 specifically for prophylaxis.
 
-The SEAITRD stochastic antiviral template includes the Treated compartment `T`,
-but SEAITRD enters `T` only through stockpile-constrained treatment from
-configured eligible compartments such as `I`, `A`, or `E`. The deterministic
-baseline template omits `T`; add `T` only for antiviral scenarios that release
-stockpile doses.
+SEAITRD templates must always include the Treated compartment `T` in
+`disease_model.parameters.compartments`, for both deterministic and stochastic
+SEAITRD. This is the main difference from the other model families. SEAITRD
+enters `T` only through stockpile-constrained treatment from configured
+eligible compartments such as `I`, `A`, or `E`; if no antiviral doses are
+released, `T` remains empty. SEAITRD templates should provide `I_to_R_days` and
+`T_to_R_days` separately, `I_to_D_invdays` for untreated mortality, and
+`antiviral_effectiveness_death` in antiviral scenarios so treated mortality can
+be derived.

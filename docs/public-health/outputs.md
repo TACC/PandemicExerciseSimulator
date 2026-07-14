@@ -28,7 +28,7 @@ With `"output_dir_path": "GENERATE"`, outputs are written to:
 
 The full SHA-256 scenario hash groups semantically equivalent configurations.
 It is based on normalized data paths, model identities and runtime attributes,
-initial infections, and NPIs. Output location, tags, batch identifier, random seed,
+initial exposures, and NPIs. Output location, tags, batch identifier, random seed,
 and superficial numeric differences such as `1` versus `1.0` do not create a
 new scenario hash.
 
