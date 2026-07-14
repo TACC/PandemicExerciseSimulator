@@ -15,7 +15,6 @@ def SEAITRD_model(
     transmission_prob,
     E_to_A_rate,
     A_to_I_rate,
-    T_to_I_rate,
     I_to_R_rate,
     T_to_R_rate,
     I_to_D_rate,
@@ -25,12 +24,11 @@ def SEAITRD_model(
     SEAITRD compartmental model ODE function.
     Parameters:
         y (List[float]): Current values for compartments [S, E, A, I, T, R, D]
-        transmission_prob (float): beta modified by NPIs, vaccine effectiveness, contact rate, relative susceptibility (sigma),
+        transmission_prob (float): beta modified by NPIs, vaccine effectiveness, contact rate, relative susceptibility,
                                    has (A+I+T)/N hidden in it to do node based proportion of population infectious
                                    Transmission rate converted to probability to keep between 0 and 1
         E_to_A_rate (float): Exposed to asymptomatic rate in 1/days
         A_to_I_rate (float): Asymptomatic to infectious rate in 1/days
-        T_to_I_rate (float): Retained for input compatibility; treatment is stockpile-controlled
         I_to_R_rate (float): Infectious recovery rate in 1/days
         T_to_R_rate (float): Treated recovery rate in 1/days
         I_to_D_rate (float): Infectious mortality rate in 1/days
@@ -82,12 +80,11 @@ class DeterministicSEAITRD(DiseaseModel):
         self.beta_scale     = float(self.parameters.disease_parameters['beta_scale'] )   # "R0CorrectionFactor"
         self.beta           = self.R0 / self.beta_scale
 
-        # the following four parameters are provided by users as periods (units = days),
+        # the following parameters are provided by users as periods (units = days),
         # but then stored here as rates (units = 1/days)
         self.E_to_A_rate    = 1/float(self.parameters.disease_parameters['E_to_A_days'])
         self.A_to_I_rate    = 1/float(self.parameters.disease_parameters['A_to_I_days'])
         self.I_to_R_rate    = 1/float(self.parameters.disease_parameters['I_to_R_days'])
-        self.T_to_I_rate    = 1/float(self.parameters.disease_parameters['T_to_I_days'])
 
         compartment_labels = [
             str(label).upper()
@@ -111,10 +108,14 @@ class DeterministicSEAITRD(DiseaseModel):
             self.T_to_R_rate = self.I_to_R_rate
 
         # the user enters one I_to_D rate value for each age group, assumed to be low risk
-        # population. use multiplier 9x to derive values for high risk population
+        # population. highrisk_death_multiplier derives high-risk death rates.
+        highrisk_death_multiplier = float(self.parameters.disease_parameters['highrisk_death_multiplier'])
         self.I_to_D_rates_by_risk      = [[],[]]
         self.I_to_D_rates_by_risk[0]   = [float(x)   for x in self.parameters.disease_parameters['I_to_D_invdays']]
-        self.I_to_D_rates_by_risk[1]   = [float(x)*9 for x in self.parameters.disease_parameters['I_to_D_invdays']]
+        self.I_to_D_rates_by_risk[1]   = [
+            float(x) * highrisk_death_multiplier
+            for x in self.parameters.disease_parameters['I_to_D_invdays']
+        ]
 
         # Transpose rates so that we can access values as rates[age][risk].
         self.I_to_D_rates_by_risk = np.array(self.I_to_D_rates_by_risk).transpose().tolist()
@@ -138,8 +139,9 @@ class DeterministicSEAITRD(DiseaseModel):
             for age, age_rates in enumerate(self.I_to_D_rates_by_risk)
         ]
 
-        self.relative_susceptibility = []
-        self.relative_susceptibility = [float(x) for x in self.parameters.disease_parameters['sigma']]
+        self.relative_susceptibility = [
+            float(x) for x in self.parameters.disease_parameters['relative_susceptibility']
+        ]
 
         # this isn't used, bc _calculate_beta_w_npi uses the schedule
         self.npis_schedule = disease_model.npis_schedule
@@ -228,7 +230,6 @@ class DeterministicSEAITRD(DiseaseModel):
                 transmission_prob,     # S => E
                 self.E_to_A_rate,      # E => A
                 self.A_to_I_rate,      # A => I
-                self.T_to_I_rate,      # retained; T entry is stockpile-controlled
                 self.I_to_R_rate,      # I => R
                 self.T_to_R_rate,      # T => R
                 I_to_D_rate,           # I => D

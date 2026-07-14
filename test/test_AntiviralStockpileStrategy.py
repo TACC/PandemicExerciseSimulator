@@ -181,28 +181,40 @@ def test_antiviral_priority_can_treat_exposed_before_infectious():
     assert result[Compartments.T.value] == 12.0
 
 
-def test_seaitrd_antiviral_priority_can_include_exposed_asymptomatic_and_infectious():
+def test_seaitrd_antiviral_priority_rejects_exposed_and_asymptomatic():
+    net = Network(["S", "E", "A", "I", "T", "R", "D"])
+    node = Node(0, 0, 0, PopulationCompartments([100], [0.0]))
+    net._add_node(node)
+
+    params = make_params([{"day": "0", "amount": "10"}])
+    params.antiviral_parameters["compartment_priority"] = ["I", "A", "E"]
+
+    with pytest.raises(ValueError, match=r"SEAITRD antiviral treatment only supports"):
+        Antiviral(params).get_child("stockpile-age-risk", network=net)
+
+
+def test_seaitrd_antiviral_moves_infectious_to_t_only():
     net = Network(["S", "E", "A", "I", "T", "R", "D"])
     node = Node(0, 0, 0, PopulationCompartments([100], [0.0]))
     net._add_node(node)
     group = GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.U.value)
     node.compartments.set_compartment_vector_for(
         group,
-        np.array([80.0, 2.0, 3.0, 0.0, 5.0, 0.0, 0.0]),
+        np.array([80.0, 2.0, 3.0, 5.0, 0.0, 0.0, 0.0]),
     )
 
     params = make_params([{"day": "0", "amount": "10"}])
-    params.antiviral_parameters["compartment_priority"] = ["I", "A", "E"]
+    params.antiviral_parameters["compartment_priority"] = ["I"]
 
     strat = Antiviral(params).get_child("stockpile-age-risk", network=net)
     strat.distribute_antivirals_to_nodes(net, day=0)
     strat.distribute_antivirals_to_population(node, day=0)
 
     result = node.compartments.get_compartment_vector_for(group)
-    assert result[Compartments.E.value] == 0.0
-    assert result[Compartments.A.value] == 0.0
+    assert result[Compartments.E.value] == 2.0
+    assert result[Compartments.A.value] == 3.0
     assert result[Compartments.I.value] == 0.0
-    assert result[Compartments.T.value] == 10.0
+    assert result[Compartments.T.value] == 5.0
 
 
 def test_seaitrd_antiviral_default_priority_is_infectious_only():

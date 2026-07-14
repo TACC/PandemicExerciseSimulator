@@ -35,9 +35,9 @@ def make_params(num_age_grp=2, compartments=None):
             "A_to_I_days": "4.0",
             "I_to_R_days": "4.0",
             "T_to_R_days": "2.0",
-            "T_to_I_days":   "4.0",
             "I_to_D_invdays":    ["0.25"] * num_age_grp,
-            "sigma": ["1.0"] * num_age_grp
+            "highrisk_death_multiplier": "9",
+            "relative_susceptibility": ["1.0"] * num_age_grp
         }
     )
     return params
@@ -118,7 +118,6 @@ def test_euler_step_mass_conservation():
     transmission_rate = 0.0  # No new infections
     E_to_A_rate = 1.0  # Exposed to asymptomatic rate
     A_to_I_rate = 1.0  # Asymptomatic to infectious rate
-    T_to_I_rate = 1.0  # Retained for compatibility; treatment entry is stockpile-controlled
     I_to_R_rate = 1.0
     T_to_R_rate = 1.0
     I_to_D_rate = 0.0
@@ -126,7 +125,7 @@ def test_euler_step_mass_conservation():
 
     # Euler time step forward of difference
     y_diff = SEAITRD_model(
-        y, transmission_rate, E_to_A_rate, A_to_I_rate, T_to_I_rate,
+        y, transmission_rate, E_to_A_rate, A_to_I_rate,
         I_to_R_rate, T_to_R_rate, I_to_D_rate, T_to_D_rate
     )
     # New y values after 1 time step forward
@@ -137,7 +136,6 @@ def test_euler_step_mass_conservation():
 
 
 def test_deterministic_seaitrd_has_no_natural_i_to_t_flow():
-    # T_to_I_rate is intentionally high; T should still only be stockpile-controlled.
     y = np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0])
 
     y_diff = SEAITRD_model(
@@ -145,7 +143,6 @@ def test_deterministic_seaitrd_has_no_natural_i_to_t_flow():
         transmission_prob=0.0,
         E_to_A_rate=1.0,
         A_to_I_rate=1.0,
-        T_to_I_rate=10.0,
         I_to_R_rate=0.0,
         T_to_R_rate=0.0,
         I_to_D_rate=0.0,
@@ -164,7 +161,6 @@ def test_deterministic_seaitrd_existing_t_exits_without_new_t_entry():
         transmission_prob=0.0,
         E_to_A_rate=1.0,
         A_to_I_rate=1.0,
-        T_to_I_rate=10.0,
         I_to_R_rate=0.25,
         T_to_R_rate=1.0,
         I_to_D_rate=0.0,
@@ -183,7 +179,6 @@ def test_deterministic_seaitrd_rejects_omitting_t_compartment():
             transmission_prob=0.0,
             E_to_A_rate=1.0,
             A_to_I_rate=1.0,
-            T_to_I_rate=10.0,
             I_to_R_rate=0.0,
             T_to_R_rate=0.0,
             I_to_D_rate=0.0,
@@ -200,6 +195,19 @@ def test_deterministic_seaitrd_requires_t_compartment():
         DeterministicSEAITRD(parent)
 
 
+def test_deterministic_seaitrd_uses_configured_highrisk_death_multiplier():
+    params = make_params(num_age_grp=1)
+    params.disease_parameters["I_to_D_invdays"] = ["0.2"]
+    params.disease_parameters["highrisk_death_multiplier"] = "3"
+    npi = NonPharmaInterventions([], 1, 1, 1)
+    parent = DiseaseModel(params, npi, 0)
+
+    model = DeterministicSEAITRD(parent)
+
+    assert model.I_to_D_rates_by_risk[0][0] == 0.2
+    assert model.I_to_D_rates_by_risk[0][1] == pytest.approx(0.6)
+
+
 def test_deterministic_seaitrd_t_uses_separate_recovery_and_reduced_death_rates():
     y = np.array([0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0])
 
@@ -208,7 +216,6 @@ def test_deterministic_seaitrd_t_uses_separate_recovery_and_reduced_death_rates(
         transmission_prob=0.0,
         E_to_A_rate=1.0,
         A_to_I_rate=1.0,
-        T_to_I_rate=10.0,
         I_to_R_rate=0.25,
         T_to_R_rate=0.5,
         I_to_D_rate=0.25,

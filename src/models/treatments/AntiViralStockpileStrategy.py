@@ -38,6 +38,9 @@ class AntiviralStockpileStrategy(Antiviral):
         for label in self.compartment_priority:
             if not hasattr(Compartments, label):
                 raise ValueError(f"Antiviral compartment {label} not in active compartments.")
+        active_compartments = {str(label).strip().upper() for label in network.compartment_labels}
+        if active_compartments == {"S", "E", "A", "I", "T", "R", "D"} and self.compartment_priority != ["I"]:
+            raise ValueError("SEAITRD antiviral treatment only supports compartment_priority ['I'].")
 
         self.antiviral_capacity = float(
             self.parameters.antiviral_parameters.get("antiviral_capacity_proportion", 1.0)

@@ -28,7 +28,6 @@ class Schedule:
         """
         E_to_A_rate # Exposed to asymptomatic rate
         A_to_I_rate # Asymptomatic to infectious rate
-        T_to_I_rate # Retained for parameter compatibility; T no longer progresses to I
         I_to_R_rate # Infectious recovery rate
         T_to_R_rate # Treated recovery rate
         I_to_D_rate # Infectious mortality rate
@@ -103,12 +102,11 @@ class StochasticSEAITRD(DiseaseModel):
         self.beta_scale     = float(self.parameters.disease_parameters['beta_scale'] )   # "R0CorrectionFactor"
         self.beta           = self.R0 / self.beta_scale
 
-        # the following four parameters are provided by users as periods (units = days),
+        # the following parameters are provided by users as periods (units = days),
         # but then stored here as rates (units = 1/days)
         self.E_to_A_rate    = 1/float(self.parameters.disease_parameters['E_to_A_days'])
         self.A_to_I_rate    = 1/float(self.parameters.disease_parameters['A_to_I_days'])
         self.I_to_R_rate    = 1/float(self.parameters.disease_parameters['I_to_R_days'])
-        self.T_to_I_rate    = 1/float(self.parameters.disease_parameters['T_to_I_days'])
 
         # Mobility reduction parameter
         #self.rho            = float(simulation_properties.rho)
@@ -132,10 +130,14 @@ class StochasticSEAITRD(DiseaseModel):
             self.T_to_R_rate = self.I_to_R_rate
 
         # the user enters one I_to_D rate value for each age group, assumed to be low risk
-        # population. use multiplier 9x to derive values for high risk population
+        # population. highrisk_death_multiplier derives high-risk death rates.
+        highrisk_death_multiplier = float(self.parameters.disease_parameters['highrisk_death_multiplier'])
         self.I_to_D_rates_by_risk      = [[],[]]
         self.I_to_D_rates_by_risk[0]   = [float(x)   for x in self.parameters.disease_parameters['I_to_D_invdays']]
-        self.I_to_D_rates_by_risk[1]   = [float(x)*9 for x in self.parameters.disease_parameters['I_to_D_invdays']]
+        self.I_to_D_rates_by_risk[1]   = [
+            float(x) * highrisk_death_multiplier
+            for x in self.parameters.disease_parameters['I_to_D_invdays']
+        ]
 
         # Transpose rates so that we can access values as rates[age][risk].
         self.I_to_D_rates_by_risk = np.array(self.I_to_D_rates_by_risk).transpose().tolist()
@@ -158,8 +160,9 @@ class StochasticSEAITRD(DiseaseModel):
             for age, age_rates in enumerate(self.I_to_D_rates_by_risk)
         ]
 
-        self.relative_susceptibility = []
-        self.relative_susceptibility = [float(x) for x in self.parameters.disease_parameters['sigma']]
+        self.relative_susceptibility = [
+            float(x) for x in self.parameters.disease_parameters['relative_susceptibility']
+        ]
 
         self.npis_schedule = disease_model.npis_schedule
 
@@ -354,7 +357,7 @@ class StochasticSEAITRD(DiseaseModel):
         beta = self._calculate_beta_w_npi(node.node_index, node.node_id)
 
         for ag in range(self.parameters.number_of_age_groups):
-            sigma = float(self.relative_susceptibility[ag])
+            relative_susceptibility = float(self.relative_susceptibility[ag])
 
             for rg in range(len(RiskGroup)):
                 for vg in range(len(VaccineGroup)):
@@ -374,7 +377,7 @@ class StochasticSEAITRD(DiseaseModel):
                         vaccine_effectiveness = 0
                     # group_cache is weighting the force of infection
                     transmission_rate = (1.0 - vaccine_effectiveness) * beta[ag] * contact_rate \
-                                        * sigma * group_cache[ag][rg][vg]
+                                        * relative_susceptibility * group_cache[ag][rg][vg]
                     # if the rate is zero (VE=1 or other reasons), do not schedule contacts
                     if transmission_rate <= 0.0:
                         continue

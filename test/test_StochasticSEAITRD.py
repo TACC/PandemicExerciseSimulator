@@ -35,9 +35,9 @@ def make_params(antiviral_parameters=None):
             "A_to_I_days": "2.0",
             "I_to_R_days": "4.0",
             "T_to_R_days": "2.0",
-            "T_to_I_days": "2.0",
             "I_to_D_invdays": ["0.01"],
-            "sigma": ["1.0"],
+            "highrisk_death_multiplier": "9",
+            "relative_susceptibility": ["1.0"],
         },
         antiviral_parameters=antiviral_parameters or {},
     )
@@ -225,7 +225,7 @@ def test_stale_t_event_is_skipped_before_new_antiviral_t_event():
 def test_antiviral_allocation_replaces_old_queue_with_t_trajectories(monkeypatch):
     antiviral_parameters = {
         "age_risk_priority_groups": ["1"],
-        "compartment_priority": ["I", "A", "E"],
+        "compartment_priority": ["I"],
         "antiviral_effectiveness_death": "0.25",
         "antiviral_stockpile": [{"day": "0", "amount": "10"}],
     }
@@ -264,18 +264,18 @@ def test_antiviral_allocation_replaces_old_queue_with_t_trajectories(monkeypatch
     monkeypatch.setattr(StochasticSEAITRDModule, "Schedule", TreatedSchedule)
 
     result_after_allocation = compartment_vector(node, group)
-    assert result_after_allocation[Compartments.E.value] == 0
-    assert result_after_allocation[Compartments.A.value] == 0
+    assert result_after_allocation[Compartments.E.value] == 2
+    assert result_after_allocation[Compartments.A.value] == 3
     assert result_after_allocation[Compartments.I.value] == 0
-    assert result_after_allocation[Compartments.T.value] == 10
-    assert len(node.pending_antiviral_transitions) == 3
+    assert result_after_allocation[Compartments.T.value] == 5
+    assert len(node.pending_antiviral_transitions) == 1
     assert_population_invariants(node, 10)
 
     model.simulate(node, time=0, vaccine_model=DummyVax())
 
     result_after_events = compartment_vector(node, group)
     assert result_after_events[Compartments.T.value] == 0
-    assert result_after_events[Compartments.R.value] == 10
+    assert result_after_events[Compartments.R.value] == 5
     assert node.pending_antiviral_transitions == []
     assert_population_invariants(node, 10)
 

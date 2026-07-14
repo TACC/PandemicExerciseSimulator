@@ -35,9 +35,9 @@ def make_dummy_input(tmp_path):
          "A_to_I_days": "4.0",
          "I_to_R_days": "4.0",
          "T_to_R_days": "2.0",
-         "T_to_I_days": "4.0",
          "I_to_D_invdays": ["0.25", "0.25"],
-         "sigma": ["1.0", "1.0"],
+         "highrisk_death_multiplier": "9",
+         "relative_susceptibility": ["1.0", "1.0"],
       },
       travel_model="binomial",
       travel_parameters={
