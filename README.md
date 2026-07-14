@@ -11,9 +11,10 @@ Read the Docs builds the site from the files in `docs/`. Sphinx is the
 documentation build engine used by Read the Docs and by the local preview
 commands below.
 
-For the simulator code, runtime instructions, data preparation workflow, tests,
-and release-specific source files, use the repository's `main` branch or a
-tagged release.
+This documentation branch is separate from the simulator code branch. The
+simulator codebase, runtime instructions, data preparation workflow, tests, and
+release-specific source files are on the `main` branch of the
+`TACC/PandemicExerciseSimulator` repository, or in a tagged release.
 
 ### Requirements
 
