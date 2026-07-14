@@ -12,9 +12,11 @@ _build/
 docs/_build/
 .Rproj.user
 .vscode/
-scripts/.Rhistory
-scripts/.RData
-scripts/.RDataTmp
+
+# Ignore R session artifacts and hidden local scripts in any subdirectory
+**/.Rhistory
+**/.RData
+**/.RDataTmp
 
 # Ignore all input data files to be downloaded or created by user
 data/private_input_data/
@@ -26,7 +28,6 @@ data/RISK_RATIOS/
 data/SVI/
 data/PLACES/
 data/VACCINATION/
-figures/
 
 # ignore output files
 US_States/
