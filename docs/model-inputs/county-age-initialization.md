@@ -1,29 +1,51 @@
 # County-Age Initial Exposure Fitting
 
-This page documents the Delaware manuscript example used to derive county- and age-specific initial conditions from state-level incident influenza hospitalization data.
+This page documents the external initializer implemented by
+`scripts/6b_derive_initial_exposures.R`. The script derives state/DC
+age-specific initial exposed counts from incident influenza hospitalization
+data, allocates those counts to counties, and writes simulator-ready test
+inputs.
 
 The simulator input field is named `initial_exposed`. The implementation places
 those people in the low-risk, unvaccinated `E` compartment. The quantities
 below are therefore low-risk-equivalent initial exposed people, indexed by
 county and age group.
 
-## Delaware Example
+## Scope And Defaults
 
-The example starts simulations on August 9, 2025 and uses the Delaware age-stratified incident hospitalization time series from the Flu Scenario Modeling Hub target data archive. Delaware has three counties in the simulator population file:
+The current script runs all states and DC by default. Its default settings are:
 
-| County FIPS | County |
+| Setting | Default |
 | --- | --- |
-| `10001` | Kent |
-| `10003` | New Castle |
-| `10005` | Sussex |
+| Simulation start | `2025-08-09` |
+| Hospitalization source | `data/Flu-Hub-Data/time-series_2026-07-13.csv` |
+| Template input | `data/INPUT_FILE_TEMPLATES/INPUT_SEIHRD-STOCH_ANTIVIRAL.json` |
+| Output directory | `STATE_INIT_TEST/` |
+| Population exponent | `1.0` |
+| Mobility exponent | `0.25` |
+| Minimum timing weight | `0.25` |
+| Minimum active state-age exposed count | `1` |
 
-The script `scripts/6b_derive_initial_exposures.R` estimates an initial exposure table and writes a complete runnable test input under `data/Delaware_TEST/`.
+The hospitalization source is the Flu Scenario Modeling Hub time-series file.
+The script uses age-stratified `inc hosp` observations, excludes the aggregate
+`0-130` age group, and maps `65-130` to the simulator's `65+` age group.
 
 ## State Hospitalizations To State Initial Exposed
 
-Let $a$ index the five simulator age groups and let $H_a^{obs}$ be observed state-level incident hospitalizations in the calibration window beginning at simulation day 0. In the default Delaware example, the calibration window is the first eight weekly observations beginning August 9, 2025.
+Let $s$ index states and $a$ index the five simulator age groups. For each
+state-age pair, the script finds the first strictly positive incident
+hospitalization observation on or after simulation day 0:
 
-For a low-risk exposed person in age group $a$, the approximate probability of eventually entering `H` is:
+```{math}
+H_{s,a}^{first}.
+```
+
+If no positive observation appears for a state-age pair, that pair receives
+zero initial exposures. The script still writes a complete state-age summary
+row with zero hospitalization signal and zero initial exposed people.
+
+For a low-risk exposed person in age group $a$, the approximate probability of
+eventually entering `H` is:
 
 ```{math}
 q_a = (1 - p_{A,a}) p_{H,L,a},
@@ -31,26 +53,66 @@ q_a = (1 - p_{A,a}) p_{H,L,a},
 
 where:
 
-- $p_{A,a}$ is `prop_E_to_IA`, the probability that an exposed person follows the asymptomatic path;
-- $p_{H,L,a}$ is `prop_IS_to_H_lowrisk`, the low-risk realized hospitalization probability among symptomatic infectious people.
+- $p_{A,a}$ is `prop_E_to_IA`, the probability that an exposed person follows
+  the asymptomatic path;
+- $p_{H,L,a}$ is `prop_IS_to_H_lowrisk`, the low-risk realized
+  hospitalization probability among symptomatic infectious people.
 
-The statewide low-risk-equivalent exposed count is then:
+The expected time from exposure to hospitalization is read from the template:
 
 ```{math}
-\tilde E_{0,a}^{state} = \frac{H_a^{obs}}{q_a}.
+d_{E \rightarrow H} =
+d_{E \rightarrow IP/IA} + d_{IP \rightarrow IS} + d_{IS \rightarrow H}.
 ```
 
-The script rounds this value and applies a configurable floor only when the calibration window contains at least one hospitalization for that age group:
+The default antiviral template gives:
 
 ```{math}
-E_{0,a}^{state} =
+d_{E \rightarrow H} = 0.7 + 0.9 + 3.74 = 5.34 \text{ days}.
+```
+
+The script converts this to a weekly exponential timing rate:
+
+```{math}
+\lambda = \frac{1}{d_{E \rightarrow H}/7}.
+```
+
+If the first positive hospitalization occurs $t_{s,a}$ weeks after the
+simulation start, its timing weight is:
+
+```{math}
+\tau_{s,a} =
+\tau_{min} + (1-\tau_{min})\exp(-\lambda t_{s,a}),
+```
+
+where $\tau_{min}=0.25$ by default. This keeps later first observations from
+implying as many day-0 exposures as observations close to simulation start,
+while still giving them a nonzero floor.
+
+The effective hospitalization signal and state-level exposed estimate are:
+
+```{math}
+H_{s,a}^{eff} = H_{s,a}^{first}\tau_{s,a}
+```
+
+```{math}
+\tilde E_{0,s,a}^{state} = \frac{H_{s,a}^{eff}}{q_a}.
+```
+
+The integer state-age total is rounded and bounded below only for active
+state-age pairs:
+
+```{math}
+E_{0,s,a}^{state} =
 \max\left(
-\operatorname{round}(\tilde E_{0,a}^{state}),
-\mathbf{1}[H_a^{obs} > 0]E_{min}
+\operatorname{round}(\tilde E_{0,s,a}^{state}),
+\mathbf{1}[H_{s,a}^{first} > 0]E_{min}
 \right).
 ```
 
-For the Delaware baseline parameters:
+The default $E_{min}$ is 1.
+
+For the default antiviral template:
 
 | Age group | `prop_E_to_IA` | `prop_IS_to_H_lowrisk` | $q_a$ |
 | --- | ---: | ---: | ---: |
@@ -60,19 +122,11 @@ For the Delaware baseline parameters:
 | 50-64 | 0.30 | 0.0594 | 0.041580 |
 | 65+ | 0.30 | 0.0802 | 0.056140 |
 
-In the first eight weeks after August 9, 2025, Delaware has two observed incident hospitalizations in ages 0-4 and two in ages 65+. The resulting state-level initial exposed estimates are:
-
-| Age group | $H_a^{obs}$ | $E_{0,a}^{state}$ |
-| --- | ---: | ---: |
-| 0-4 | 2 | 202 |
-| 5-17 | 0 | 0 |
-| 18-49 | 0 | 0 |
-| 50-64 | 0 | 0 |
-| 65+ | 2 | 36 |
-
 ## State Initial Exposed To Counties
 
-Let $c$ index counties. The county allocation uses low-risk county population by age and a mild county mobility centrality term:
+Let $c$ index counties. For each state and age group, the script allocates the
+state-age total to counties using low-risk county-age population and a county
+mobility multiplier:
 
 ```{math}
 w_{c,a} = L_{c,a}^{\alpha} M_c^{\delta},
@@ -80,105 +134,121 @@ w_{c,a} = L_{c,a}^{\alpha} M_c^{\delta},
 
 where:
 
-- $L_{c,a} = N_{c,a}(1-r_{c,a})$ is the low-risk population in county $c$ and age group $a$;
+- $L_{c,a} = N_{c,a}(1-r_{c,a})$ is the low-risk population in county $c$ and
+  age group $a$;
 - $N_{c,a}$ is county population;
 - $r_{c,a}$ is the county high-risk ratio;
-- $M_c$ is normalized outbound county mobility for the simulation-start quarter;
-- $\alpha$ is the population exponent;
-- $\delta$ is the mobility exponent.
+- $M_c$ is county total population outflow divided by the state mean county
+  total population outflow for the simulation-start quarter;
+- $\alpha$ is `POPULATION_POWER`, default `1.0`;
+- $\delta$ is `MOBILITY_POWER`, default `0.25`.
 
-This is a dasymetric proportional allocation rather than a fully fitted county-level epidemic model. The state-level hospitalization signal identifies $E_{0,a}^{state}$, and the county weights distribute that age-specific total using available ancillary information.
-
-### Population Exponent
-
-The population exponent $\alpha$ controls how strongly initial exposed people follow the county-age low-risk population. If county A has twice the low-risk population of county B in the same age group, and mobility is equal, then:
-
-```{math}
-\frac{w_{A,a}}{w_{B,a}} = 2^{\alpha}.
-```
-
-Interpretation:
-
-| $\alpha$ | Effect |
-| ---: | --- |
-| 0 | Ignores county-age population; counties receive equal population weight before mobility. |
-| 0.5 | Sublinear population weighting; larger counties receive more exposures, but less than proportional. |
-| 1 | Proportional low-risk population allocation. This is the Delaware default. |
-| >1 | Superlinear population weighting; larger counties receive disproportionately more exposures. |
-
-The manuscript default $\alpha=1$ is the most transparent assumption: absent county-level infection surveillance, the expected number of initial exposures is proportional to the eligible low-risk county-age population.
-
-### Mobility Exponent
-
-The mobility exponent $\delta$ controls how much the allocation favors counties with greater normalized outbound mobility. If county A has twice the normalized mobility of county B, and low-risk population is equal, then:
-
-```{math}
-\frac{w_{A,a}}{w_{B,a}} = 2^{\delta}.
-```
-
-Interpretation:
-
-| $\delta$ | Effect |
-| ---: | --- |
-| 0 | Ignores mobility; allocation uses only population weighting. |
-| 0.25 | Mild mobility preference. A two-fold mobility difference gives only a $2^{0.25}\approx1.19$-fold weight difference. This is the Delaware default. |
-| 1 | Mobility-proportional weighting. A two-fold mobility difference gives a two-fold weight difference. |
-| >1 | Strong mobility concentration in more connected counties. |
-
-The default $\delta=0.25$ keeps mobility as a secondary modifier rather than allowing mobility to dominate population. This is useful for an illustrative early-season exposure initializer because population is the better-measured denominator, while mobility centrality is an ancillary spatial-risk signal.
+The mobility rank file is filtered to the calendar quarter containing
+simulation day 0. With the default August 9 start date, this is quarter 3.
+Missing high-risk ratios are treated as 0, and missing mobility multipliers are
+treated as 1.
 
 County exposures are allocated by normalized weights:
 
 ```{math}
-\hat E_{0,c,a} = E_{0,a}^{state}
-\frac{w_{c,a}}{\sum_{c'} w_{c',a}}.
+\hat E_{0,c,a} = E_{0,s,a}^{state}
+\frac{w_{c,a}}{\sum_{c' \in s} w_{c',a}}.
 ```
 
-The final integer table uses largest-remainder apportionment within each age group so that county totals preserve the state total exactly:
+The final integer table uses largest-remainder apportionment within each
+state-age group so county totals preserve the state-age total exactly:
 
 ```{math}
-\sum_c E_{0,c,a} = E_{0,a}^{state}.
+\sum_{c \in s} E_{0,c,a} = E_{0,s,a}^{state}.
 ```
 
-### Sensitivity To Exponent Choices
+Rows with zero allocated exposures are omitted from the generated
+`initial_exposed` JSON array.
 
-The table below shows how Delaware county allocations change under three exponent choices. The `State age total matched` column is the $E_{0,a}^{state}$ value being distributed, and each scenario column sums to that value within age group. For example, the three county rows for ages 0-4 sum to 202 in every scenario, and the three county rows for ages 65+ sum to 36 in every scenario.
+## Delaware Example
 
-| County FIPS | Age group | State age total matched | $\alpha=1,\delta=0.25$ default | $\alpha=1,\delta=1$ | $\alpha=0.5,\delta=1$ |
-| --- | --- | ---: | ---: | ---: | ---: |
-| `10001` | 0-4 | 202 | 41 | 44 | 59 |
-| `10003` | 0-4 | 202 | 119 | 123 | 97 |
-| `10005` | 0-4 | 202 | 42 | 35 | 46 |
-| `10001` | 65+ | 36 | 6 | 6 | 9 |
-| `10003` | 65+ | 36 | 18 | 19 | 16 |
-| `10005` | 65+ | 36 | 12 | 11 | 11 |
+Delaware has three counties in the simulator population file:
 
-## Generated Initial Conditions
+| County FIPS | County |
+| --- | --- |
+| `10001` | Kent |
+| `10003` | New Castle |
+| `10005` | Sussex |
 
-The default script writes the following `initial_exposed` entries for the Delaware test input:
+Under the current default script and the `time-series_2026-07-13.csv`
+hospitalization file, Delaware's first positive observations after
+August 9, 2025 produce the following state-age estimates:
+
+| Age group | First positive date | First hosp count | Weeks from start | Timing weight | Effective hosps | State initial exposed |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 0-4 | 2025-09-20 | 2 | 6 | 0.250288 | 0.500576 | 51 |
+| 5-17 | 2025-11-15 | 1 | 14 | 0.250000 | 0.250000 | 34 |
+| 18-49 | 2025-11-08 | 1 | 13 | 0.250000 | 0.250000 | 12 |
+| 50-64 | 2025-11-08 | 1 | 13 | 0.250000 | 0.250000 | 6 |
+| 65+ | 2025-08-30 | 2 | 3 | 0.264695 | 0.529389 | 9 |
+
+The resulting Delaware county-age allocation is:
+
+| County FIPS | Age group | State age total matched | Initial exposed |
+| --- | --- | ---: | ---: |
+| `10001` | 0-4 | 51 | 10 |
+| `10003` | 0-4 | 51 | 30 |
+| `10005` | 0-4 | 51 | 11 |
+| `10001` | 5-17 | 34 | 7 |
+| `10003` | 5-17 | 34 | 20 |
+| `10005` | 5-17 | 34 | 7 |
+| `10001` | 18-49 | 12 | 2 |
+| `10003` | 18-49 | 12 | 8 |
+| `10005` | 18-49 | 12 | 2 |
+| `10001` | 50-64 | 6 | 1 |
+| `10003` | 50-64 | 6 | 3 |
+| `10005` | 50-64 | 6 | 2 |
+| `10001` | 65+ | 9 | 1 |
+| `10003` | 65+ | 9 | 5 |
+| `10005` | 65+ | 9 | 3 |
+
+The Delaware `initial_exposed` entries written to the generated input JSON are:
 
 ```json
 [
-  {"county": "10001", "infected": "41", "age_group": "0"},
-  {"county": "10003", "infected": "119", "age_group": "0"},
-  {"county": "10005", "infected": "42", "age_group": "0"},
-  {"county": "10001", "infected": "6", "age_group": "4"},
-  {"county": "10003", "infected": "18", "age_group": "4"},
-  {"county": "10005", "infected": "12", "age_group": "4"}
+  {"county": "10001", "infected": "10", "age_group": "0"},
+  {"county": "10003", "infected": "30", "age_group": "0"},
+  {"county": "10005", "infected": "11", "age_group": "0"},
+  {"county": "10001", "infected": "7", "age_group": "1"},
+  {"county": "10003", "infected": "20", "age_group": "1"},
+  {"county": "10005", "infected": "7", "age_group": "1"},
+  {"county": "10001", "infected": "2", "age_group": "2"},
+  {"county": "10003", "infected": "8", "age_group": "2"},
+  {"county": "10005", "infected": "2", "age_group": "2"},
+  {"county": "10001", "infected": "1", "age_group": "3"},
+  {"county": "10003", "infected": "3", "age_group": "3"},
+  {"county": "10005", "infected": "2", "age_group": "3"},
+  {"county": "10001", "infected": "1", "age_group": "4"},
+  {"county": "10003", "infected": "5", "age_group": "4"},
+  {"county": "10005", "infected": "3", "age_group": "4"}
 ]
 ```
 
-The total initial low-risk exposed count is 238. The nonzero age groups reflect the hospitalization signal in the first eight weeks after the simulation start date; this is an intentionally conservative early-season initializer, not a full posterior calibration.
+The total Delaware initial low-risk exposed count is 112. The value is an
+early-season initializer derived from the first observed age-stratified
+hospitalization signal, not a posterior calibration of the full epidemic
+trajectory.
 
 ## Generated Files
 
 Running `scripts/6b_derive_initial_exposures.R` writes:
 
 ```text
-data/Delaware/derived_initial_exposed_Delaware_2025-08-09.csv
-data/Delaware/derived_initial_exposed_Delaware_2025-08-09.json
-data/Delaware/derived_initial_exposed_Delaware_2025-08-09_method.csv
-data/Delaware_TEST/INPUT_SEIHRD-STOCH_Delaware_TEST_R0-2.2_BASELINE.json
+STATE_INIT_TEST/derived_initial_exposed_state_age_2025-08-09.csv
+STATE_INIT_TEST/derived_initial_exposed_county_age_2025-08-09.csv
+STATE_INIT_TEST/INPUT_JSONS/INPUT_SEIHRD-STOCH_<STATE>_INIT_TEST_ANTIVIRAL.json
 ```
 
-The `Delaware_TEST` directory is ignored by git because it is a generated local test artifact.
+Each generated JSON is copied from the antiviral template, has `STATE` tokens
+replaced with the state directory name, sets `output_dir_path` to
+`<STATE>_INIT_TEST`, sets `batch_num` to `0`, appends a metadata note describing
+the initialization source, and replaces `initial_exposed` with the derived
+county-age rows for that state.
+
+The output directory is a generated test artifact and is not part of the
+canonical state input directories under `data/<STATE>/`.
