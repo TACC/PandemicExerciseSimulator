@@ -1,6 +1,14 @@
 # Editing And Publishing These Docs
 
 The documentation uses Sphinx, MyST Markdown, and Read the Docs.
+It is maintained on the repository's documentation branch, separate from the
+simulator code on `main`.
+
+The hosted site is:
+
+```text
+https://pandemicexercisesimulator-test.readthedocs.io/en/latest/
+```
 
 ## Edit Locally
 
@@ -10,21 +18,22 @@ Documentation source files live in:
 docs/
 ```
 
-Most pages are Markdown files. Edit them in your normal editor and commit them
-with the code.
+Most pages are Markdown files. Edit them in your normal editor and commit the
+documentation changes to the documentation branch. Code changes belong on the
+repository's `main` branch.
 
 ## Build Locally
 
-Install the documentation dependencies:
+Install the documentation dependencies from the repository root:
 
 ```bash
-python3 -m pip install -r docs/requirements.txt
+poetry install --with docs --no-root
 ```
 
 Build HTML:
 
 ```bash
-sphinx-build -b html docs docs/_build/html
+poetry run sphinx-build -b html docs docs/_build/html
 ```
 
 Open the local build:
@@ -37,27 +46,14 @@ On Linux, use `xdg-open` instead of `open`.
 
 ## Preview Edits Live
 
-For documentation editing, `sphinx-autobuild` is included in
-`docs/requirements.txt` as an optional authoring tool. It is only needed by
-contributors who want live browser refreshes while editing docs.
-
-Install the documentation dependencies in your active Python environment:
-
-```bash
-python3 -m pip install -r docs/requirements.txt
-```
+For documentation editing, `sphinx-autobuild` is included in the Poetry
+`docs` dependency group. It is only needed by contributors who want live
+browser refreshes while editing docs.
 
 Start the live preview server from the repository root:
 
 ```bash
-sphinx-autobuild docs docs/_build/html --open-browser
-```
-
-If your shell cannot find the `sphinx-autobuild` command, confirm that the same
-environment used for installation is active, or run it as a Python module:
-
-```bash
-python3 -m sphinx_autobuild docs docs/_build/html --open-browser
+poetry run sphinx-autobuild docs docs/_build/html
 ```
 
 By default, the preview is served at `http://127.0.0.1:8000/` and rebuilds when
@@ -65,12 +61,21 @@ files under `docs/` change.
 
 ## Host On Read The Docs
 
-1. Commit and push `.readthedocs.yaml`, `docs/conf.py`, and the `docs/` pages.
-2. Create a Read the Docs account at `https://readthedocs.org/`.
-3. Connect your GitHub account.
-4. Import this repository as a new documentation project.
-5. Let Read the Docs build the default branch.
-6. In project settings, confirm that it is using `.readthedocs.yaml`.
+Read the Docs builds this documentation branch using `.readthedocs.yaml`.
+That file installs Poetry, runs `poetry install --with docs --no-root`, and
+builds HTML with:
+
+```bash
+poetry run sphinx-build -b html docs $READTHEDOCS_OUTPUT/html
+```
+
+For routine publishing:
+
+1. Commit and push `.readthedocs.yaml`, `docs/conf.py`, `pyproject.toml`,
+   `poetry.lock`, and the `docs/` pages when they change.
+2. Confirm the Read the Docs project is configured to build the documentation
+   branch, not the simulator-code `main` branch.
+3. In project settings, confirm that it is using `.readthedocs.yaml`.
 
 After that, every push to the configured branch can trigger a new documentation
 build.
@@ -82,7 +87,8 @@ build.
 - Which operating system image to use
 - Which Python version to use
 - Where the Sphinx configuration file lives
-- Which documentation requirements to install
+- Which Poetry dependency group to install
+- Which Sphinx build command to run
 
 `docs/conf.py` configures Sphinx itself. It enables Markdown, LaTeX math, and
 the Read the Docs theme.
