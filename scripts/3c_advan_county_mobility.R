@@ -156,6 +156,7 @@ for (i in seq_along(mobility_files)) {
     progress = FALSE
   )
 
+  start_time <- Sys.time()
   device_home_areas_df = mobility_df %>%
     dplyr::select(
       any_of(c(
@@ -165,8 +166,7 @@ for (i in seq_along(mobility_files)) {
         "DATE_RANGE_START",
         "DATE_RANGE_END",
         "AREA",
-        "DEVICE_HOME_AREAS"
-      ))
+        "DEVICE_HOME_AREAS" ))
     ) %>%
     mutate(
       DEVICE_HOME_AREAS_PARSED = map(DEVICE_HOME_AREAS, parse_json_object)
@@ -194,9 +194,12 @@ for (i in seq_along(mobility_files)) {
     )
 
   write_or_append_csv(device_home_areas_df, device_home_areas_out_file)
-}
-
-message("Finished writing Advan CBG mobility intermediates to ", advan_dir)
+  end_time      <- Sys.time()
+  total_seconds <- as.numeric(difftime(end_time, start_time, units = "secs"))
+  final_time    <- seconds_to_period(total_seconds)
+  message("Total run time ", final_time)
+  
+} # end loop over 
 
 #///////////////////////////////////////////////////////////
 #### US-ONLY HOME PANEL FOR ANALYSIS YEAR, BATCHED BY YEAR/MONTH ####
@@ -419,6 +422,7 @@ initialize_home_panel_chunk_state(
 )
 
 for (i in seq_along(home_panel_files)) {
+  start_time <- Sys.time()
   source_tag = stringr::str_remove(basename(home_panel_files[i]), "\\.csv$")
   source_done_file = file.path(
     advan_dir,
@@ -474,6 +478,10 @@ for (i in seq_along(home_panel_files)) {
     })
 
   writeLines(as.character(Sys.time()), source_done_file)
+  end_time      <- Sys.time()
+  total_seconds <- as.numeric(difftime(end_time, start_time, units = "secs"))
+  final_time    <- seconds_to_period(total_seconds)
+  message("Total run time ", final_time)
 }
 
 message("Finished writing US-only ", analysis_year, " home panel chunks to ", advan_dir)
