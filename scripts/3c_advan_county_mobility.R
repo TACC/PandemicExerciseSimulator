@@ -793,12 +793,9 @@ for (year_month_i in year_month_set) {
     dplyr::filter(!is.na(STATE_DIR)) %>%
     mutate(
       DAYS_IN_MONTH = month_days_i,
-      # The travel matrix should represent out-of-county coupling only;
-      # within-county transmission is already handled by the disease model.
-      OUT_OF_COUNTY_DEVICE_COUNTS = if_else(COUNTY_ORG == COUNTY_DEST, 0, DEVICE_COUNTS),
       MOBILITY_MATRIX_VALUE = if_else(
         !is.na(NUMBER_DEVICES_RESIDING) & NUMBER_DEVICES_RESIDING > 0,
-        OUT_OF_COUNTY_DEVICE_COUNTS / (NUMBER_DEVICES_RESIDING * DAYS_IN_MONTH),
+        DEVICE_COUNTS / (NUMBER_DEVICES_RESIDING * DAYS_IN_MONTH),
         0
       )
     ) %>%
@@ -812,7 +809,6 @@ for (year_month_i in year_month_set) {
       COUNTY_ORG,
       COUNTY_DEST,
       DEVICE_COUNTS,
-      OUT_OF_COUNTY_DEVICE_COUNTS,
       NUMBER_DEVICES_RESIDING,
       DAYS_IN_MONTH,
       MOBILITY_MATRIX_VALUE
@@ -872,23 +868,11 @@ for (state_dir_i in state_lookup$STATE_DIR) {
     progress = FALSE
   )
 
-  if (!("OUT_OF_COUNTY_DEVICE_COUNTS" %in% names(state_monthly_mobility))) {
-    state_monthly_mobility = state_monthly_mobility %>%
-      mutate(
-        OUT_OF_COUNTY_DEVICE_COUNTS = if_else(
-          COUNTY_ORG == COUNTY_DEST,
-          0,
-          as.numeric(DEVICE_COUNTS)
-        )
-      )
-  }
-
   state_monthly_mobility = state_monthly_mobility %>%
     mutate(
       YEAR = as.integer(YEAR),
       MONTH = as.integer(MONTH),
       DEVICE_COUNTS = as.numeric(DEVICE_COUNTS),
-      OUT_OF_COUNTY_DEVICE_COUNTS = replace_na(as.numeric(OUT_OF_COUNTY_DEVICE_COUNTS), 0),
       NUMBER_DEVICES_RESIDING = as.numeric(NUMBER_DEVICES_RESIDING),
       DAYS_IN_MONTH = as.integer(DAYS_IN_MONTH),
       MOBILITY_MATRIX_VALUE = as.numeric(MOBILITY_MATRIX_VALUE),
@@ -951,13 +935,10 @@ for (state_dir_i in state_lookup$STATE_DIR) {
 
   state_quarterly_mobility = state_monthly_mobility %>%
     mutate(
-      # Keep the quarterly matrix off-diagonal because local disease dynamics
-      # already represent within-county mixing.
-      OUT_OF_COUNTY_DEVICE_COUNTS = if_else(
-        COUNTY_ORG == COUNTY_DEST,
-        0,
-        OUT_OF_COUNTY_DEVICE_COUNTS
-      )
+      # Keep the diagonal as its observed share of origin trips. The travel
+      # model ignores same-county pairs, but retaining the diagonal prevents
+      # off-diagonal destinations from being inflated to 100% of trips.
+      TRIP_SHARE_DEVICE_COUNTS = replace_na(DEVICE_COUNTS, 0)
     ) %>%
     group_by(
       STATE_NAME,
@@ -969,7 +950,7 @@ for (state_dir_i in state_lookup$STATE_DIR) {
       QUARTER
     ) %>%
     summarise(
-      quarterly_out_of_county_device_counts = sum(OUT_OF_COUNTY_DEVICE_COUNTS, na.rm = TRUE),
+      quarterly_device_counts = sum(TRIP_SHARE_DEVICE_COUNTS, na.rm = TRUE),
       mean_number_devices_residing = weighted.mean(
         NUMBER_DEVICES_RESIDING,
         w = DAYS_IN_MONTH,
@@ -979,10 +960,10 @@ for (state_dir_i in state_lookup$STATE_DIR) {
     ) %>%
     group_by(STATE_NAME, STATE_DIR, STATE_ABBR, STATE_FIPS, QUARTER, COUNTY_ORG) %>%
     mutate(
-      total_quarterly_origin_outflow = sum(quarterly_out_of_county_device_counts, na.rm = TRUE),
+      total_quarterly_origin_trips = sum(quarterly_device_counts, na.rm = TRUE),
       mean_mobility_matrix_value = if_else(
-        total_quarterly_origin_outflow > 0,
-        quarterly_out_of_county_device_counts / total_quarterly_origin_outflow,
+        total_quarterly_origin_trips > 0,
+        quarterly_device_counts / total_quarterly_origin_trips,
         0
       )
     ) %>%
@@ -996,8 +977,8 @@ for (state_dir_i in state_lookup$STATE_DIR) {
     mutate(imputed = is.na(mean_mobility_matrix_value)) %>%
     replace_na(list(
       mean_mobility_matrix_value = 0,
-      quarterly_out_of_county_device_counts = 0,
-      total_quarterly_origin_outflow = 0,
+      quarterly_device_counts = 0,
+      total_quarterly_origin_trips = 0,
       mean_number_devices_residing = 0
     )) %>%
     arrange(STATE_DIR, COUNTY_ORG, COUNTY_DEST, QUARTER)
