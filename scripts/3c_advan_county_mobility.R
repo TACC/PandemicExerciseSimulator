@@ -221,7 +221,7 @@ device_home_areas_output_file = function(path) {
     stop(paste("Could not parse date prefix and final shard from", file_name))
   }
 
-  file.path(advan_dir,
+  file.path(device_home_areas_dir,
     paste0(basename(device_home_areas_out_prefix), 
            "_", date_prefix,
            "_", final_shard, ".csv" ))
@@ -463,7 +463,7 @@ initialize_home_panel_chunk_state = function(part_env, row_env, chunk_files) {
 #' @param part_env Environment tracking the next part number by year-month.
 #' @param row_env Environment tracking row counts in the active part by year-month.
 #'
-#' @return `NULL`; writes one or more CSV files to `advan_dir`.
+#' @return `NULL`; writes one or more CSV files to `home_panel_chunk_dir`.
 #'
 #' @examples
 #' write_home_panel_chunks(tibble::tibble(YEAR = 2025, MONTH = 1), 2025, 1, new.env(), new.env())
@@ -686,7 +686,14 @@ device_home_areas_clean_files = find_output_files(
 )
 
 if (length(device_home_areas_clean_files) == 0) {
-  stop(paste("No clean", analysis_year, "device home area files found in", advan_dir))
+  stop(paste(
+    "No clean",
+    analysis_year,
+    "device home area files found in",
+    device_home_areas_dir,
+    "or fallback",
+    advan_dir
+  ))
 }
 
 device_file_index = map_dfr(
