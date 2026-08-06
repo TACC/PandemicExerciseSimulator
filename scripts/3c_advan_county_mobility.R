@@ -495,9 +495,7 @@ for (i in seq_along(home_panel_files)) {
     source_done_file
   )
   log_elapsed_time(clean_start_time, "Home panel cleaning and chunking block")
-}
-
-message("Finished writing US-only ", analysis_year, " home panel chunks to ", advan_dir)
+} # finish cleaning home panel files
 
 #////////////////////////////////////////////////////////
 #### COUNTY-LEVEL DAILY MOBILITY MATRIX, BATCHED BY YEAR/MONTH ####
@@ -683,6 +681,4 @@ for (year_month_i in year_month_set) {
     county_mobility_matrix,
     county_mobility_matrix_out_file
   )
-}
-
-message("Finished writing county-level monthly daily mobility matrix files to ", advan_dir)
+} # end loop over county month year files
