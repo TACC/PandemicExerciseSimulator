@@ -98,6 +98,23 @@ write_or_append_csv = function(df, path) {
   }
 }
 
+#' Print elapsed runtime from a start time
+#'
+#' @param start_time POSIXct timestamp from `Sys.time()`.
+#' @param label Character description of the timed code block.
+#'
+#' @return Invisibly returns the elapsed time as a lubridate period.
+#'
+#' @examples
+#' log_elapsed_time(Sys.time(), "example block")
+log_elapsed_time = function(start_time, label) {
+  end_time = Sys.time()
+  total_seconds = as.numeric(difftime(end_time, start_time, units = "secs"))
+  final_time = lubridate::seconds_to_period(total_seconds)
+  message(label, " run time ", final_time)
+  invisible(final_time)
+}
+
 #' Build the device-home-areas output path for a raw mobility file
 #'
 #' @param path Character path to one raw Advan mobility CSV file.
@@ -156,7 +173,7 @@ for (i in seq_along(mobility_files)) {
     progress = FALSE
   )
 
-  start_time <- Sys.time()
+  clean_start_time = Sys.time()
   device_home_areas_df = mobility_df %>%
     dplyr::select(
       any_of(c(
@@ -194,10 +211,7 @@ for (i in seq_along(mobility_files)) {
     )
 
   write_or_append_csv(device_home_areas_df, device_home_areas_out_file)
-  end_time      <- Sys.time()
-  total_seconds <- as.numeric(difftime(end_time, start_time, units = "secs"))
-  final_time    <- seconds_to_period(total_seconds)
-  message("Total run time ", final_time)
+  log_elapsed_time(clean_start_time, "Device home areas cleaning block")
   
 } # end loop over 
 
@@ -422,19 +436,14 @@ initialize_home_panel_chunk_state(
 )
 
 for (i in seq_along(home_panel_files)) {
-  start_time <- Sys.time()
+  clean_start_time = Sys.time()
   source_tag = stringr::str_remove(basename(home_panel_files[i]), "\\.csv$")
   source_done_file = file.path(
     advan_dir,
-    paste0("advan_home_panel_us_", analysis_year, "_done_", source_tag, ".txt")
-  )
-  legacy_source_done_file = file.path(
-    advan_dir,
-    paste0("advan_home_panel_us_done_", source_tag, ".txt")
+    paste0("advan_home_panel_us_", analysis_year, "_done_", source_tag, ".csv")
   )
 
-  if (file.exists(source_done_file) ||
-      (analysis_year == 2025 && file.exists(legacy_source_done_file))) {
+  if (file.exists(source_done_file)) {
     message("Skipping completed home panel file ", i, " of ",
             length(home_panel_files), ": ", basename(home_panel_files[i]))
     next
@@ -477,11 +486,15 @@ for (i in seq_along(home_panel_files)) {
       )
     })
 
-  writeLines(as.character(Sys.time()), source_done_file)
-  end_time      <- Sys.time()
-  total_seconds <- as.numeric(difftime(end_time, start_time, units = "secs"))
-  final_time    <- seconds_to_period(total_seconds)
-  message("Total run time ", final_time)
+  readr::write_csv(
+    tibble(
+      ANALYSIS_YEAR = analysis_year,
+      SOURCE_FILE = basename(home_panel_files[i]),
+      COMPLETED_AT = as.character(Sys.time())
+    ),
+    source_done_file
+  )
+  log_elapsed_time(clean_start_time, "Home panel cleaning and chunking block")
 }
 
 message("Finished writing US-only ", analysis_year, " home panel chunks to ", advan_dir)
@@ -596,6 +609,7 @@ for (year_month_i in year_month_set) {
     stop(paste("No home panel chunks found for", year_month_i))
   }
 
+  clean_start_time = Sys.time()
   county_number_devices_residing = map_dfr(
     home_panel_month_files,
     read_csv,
@@ -613,11 +627,13 @@ for (year_month_i in year_month_set) {
       NUMBER_DEVICES_RESIDING = sum(NUMBER_DEVICES_RESIDING, na.rm = TRUE),
       .groups = "drop"
     )
+  log_elapsed_time(clean_start_time, paste("County home panel aggregation block for", year_month_i))
 
   month_device_files = device_file_index %>%
     dplyr::filter(YEAR_MONTH == year_month_i) %>%
     pull(PATH)
 
+  clean_start_time = Sys.time()
   county_device_counts = map_dfr(month_device_files, function(path_i) {
     read_csv(
       path_i,
@@ -648,7 +664,9 @@ for (year_month_i in year_month_set) {
       DEVICE_COUNTS = sum(DEVICE_COUNTS, na.rm = TRUE),
       .groups = "drop"
     )
+  log_elapsed_time(clean_start_time, paste("County device counts cleaning block for", year_month_i))
 
+  clean_start_time = Sys.time()
   county_mobility_matrix = county_device_counts %>%
     left_join(
       county_number_devices_residing,
@@ -659,6 +677,7 @@ for (year_month_i in year_month_set) {
       MOBILITY_MATRIX_VALUE = DEVICE_COUNTS / (NUMBER_DEVICES_RESIDING * DAYS_IN_MONTH)
     ) %>%
     arrange(STATE_FIPS, COUNTY_ORG, COUNTY_DEST)
+  log_elapsed_time(clean_start_time, paste("County mobility matrix calculation block for", year_month_i))
 
   write_csv(
     county_mobility_matrix,
