@@ -129,19 +129,21 @@ plot_state_od_map = function(od, state_dir, county_pop, period_label, out_file) 
     labs(
       title = paste0(state_dir, " county mobility matrix flows"),
       subtitle = period_label,
-      caption = paste0(
+      caption = stringr::str_wrap(paste0(
         "Lines show top ", scales::comma(max_lines_per_plot),
         " off-diagonal OD pairs by matrix value. Black county borders mark top ",
         scales::percent(top_outflow_county_fraction),
         " counties by summed matrix value of their top ",
         top_outflow_links_per_county,
         " outbound links."
-      )
+      ), width = 95)
     ) +
     theme_void(base_size = 14) +
     theme(
       plot.title = element_text(face = "bold", hjust = 0.5, size = 18),
       plot.subtitle = element_text(hjust = 0.5, size = 13),
+      plot.caption = element_text(hjust = 0.5, size = 10, margin = margin(t = 10)),
+      plot.margin = margin(t = 12, r = 18, b = 36, l = 18),
       legend.position = "right"
     )
 
