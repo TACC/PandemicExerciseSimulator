@@ -16,13 +16,19 @@
 library(tidycensus)
 library(tidyverse)
 source("../data/private_input_data/api_keys.R")
+dir.create("../data/POPULATION/")
+
+# make TRUE if initial exposure should be generated in this way instead of fitting
+generate_init_exp = FALSE
 
 #//////////////////////
 #### READ POP DATA ####
-# ACS 2019-2023 County total population
-us_file_path = "../data/POPULATION/all_US_county_pop_by_age_2019-2023ACS.csv"
+# ACS 2020-2024 County total population
+year_range = "2020-2024"
+year = 2024
+us_file_path = paste0("../data/POPULATION/all_US_county_pop_by_age_", year_range, "ACS.csv")
 if(!file.exists(us_file_path)){
-  county_lookup_file = "../data/POPULATION/county_lookup_2019-2023ACS.csv"
+  county_lookup_file = paste0("../data/POPULATION/county_lookup_", year_range, "ACS.csv")
   if(!file.exists(county_lookup_file)){
     state_names_df = tigris::fips_codes %>%
       distinct(state_code, state_name, state) %>%  # state is USPS abbrev
@@ -30,7 +36,7 @@ if(!file.exists(us_file_path)){
              STATE_NAME = state_name) %>%
       dplyr::select(STATE_NAME, STATE_FIPS)
     
-    county_lookup_df = tigris::counties(year = 2023) %>%
+    county_lookup_df = tigris::counties(year = year) %>%
       sf::st_drop_geometry() %>%
       transmute(
         STATE_FIPS  = STATEFP,
@@ -72,7 +78,7 @@ if(!file.exists(us_file_path)){
                                   '50-64', '65+', '65+', '65+',
                                   '65+', '65+', '65+'))
   
-  county_age_pop = get_acs(geography="county", variables= acs_vars$acs_variable_code, geometry=FALSE, year = 2023) %>% 
+  county_age_pop = get_acs(geography="county", variables= acs_vars$acs_variable_code, geometry=FALSE, year = year) %>% 
     left_join(acs_vars, by = c('variable' = 'acs_variable_code')) %>% 
     left_join(age_dict, by = c('age_grouping' = 'acs_age_group')) %>%
     group_by(GEOID, age_group) %>% 
@@ -103,7 +109,7 @@ for(state in state_names){
   state_name_hypen = str_replace_all(state, " ", "-")
   state_dir_path = paste0("../data/", state_name_hypen, "/")
   dir.create(state_dir_path)
-  file_path = paste0(state_dir_path, "county_pop_by_age_", state_name_hypen, "_2019-2023ACS.csv")
+  file_path = paste0(state_dir_path, "county_pop_by_age_", state_name_hypen, "_", year_range, "ACS.csv")
   
   # write.csv was ignoring direction to ignore header
   write.table(state_specific_df, 
@@ -115,29 +121,32 @@ for(state in state_names){
 #### LARGEST COUNTY ####
 # Initially will infect 1 per 1M of most populous county that is LOW risk
 
-init_exp_file = "../data/POPULATION/all_US_initial_exposed.csv"
-if(!file.exists(init_exp_file)){
-  
-  init_inf_df = county_age_pop %>%
-    group_by(STATE_NAME, COUNTY_NAME, fips) %>%
-    summarise(county_pop = sum(pop), 
-              .groups = "drop") %>%
-    group_by(STATE_NAME) %>%
-    arrange(desc(county_pop), .by_group = T) %>%
-    summarise(total_pop = sum(county_pop), 
-              total_counties = n(),
-              COUNTY_NAME = first(COUNTY_NAME),
-              fips = first(fips),
-              .groups = "drop") %>%
-    mutate(init_inf_per_1M = ceiling(total_pop/1000000)) %>%
-    drop_na()
-  
-  write.csv(init_inf_df,
-            init_exp_file,
-            row.names = FALSE, quote = FALSE)
-}else{
-  init_inf_df = read_csv(init_exp_file)
-} # end if file needs to be made or exists
+if(generate_init_exp){
+  init_exp_file = "../data/POPULATION/all_US_initial_exposed.csv"
+  if(!file.exists(init_exp_file)) {
+    
+    init_inf_df = county_age_pop %>%
+      group_by(STATE_NAME, COUNTY_NAME, fips) %>%
+      summarise(county_pop = sum(pop), 
+                .groups = "drop") %>%
+      group_by(STATE_NAME) %>%
+      arrange(desc(county_pop), .by_group = T) %>%
+      summarise(total_pop = sum(county_pop), 
+                total_counties = n(),
+                COUNTY_NAME = first(COUNTY_NAME),
+                fips = first(fips),
+                .groups = "drop") %>%
+      mutate(init_inf_per_1M = ceiling(total_pop/1000000)) %>%
+      drop_na()
+    
+    write.csv(init_inf_df,
+              init_exp_file,
+              row.names = FALSE, quote = FALSE)
+  }else{
+    init_inf_df = read_csv(init_exp_file)
+  } # end if file needs to be made or exists
+} # end if we chose to generate the file
+
 
 
   
