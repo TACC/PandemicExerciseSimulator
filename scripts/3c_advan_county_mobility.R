@@ -208,8 +208,16 @@ if (!any(stringr::str_detect(basename(home_panel_files), paste0("^advan_home_pan
   message("Creating cleaned monthly home-panel files")
   start_time = Sys.time()
   map_dfr(raw_home_panel_files, read_csv, col_types = cols(.default = col_character()), progress = FALSE) %>%
-    dplyr::filter(ISO_COUNTRY_CODE == "US") %>%
-    mutate(MONTH = as.integer(MONTH)) %>%
+    dplyr::filter(
+      ISO_COUNTRY_CODE == "US",
+      stringr::str_detect(CENSUS_BLOCK_GROUP, "^[0-9]{12}$")
+    ) %>%
+    transmute(
+      YEAR,
+      MONTH = as.integer(MONTH),
+      CENSUS_BLOCK_GROUP,
+      NUMBER_DEVICES_RESIDING
+    ) %>%
     group_split(YEAR, MONTH, .keep = TRUE) %>%
     walk(function(df) {
       write_csv(
@@ -256,15 +264,8 @@ for (year_month_i in year_month_set) {
   target_month_i = as.Date(sprintf("%s-%02d-01", year_i, month_i))
   home_panel_county_file = file.path(home_panel_county_dir, paste0(year_month_i, "_county-home-panel.csv"))
   county_device_counts_file = file.path(county_device_counts_dir, paste0(year_month_i, "_county-device-counts.csv"))
-  home_panel_intermediate_is_current = file.exists(home_panel_county_file) &&
-    "TRACKED_DEVICES" %in% names(read_csv(
-      home_panel_county_file,
-      n_max = 0,
-      show_col_types = FALSE,
-      progress = FALSE
-    ))
 
-  if (!home_panel_intermediate_is_current) {
+  if (!file.exists(home_panel_county_file)) {
     message("Creating county tracked-device intermediate for ", year_month_i)
     start_time = Sys.time()
     county_home_panel = map_dfr(
@@ -273,10 +274,6 @@ for (year_month_i in year_month_set) {
       col_types = cols(.default = col_character()),
       progress = FALSE
     ) %>%
-      dplyr::filter(
-        ISO_COUNTRY_CODE == "US",
-        stringr::str_detect(CENSUS_BLOCK_GROUP, "^[0-9]{12}$")
-      ) %>%
       mutate(
         HOME_PANEL_MONTH = as.Date(sprintf("%s-%02d-01", YEAR, as.integer(MONTH))),
         TRACKED_DEVICES = as.numeric(NUMBER_DEVICES_RESIDING)
@@ -346,18 +343,7 @@ for (year_month_i in year_month_set) {
     monthly_state_dir,
     paste0(state_lookup$STATE_DIR, "_", year_month_i, "_within-state_county-mobility.csv")
   )
-  expected_outputs_exist = all(file.exists(expected_outputs))
-  expected_outputs_are_current = expected_outputs_exist && all(map_lgl(
-    expected_outputs,
-    ~ all(c("ORIGIN_COVERAGE", "POPULATION_EXPANDED_DEVICE_COUNTS",
-            "ORIGIN_ROW_DENOMINATOR", "MOBILITY_MATRIX_VALUE") %in% names(read_csv(
-              .x,
-              n_max = 0,
-              show_col_types = FALSE,
-              progress = FALSE
-            )))
-  ))
-  if (expected_outputs_are_current) {
+  if (all(file.exists(expected_outputs))) {
     message("Skipping existing monthly state files for ", year_month_i)
     next
   }
