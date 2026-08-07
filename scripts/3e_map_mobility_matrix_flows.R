@@ -21,6 +21,7 @@ options(tigris_use_cache = TRUE)
 
 analysis_year = 2025
 max_lines_per_plot = 5000
+top_outflow_county_fraction = 0.10
 
 monthly_state_dir = "../data/MOBILITY/Advan/within-state_county-mobility"
 figure_dir = "../figures/mobility-matrix-flow-maps"
@@ -71,17 +72,27 @@ make_od_lines = function(od) {
 #'
 #' @param od Tibble with `COUNTY_ORG`, `COUNTY_DEST`, and `MOBILITY_MATRIX_VALUE`.
 #' @param state_dir Character state directory name.
+#' @param county_pop Tibble with county `fips` and `total_population`.
 #' @param period_label Character period label for title and file name.
 #' @param out_file Character output PNG path.
 #'
 #' @return Invisibly returns output path.
 #'
 #' @examples
-#' plot_state_od_map(monthly_od, "Texas", "2025-01", "map.png")
-plot_state_od_map = function(od, state_dir, period_label, out_file) {
+#' plot_state_od_map(monthly_od, "Texas", county_pop, "2025-01", "map.png")
+plot_state_od_map = function(od, state_dir, county_pop, period_label, out_file) {
   state_counties = sort(unique(c(od$COUNTY_ORG, od$COUNTY_DEST)))
-  state_geo = county_geo %>% dplyr::filter(GEOID %in% state_counties)
+  state_geo = county_geo %>%
+    dplyr::filter(GEOID %in% state_counties) %>%
+    left_join(county_pop, by = c("GEOID" = "fips"))
   state_points = county_points %>% dplyr::filter(GEOID %in% state_counties)
+  top_outflow_counties = od %>%
+    dplyr::filter(COUNTY_ORG != COUNTY_DEST) %>%
+    group_by(COUNTY_ORG) %>%
+    summarise(outbound_matrix_share = sum(MOBILITY_MATRIX_VALUE, na.rm = TRUE), .groups = "drop") %>%
+    slice_max(outbound_matrix_share, n = max(1, ceiling(n_distinct(COUNTY_ORG) * top_outflow_county_fraction)), with_ties = FALSE) %>%
+    pull(COUNTY_ORG)
+  top_outflow_geo = state_geo %>% dplyr::filter(GEOID %in% top_outflow_counties)
 
   od_lines = od %>%
     dplyr::filter(COUNTY_ORG != COUNTY_DEST, MOBILITY_MATRIX_VALUE > 0) %>%
@@ -93,11 +104,18 @@ plot_state_od_map = function(od, state_dir, period_label, out_file) {
     make_od_lines()
 
   mobility_map = ggplot() +
-    geom_sf(data = state_geo, fill = "white", color = "grey70", linewidth = 0.2) +
+    geom_sf(data = state_geo, aes(fill = total_population), color = "grey70", linewidth = 0.2) +
+    geom_sf(data = top_outflow_geo, fill = NA, color = "black", linewidth = 0.75) +
     geom_sf(
       data = od_lines,
       aes(linewidth = MOBILITY_MATRIX_VALUE, alpha = MOBILITY_MATRIX_VALUE, color = MOBILITY_MATRIX_VALUE),
       lineend = "round"
+    ) +
+    scale_fill_gradient(
+      low = "#FFF7BC",
+      high = "#FEC44F",
+      labels = scales::comma,
+      name = "Total population\n(matrix assumed equal\nacross age/risk/vax)"
     ) +
     scale_color_gradient(low = "#BDECC1", high = "#006D2C", name = "Matrix value") +
     scale_linewidth(range = c(0.05, 1.1), name = "Matrix value") +
@@ -106,7 +124,12 @@ plot_state_od_map = function(od, state_dir, period_label, out_file) {
     labs(
       title = paste0(state_dir, " county mobility matrix flows"),
       subtitle = period_label,
-      caption = paste0("Lines show top ", scales::comma(max_lines_per_plot), " off-diagonal OD pairs by matrix value.")
+      caption = paste0(
+        "Lines show top ", scales::comma(max_lines_per_plot),
+        " off-diagonal OD pairs by matrix value. Black county borders mark top ",
+        scales::percent(top_outflow_county_fraction),
+        " counties by summed off-diagonal outbound matrix share."
+      )
     ) +
     theme_void(base_size = 14) +
     theme(
@@ -139,6 +162,17 @@ for (state_dir_i in state_lookup$STATE_DIR) {
   dir.create(quarterly_fig_dir, showWarnings = FALSE, recursive = TRUE)
 
   message("Writing mobility matrix flow maps for ", state_dir_i)
+  county_pop = read_csv(
+    file.path("../data", state_dir_i, paste0("county_pop_by_age_", state_dir_i, "_2019-2023ACS.csv")),
+    col_types = cols(.default = col_character()),
+    progress = FALSE
+  ) %>%
+    mutate(
+      across(matches("^[0-9]+(-[0-9]+|\\+)$"), as.numeric),
+      total_population = rowSums(pick(matches("^[0-9]+(-[0-9]+|\\+)$")), na.rm = TRUE)
+    ) %>%
+    dplyr::select(fips, total_population)
+
   monthly = map_dfr(files_i, read_csv, col_types = cols(.default = col_character()), progress = FALSE) %>%
     mutate(
       YEAR = as.integer(YEAR),
@@ -155,6 +189,7 @@ for (state_dir_i in state_lookup$STATE_DIR) {
       plot_state_od_map(
         month_i %>% dplyr::select(COUNTY_ORG, COUNTY_DEST, MOBILITY_MATRIX_VALUE),
         state_dir_i,
+        county_pop,
         period_label,
         file.path(monthly_fig_dir, paste0(state_dir_i, "_", period_label, "_mobility-matrix-flow-map.png"))
       )
@@ -182,6 +217,7 @@ for (state_dir_i in state_lookup$STATE_DIR) {
       plot_state_od_map(
         quarter_i %>% dplyr::select(COUNTY_ORG, COUNTY_DEST, MOBILITY_MATRIX_VALUE),
         state_dir_i,
+        county_pop,
         period_label,
         file.path(quarterly_fig_dir, paste0(state_dir_i, "_", period_label, "_mobility-matrix-flow-map.png"))
       )
