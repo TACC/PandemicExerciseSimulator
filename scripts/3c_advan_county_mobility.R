@@ -67,6 +67,13 @@ state_lookup = tigris::fips_codes %>%
   ) %>%
   dplyr::filter(as.integer(STATE_FIPS) < 60)
 
+ak_ct_crosswalk = read_csv(
+  "../data/MOBILITY/ak_ct_crosswalk.csv",
+  col_types = cols(.default = col_character()),
+  progress = FALSE
+) %>%
+  transmute(OLD_FIPS, NEW_FIPS, afact = as.numeric(afact))
+
 #/////////////////////
 #### SMALL HELPERS ####
 #/////////////////////
@@ -357,7 +364,15 @@ for (year_month_i in year_month_set) {
     mutate(
       MONTH = as.integer(MONTH),
       TRACKED_DEVICES = as.numeric(TRACKED_DEVICES)
-    )
+    ) %>%
+    left_join(ak_ct_crosswalk, by = c("COUNTY" = "OLD_FIPS")) %>%
+    mutate(
+      COUNTY = coalesce(NEW_FIPS, COUNTY),
+      STATE_FIPS = stringr::str_sub(COUNTY, 1, 2),
+      TRACKED_DEVICES = TRACKED_DEVICES * coalesce(afact, 1)
+    ) %>%
+    group_by(YEAR, MONTH, STATE_FIPS, COUNTY) %>%
+    summarise(TRACKED_DEVICES = sum(TRACKED_DEVICES, na.rm = TRUE), .groups = "drop")
 
   monthly_state_od = read_csv(
     file.path(county_device_counts_dir, paste0(year_month_i, "_county-device-counts.csv")),
@@ -365,6 +380,24 @@ for (year_month_i in year_month_set) {
     progress = FALSE
   ) %>%
     mutate(MONTH = as.integer(MONTH), DEVICE_COUNTS = as.numeric(DEVICE_COUNTS)) %>%
+    left_join(
+      ak_ct_crosswalk %>% rename(COUNTY_ORG_NEW = NEW_FIPS, afact_org = afact),
+      by = c("COUNTY_ORG" = "OLD_FIPS"),
+      relationship = "many-to-many"
+    ) %>%
+    left_join(
+      ak_ct_crosswalk %>% rename(COUNTY_DEST_NEW = NEW_FIPS, afact_dest = afact),
+      by = c("COUNTY_DEST" = "OLD_FIPS"),
+      relationship = "many-to-many"
+    ) %>%
+    mutate(
+      COUNTY_ORG = coalesce(COUNTY_ORG_NEW, COUNTY_ORG),
+      COUNTY_DEST = coalesce(COUNTY_DEST_NEW, COUNTY_DEST),
+      STATE_FIPS = stringr::str_sub(COUNTY_ORG, 1, 2),
+      DEVICE_COUNTS = DEVICE_COUNTS * coalesce(afact_org, 1) * coalesce(afact_dest, 1)
+    ) %>%
+    group_by(YEAR, MONTH, STATE_FIPS, COUNTY_ORG, COUNTY_DEST) %>%
+    summarise(DEVICE_COUNTS = sum(DEVICE_COUNTS, na.rm = TRUE), .groups = "drop") %>%
     left_join(state_lookup, by = "STATE_FIPS") %>%
     dplyr::filter(!is.na(STATE_DIR)) %>%
     left_join(
