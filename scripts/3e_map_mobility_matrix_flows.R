@@ -86,11 +86,12 @@ plot_state_od_map = function(od, state_dir, county_pop, period_label, out_file) 
     dplyr::filter(GEOID %in% state_counties) %>%
     left_join(county_pop, by = c("GEOID" = "fips"))
   state_points = county_points %>% dplyr::filter(GEOID %in% state_counties)
+  n_top_outflow_counties = max(1, ceiling(length(unique(od$COUNTY_ORG)) * top_outflow_county_fraction))
   top_outflow_counties = od %>%
     dplyr::filter(COUNTY_ORG != COUNTY_DEST) %>%
     group_by(COUNTY_ORG) %>%
     summarise(outbound_matrix_share = sum(MOBILITY_MATRIX_VALUE, na.rm = TRUE), .groups = "drop") %>%
-    slice_max(outbound_matrix_share, n = max(1, ceiling(n_distinct(COUNTY_ORG) * top_outflow_county_fraction)), with_ties = FALSE) %>%
+    slice_max(outbound_matrix_share, n = n_top_outflow_counties, with_ties = FALSE) %>%
     pull(COUNTY_ORG)
   top_outflow_geo = state_geo %>% dplyr::filter(GEOID %in% top_outflow_counties)
 
