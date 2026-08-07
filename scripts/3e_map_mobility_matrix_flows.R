@@ -22,6 +22,7 @@ options(tigris_use_cache = TRUE)
 analysis_year = 2025
 max_lines_per_plot = 5000
 top_outflow_county_fraction = 0.10
+top_outflow_links_per_county = 5
 
 monthly_state_dir = "../data/MOBILITY/Advan/within-state_county-mobility"
 figure_dir = "../figures/mobility-matrix-flow-maps"
@@ -90,8 +91,11 @@ plot_state_od_map = function(od, state_dir, county_pop, period_label, out_file) 
   top_outflow_counties = od %>%
     dplyr::filter(COUNTY_ORG != COUNTY_DEST) %>%
     group_by(COUNTY_ORG) %>%
-    summarise(outbound_matrix_share = sum(MOBILITY_MATRIX_VALUE, na.rm = TRUE), .groups = "drop") %>%
-    slice_max(outbound_matrix_share, n = n_top_outflow_counties, with_ties = FALSE) %>%
+    slice_max(MOBILITY_MATRIX_VALUE, n = top_outflow_links_per_county, with_ties = FALSE) %>%
+    ungroup() %>%
+    group_by(COUNTY_ORG) %>%
+    summarise(top_outbound_link_share = sum(MOBILITY_MATRIX_VALUE, na.rm = TRUE), .groups = "drop") %>%
+    slice_max(top_outbound_link_share, n = n_top_outflow_counties, with_ties = FALSE) %>%
     pull(COUNTY_ORG)
   top_outflow_geo = state_geo %>% dplyr::filter(GEOID %in% top_outflow_counties)
 
@@ -129,7 +133,9 @@ plot_state_od_map = function(od, state_dir, county_pop, period_label, out_file) 
         "Lines show top ", scales::comma(max_lines_per_plot),
         " off-diagonal OD pairs by matrix value. Black county borders mark top ",
         scales::percent(top_outflow_county_fraction),
-        " counties by summed off-diagonal outbound matrix share."
+        " counties by summed matrix value of their top ",
+        top_outflow_links_per_county,
+        " outbound links."
       )
     ) +
     theme_void(base_size = 14) +
