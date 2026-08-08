@@ -3,11 +3,13 @@
 #' by combining the vaccine coverage and inpatient effectiveness for H1N1
 #' 
 #' VC by state from:
-#'  https://data.cdc.gov/Vaccinations/Weekly-Cumulative-Influenza-Vaccination-Coverage-C/eudc-n39h/about_data
-#'  https://data.cdc.gov/Flu-Vaccinations/Weekly-Influenza-Vaccination-Coverage-and-Intent-f/sw5n-wg2p/about_data 
+#'  6mon - 17yr: https://data.cdc.gov/Child-Vaccinations/Weekly-Cumulative-Influenza-Vaccination-Coverage-b/vncy-2ds7/about_data 
+#'  18yr - 65+ : https://data.cdc.gov/Flu-Vaccinations/Weekly-Influenza-Vaccination-Coverage-and-Intent-f/sw5n-wg2p/about_data   
 #'  
-#' H1N1 VE estimates from
-#'  https://www.cdc.gov/flu-vaccines-work/php/effectiveness-studies/2023-2024.html
+#' H2N3 VE estimates 
+#' Children from NVSN (inpatient) 
+#' Adults age >=18 IVY (Inpatient) not available for 2025-26 as of Aug 8, 2026 using VISION (inpatient) for Influenza A
+#' https://www.cdc.gov/flu-vaccines-work/php/effectiveness-studies/2025-2026.html
 #'  
 #' Parent dirs: POPULATION, VACCINATION
 #////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,12 +18,12 @@ options(scipen=999) #  disable scientific notation
 
 #/////////////////////////////////////////
 #### Define key parameter assumptions ####
-pediatric_VE = 0.51
-adult_VE = 0.36
-day0 = as.Date("2024-10-01") # day epidemic starts in simulation
+pediatric_VE = 0.38 # 38 (13 to 55) from NVSN (inpatient) H3N2 specific 
+adult_VE = 0.30 # 30 (21 to 38) from VISION (inpatient) Influenza A
+day0 = as.Date("2025-10-01") # day epidemic starts in simulation
 
 # Need pop by age to determine total doses as fraction of vaccine coverage and effectiveness
-state_pop_by_age = read_csv("../data/POPULATION/all_US_county_pop_by_age_2019-2023ACS.csv") %>%
+state_pop_by_age = read_csv("../data/POPULATION/all_US_county_pop_by_age_2020-2024ACS.csv") %>%
   mutate(
     AgeGroup = case_when(age_group %in% c("0-4", "5-17") ~ "Pediatric",
                          age_group %in% c("18-49", "50-64", "65+") ~ "Adult",
@@ -37,7 +39,7 @@ ped_file = list.files(path = "../data/VACCINATION", pattern = "Children_6_Months
 ped_flu_vc = 
   read_csv(ped_file) %>%
   dplyr::filter(Indicator_label == "Up-to-date") %>%
-  dplyr::filter(influenza_season == "2024-2025") %>%
+  dplyr::filter(influenza_season == "2025-2026") %>%
   dplyr::select(`Geographic Name`, Estimate, Current_Season_Week_Ending_Label) %>%
   transmute(
     State   = `Geographic Name`,
@@ -52,23 +54,25 @@ ped_flu_vc =
 #/////////////////
 #### Adult VC ####
 adult_file = list.files(path="../data/VACCINATION", pattern ="Among_Adults_18_Years_and_Older", full.names = T)
+week_end_col <- c("Week_Ending", "Current_Season_Week_Ending") # col name change from 2024-25 to 2025-26
+
 adult_flu_vc = 
   read_csv(adult_file) %>%
-  dplyr::filter(Influenza_Season == "2024-2025") %>%
+  dplyr::filter(Influenza_Season == "2025-2026") %>%
   dplyr::filter(`Geographic Level` == "State") %>%
   dplyr::filter(indicator_label == "Up-to-date") %>%
-  dplyr::select(`Geographic Name`, Estimates, Current_Season_Week_Ending) %>%
-  # harmonize names + parse the week label string into Date
+  dplyr::select(`Geographic Name`, Estimates, dplyr::any_of(week_end_col)) %>%
+  dplyr::rename_with(~ "WeekEndRaw", dplyr::any_of(week_end_col)) %>%
   transmute(
     State   = `Geographic Name`,
     VaxCov  = Estimates,
-    WeekEnd = as.Date(strptime(Current_Season_Week_Ending, "%Y %b %d %I:%M:%S %p"))
+    WeekEnd = as.Date(strptime(WeekEndRaw, "%Y %b %d %I:%M:%S %p"))
   ) %>%
   arrange(State, WeekEnd) %>%
   mutate(
     AgeGroup = "Adult",
     VE_Inpatient = adult_VE
-  ) 
+  )
 
 #/////////////////////////
 #### Vax doses weekly ####
