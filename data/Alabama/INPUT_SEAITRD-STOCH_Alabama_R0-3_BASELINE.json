@@ -3,7 +3,7 @@
   "realization_range": ["0", "99"],
   "batch_num": "0",
   "data": {
-    "population": "../data/Alabama/county_pop_by_age_Alabama_2019-2023ACS.csv",
+    "population": "../data/Alabama/county_pop_by_age_Alabama_2020-2024ACS.csv",
     "contact": "../data/Alabama/contact_matrix_Alabama_Mistry2021_all.csv",
     "flow": "../data/Alabama/Alabama_Q4-2019_mobility-matrix.csv",
     "high_risk_ratios": "../data/Alabama/state_Alabama_high-risk-ratios-flu-only.csv"

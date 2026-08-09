@@ -9,7 +9,7 @@
     "notes": ["PLACEHOLDER"]
   },
   "data": {
-    "population": "../data/STATE/county_pop_by_age_STATE_2019-2023ACS.csv",
+    "population": "../data/STATE/county_pop_by_age_STATE_2020-2024ACS.csv",
     "contact": "../data/STATE/contact_matrix_STATE_Mistry2021_all.csv",
     "flow": "../data/STATE/STATE_Q4-2019_mobility-matrix.csv",
     "high_risk_ratios": "../data/STATE/state_STATE_high-risk-ratios-flu-only.csv"
