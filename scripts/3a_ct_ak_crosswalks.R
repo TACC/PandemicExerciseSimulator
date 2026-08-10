@@ -5,6 +5,10 @@
 #' The January 2020 tab can be cited for the Connecticut change and 2010 for Alaska
 #' 
 #' Crosswalk from GeoCorr 2022: https://mcdc.missouri.edu/applications/geocorr2022.html
+#'  - Choose Connecticut as the state
+#'  - Source: Other geographies Connecticut counties (pre-2023)
+#'  - Target: 2020 county/county equivalent 
+#'  - Weight by population (2020 census)
 #' 
 #' Parent dir: MOBILITY
 #/////////////////////////////////////////////////////////////////////////////////////////////////////////////
