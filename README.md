@@ -3,6 +3,13 @@
 This is a stand-alone Python command line implementation of an outbreak
 simulator using your choice of stochastic or deterministic compartmental model with a binomial travel model.
 
+The hosted documentation is published from the repository's documentation
+branch and is available at:
+
+```text
+https://pandemicexercisesimulator-test.readthedocs.io/en/latest/
+```
+
 ### Install Using Poetry:
 
 Depends on [Poetry](https://python-poetry.org/docs/#installation) for native installation.
@@ -191,6 +198,25 @@ and `T_to_R_days`, while baseline mortality is supplied as `I_to_D_invdays`.
 When an antiviral model is configured for SEAITRD, provide
 `antiviral_effectiveness_death`; the treated mortality rate is derived as
 `I_to_D_invdays * (1 - antiviral_effectiveness_death)`.
+
+`age_risk_priority_groups` uses the same convention as vaccination: `0` means
+no one in the age group is eligible, `0.5` means only high-risk people are
+eligible, and `1` means everyone is eligible. `compartment_priority` lists the
+disease compartments that can be moved into `T`.
+
+`antiviral_stockpile` is the total course inventory released by day. If
+`antiviral_adherence` is omitted, antivirals can be used for the current
+prevalent population in `compartment_priority`, constrained only by stockpile
+and `antiviral_capacity_proportion`. If `antiviral_adherence` is provided as a
+scalar or age-stratified list, treatment is limited to that fraction of people
+who newly entered the configured `compartment_priority` compartments during the
+current disease step. This lets a day-0 stockpile act as a maximum inventory
+while values such as `["0.54", "0.54", "0.54", "0.54", "0.54"]` represent
+age-specific outpatient antiviral uptake among newly eligible cases.
+
+`antiviral_capacity_proportion` remains an operational throughput cap: the
+maximum number of antiviral courses dispensable per node per day as a fraction
+of node population.
 
 
 
