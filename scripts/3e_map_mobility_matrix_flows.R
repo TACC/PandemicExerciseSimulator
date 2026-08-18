@@ -1,4 +1,6 @@
-#///////////////////////////////////////////////////////////////////////
+#////////
+#### Script Overview ####
+#////////
 #' Map county OD mobility matrix values by state, month, and quarter
 #'
 #' Run from the PES scripts directory or source in RStudio:
@@ -10,8 +12,7 @@
 #' @examples
 #' analysis_year = 2025
 #' source("3e_map_mobility_matrix_flows.R")
-#///////////////////////////////////////////////////////////////////////
-
+#////////
 library(tidyverse)
 library(lubridate)
 library(sf)

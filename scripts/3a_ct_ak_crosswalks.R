@@ -1,4 +1,6 @@
-#/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#////////
+#### Script Overview ####
+#////////
 #' Both Connecticut and Alaska had changes on county FIPS in/after 2019 
 #' The county travel networks need to be converted to match modern jurisdictions
 #' https://www.census.gov/programs-surveys/geography/technical-documentation/county-changes.January_2020.html
@@ -11,8 +13,7 @@
 #'  - Weight by population (2020 census)
 #' 
 #' Parent dir: MOBILITY
-#/////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+#////////
 final_crosswalk = "../data/MOBILITY/ak_ct_crosswalk.csv"
 if(!file.exists(final_crosswalk)){
   #//////////////////////////////

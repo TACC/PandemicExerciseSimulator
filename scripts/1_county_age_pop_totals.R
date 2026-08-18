@@ -1,4 +1,6 @@
-#///////////////////////////////////////////////////////////////////////////
+#////////
+#### Script Overview ####
+#////////
 #' Create 
 #'  1. state-specific input folders
 #'  2. county population by age
@@ -9,10 +11,10 @@
 #'  connectivity file further in pipeline
 #' 
 #' Parent dir: POPULATION
-#///////////////////////////////////////////////////////////////////////////
-
-#///////////////////////
+#////////
+#////////
 #### LOAD LIBRARIES ####
+#////////
 library(tidycensus)
 library(tidyverse)
 source("../data/private_input_data/api_keys.R")
@@ -21,11 +23,12 @@ dir.create("../data/POPULATION/")
 # make TRUE if initial exposure should be generated in this way instead of fitting
 generate_init_exp = FALSE
 
-#//////////////////////
+#////////
 #### READ POP DATA ####
-# ACS 2020-2024 County total population
-year_range = "2020-2024"
-year = 2024
+#////////
+# ACS County total population
+year_range = get0("ACS_YEAR_RANGE", ifnotfound = "2020-2024")
+year = as.integer(get0("ACS_YEAR", ifnotfound = stringr::str_extract(year_range, "\\d{4}$")))
 us_file_path = paste0("../data/POPULATION/all_US_county_pop_by_age_", year_range, "ACS.csv")
 if(!file.exists(us_file_path)){
   county_lookup_file = paste0("../data/POPULATION/county_lookup_", year_range, "ACS.csv")
@@ -92,8 +95,9 @@ if(!file.exists(us_file_path)){
 } # end if county pop data already exists
 
 
-#/////////////////////////////
+#////////
 #### WRITE TO STATE FILES ####
+#////////
 county_age_pop_spread = county_age_pop %>%
   spread(age_group, pop) %>%
   dplyr::select(STATE_NAME, COUNTY_NAME, fips, `0-4`, `5-17`, `18-49`, `50-64`, `65+`) %>%
@@ -117,8 +121,9 @@ for(state in state_names){
               sep = ",", row.names = FALSE, quote = FALSE)
 } # end loop over states
 
-#///////////////////////
+#////////
 #### LARGEST COUNTY ####
+#////////
 # Initially will infect 1 per 1M of most populous county that is LOW risk
 
 if(generate_init_exp){

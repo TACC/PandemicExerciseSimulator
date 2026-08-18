@@ -1,4 +1,6 @@
-#//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#////////
+#### Script Overview ####
+#////////
 #' Get the total people who will have 100% vaccine effectiveness against inf
 #' by combining the vaccine coverage and inpatient effectiveness for H1N1
 #' 
@@ -12,18 +14,19 @@
 #' https://www.cdc.gov/flu-vaccines-work/php/effectiveness-studies/2025-2026.html
 #'  
 #' Parent dirs: POPULATION, VACCINATION
-#////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+#////////
 options(scipen=999) #  disable scientific notation
 
-#/////////////////////////////////////////
+#////////
 #### Define key parameter assumptions ####
-pediatric_VE = 0.38 # 38 (13 to 55) from NVSN (inpatient) H3N2 specific 
-adult_VE = 0.30 # 30 (21 to 38) from VISION (inpatient) Influenza A
-day0 = as.Date("2025-10-01") # day epidemic starts in simulation
+#////////
+pediatric_VE = get0("PEDIATRIC_VACCINE_EFFECTIVENESS", ifnotfound = 0.38) # 38 (13 to 55) from NVSN (inpatient) H3N2 specific
+adult_VE = get0("ADULT_VACCINE_EFFECTIVENESS", ifnotfound = 0.30) # 30 (21 to 38) from VISION (inpatient) Influenza A
+day0 = as.Date(get0("SIM_DAY_0", ifnotfound = "2025-10-01")) # day epidemic starts in simulation
+acs_year_range = get0("ACS_YEAR_RANGE", ifnotfound = "2020-2024")
 
 # Need pop by age to determine total doses as fraction of vaccine coverage and effectiveness
-state_pop_by_age = read_csv("../data/POPULATION/all_US_county_pop_by_age_2020-2024ACS.csv") %>%
+state_pop_by_age = read_csv(paste0("../data/POPULATION/all_US_county_pop_by_age_", acs_year_range, "ACS.csv")) %>%
   mutate(
     AgeGroup = case_when(age_group %in% c("0-4", "5-17") ~ "Pediatric",
                          age_group %in% c("18-49", "50-64", "65+") ~ "Adult",
@@ -33,8 +36,9 @@ state_pop_by_age = read_csv("../data/POPULATION/all_US_county_pop_by_age_2020-20
   summarise(total_pop = sum(pop), .groups = "drop") %>%
   rename(State = STATE_NAME)
 
-#///////////////
+#////////
 #### Ped VC ####
+#////////
 ped_file = list.files(path = "../data/VACCINATION", pattern = "Children_6_Months-17_Years", full.names = T)
 ped_flu_vc = 
   read_csv(ped_file) %>%
@@ -51,11 +55,11 @@ ped_flu_vc =
     VE_Inpatient = pediatric_VE
     )
 
-#/////////////////
+#////////
 #### Adult VC ####
+#////////
 adult_file = list.files(path="../data/VACCINATION", pattern ="Among_Adults_18_Years_and_Older", full.names = T)
-week_end_col <- c("Week_Ending", "Current_Season_Week_Ending") # col name change from 2024-25 to 2025-26
-
+week_end_col <- c("Week_ending", "Current_Season_Week_Ending") # col name change from 2024-25 to 2025-26
 adult_flu_vc = 
   read_csv(adult_file) %>%
   dplyr::filter(Influenza_Season == "2025-2026") %>%
@@ -74,8 +78,9 @@ adult_flu_vc =
     VE_Inpatient = adult_VE
   )
 
-#/////////////////////////
+#////////
 #### Vax doses weekly ####
+#////////
 # Join Peds & Adults to get the total vaccines consumed per week
 all_age_df = adult_flu_vc %>%
   bind_rows(ped_flu_vc) %>%
@@ -97,8 +102,9 @@ write.csv(
   row.names = FALSE, quote = FALSE
 )
 
-#//////////////////////////////
+#////////
 #### Convert dates to days ####
+#////////
 # Make weeks into integer days in simulation to release vaccines from stockpile
 weekly_ts = all_age_df %>%
   group_by(State, WeekEnd) %>%
@@ -132,5 +138,3 @@ write.csv(
 
 
   
-
-

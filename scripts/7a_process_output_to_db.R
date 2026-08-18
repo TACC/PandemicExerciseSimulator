@@ -1,4 +1,6 @@
-#///////////////////////////////////////////////////////////////////////////////
+#////////
+#### Script Overview ####
+#////////
 # Post-job ETL: finds all metadata_batch-*.json files under SEARCH_ROOT and
 # ingests them into:
 #   1. metadata_master.csv  — flat metadata table, deduplication key
@@ -17,14 +19,22 @@
 #     columns of zeros cost almost nothing in file size.
 #   - For very large sweeps (250+ nodes × 250+ realizations) the node ingest
 #     reads all county files in one pass via arrow — no full in-memory load.
-#///////////////////////////////////////////////////////////////////////////////
-
+#////////
 library(jsonlite)
 library(tidyverse)
 library(arrow)
 
 #### Configuration #############################################################
-SEARCH_ROOT  <- normalizePath(file.path(here::here(), ".."))
+pipeline_search_root <- get0("pipeline_output_root", ifnotfound = NA_character_)
+if (is.na(pipeline_search_root) || !nzchar(pipeline_search_root)) {
+  pipeline_output_dir <- get0("PIPELINE_OUTPUT_DIR", ifnotfound = "STATE_WKLYFIT_TEST")
+  pipeline_search_root <- if (grepl("^/", pipeline_output_dir)) {
+    pipeline_output_dir
+  } else {
+    file.path(here::here(), "..", pipeline_output_dir)
+  }
+}
+SEARCH_ROOT  <- normalizePath(pipeline_search_root, mustWork = FALSE)
 MASTER_CSV   <- file.path(SEARCH_ROOT, "metadata_master.csv")
 PARQUET_ROOT <- file.path(SEARCH_ROOT, "sim_data")   # partitioned: <hash>/<batch>/
 
@@ -56,6 +66,16 @@ to_json_str <- function(x) {
 
 safe_get <- function(x, ...) {
   tryCatch(purrr::pluck(x, ...), error = function(e) NULL)
+}
+
+resolve_search_root_path <- function(path) {
+  if (is.null(path) || length(path) == 0 || is.na(path) || !nzchar(path)) {
+    return(NA_character_)
+  }
+  if (grepl("^/", path)) {
+    return(normalizePath(path, mustWork = FALSE))
+  }
+  normalizePath(file.path(SEARCH_ROOT, path), mustWork = FALSE)
 }
 
 get_batch_file_sizes <- function(scenario_hash, batch_num) {
@@ -145,6 +165,9 @@ parse_metadata <- function(path) {
     metadata_sim_day_0         = tags$sim_day_0 %||% NA_character_,
     metadata_notes             = vec_to_str(tags$notes),
     metadata_tags_json         = to_json_str(tags),
+    validation_used            = !is.null(tags$validation),
+    validation_json            = to_json_str(tags$validation),
+    validation_fit_data_file   = resolve_search_root_path(safe_get(tags, "validation", "fit_data_file")),
 
     realization_min            = safe_get(m, "realization_indices", "min")   %||% NA_integer_,
     realization_max            = safe_get(m, "realization_indices", "max")   %||% NA_integer_,
@@ -395,6 +418,9 @@ MASTER_COL_TYPES <- cols(
   metadata_sim_day_0         = col_character(),
   metadata_notes             = col_character(),
   metadata_tags_json         = col_character(),
+  validation_used            = col_logical(),
+  validation_json            = col_character(),
+  validation_fit_data_file   = col_character(),
 
   realization_min            = col_integer(),
   realization_max            = col_integer(),
@@ -457,18 +483,21 @@ MASTER_COL_TYPES <- cols(
 
 #### Load existing master ######################################################
 if (file.exists(MASTER_CSV)) {
-  master <- read_csv(MASTER_CSV, show_col_types = FALSE)
+  master <- read_csv(MASTER_CSV, col_types = MASTER_COL_TYPES, show_col_types = FALSE)
 
   optional_metadata_columns <- c(
     "metadata_creator",
     "metadata_disease",
     "metadata_sim_day_0",
     "metadata_notes",
-    "metadata_tags_json"
+    "metadata_tags_json",
+    "validation_json",
+    "validation_fit_data_file"
   )
   for (column in optional_metadata_columns) {
     if (!column %in% names(master)) master[[column]] <- NA_character_
   }
+  if (!"validation_used" %in% names(master)) master[["validation_used"]] <- FALSE
   master <- master %>%
     dplyr::select(-dplyr::any_of(c(
       "scenario_name",
@@ -487,6 +516,13 @@ if (file.exists(MASTER_CSV)) {
     dplyr::mutate(
       scenario_hash = as.character(scenario_hash),
       batch_num = as.character(batch_num),
+      metadata_creator = as.character(metadata_creator),
+      metadata_disease = as.character(metadata_disease),
+      metadata_sim_day_0 = as.character(metadata_sim_day_0),
+      metadata_notes = as.character(metadata_notes),
+      metadata_tags_json = as.character(metadata_tags_json),
+      validation_json = as.character(validation_json),
+      validation_fit_data_file = as.character(validation_fit_data_file),
       random_base_seed = as.character(random_base_seed),
       created_at_utc = as.POSIXct(created_at_utc, tz = "UTC")
     )

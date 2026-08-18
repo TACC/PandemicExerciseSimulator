@@ -1,4 +1,6 @@
-#///////////////////////////////////////////////////////////////////////
+#////////
+#### Script Overview ####
+#////////
 #' Create Advan within-state county mobility inputs
 #'
 #' Run from the PES scripts directory:
@@ -18,16 +20,14 @@
 #'   ../data/STATE/STATE_quarterly-YYYY_county-connection-ranking.csv
 #'   ../data/STATE/STATE_QN-YYYY_mobility-matrix.csv
 #'   ../figures/Advan/monthly-state-mobility-flows/
-#///////////////////////////////////////////////////////////////////////
-
+#////////
 library(tidyverse)
 library(jsonlite)
 library(lubridate)
 
-#///////////////////
+#////////
 #### USER SETUP ####
-#///////////////////
-
+#////////
 analysis_year = 2025
 args = commandArgs(trailingOnly = TRUE)
 year_arg = args[stringr::str_starts(args, "--year=")]
@@ -37,6 +37,20 @@ if (length(year_arg) > 0) {
 if (is.na(analysis_year)) {
   stop("analysis_year must be a four-digit year, for example 2025")
 }
+
+state_dirs_for_existing_check = tigris::fips_codes %>%
+  distinct(state_code, state_name) %>%
+  dplyr::filter(as.integer(state_code) < 60) %>%
+  transmute(STATE_DIR = stringr::str_replace_all(state_name, " ", "-")) %>%
+  pull(STATE_DIR)
+
+expected_advan_mobility_matrices = unlist(lapply(state_dirs_for_existing_check, function(state_dir) {
+  file.path("../data", state_dir, paste0(state_dir, "_Q", 1:4, "-", analysis_year, "_mobility-matrix.csv"))
+}), use.names = FALSE)
+
+if (all(file.exists(expected_advan_mobility_matrices))) {
+  message(analysis_year, " quarterly mobility matrices already exist for all states; skipping 3c mobility generation.")
+} else {
 
 mobility_dir = file.path("..", "..", paste0(analysis_year, "-us-dc-mobility-data-csv"))
 raw_home_panel_dir = "../../neighborhood-patterns-us-home-panel-summary"
@@ -74,10 +88,9 @@ ak_ct_crosswalk = read_csv(
 ) %>%
   transmute(OLD_FIPS, NEW_FIPS, afact = as.numeric(afact))
 
-#/////////////////////
+#////////
 #### SMALL HELPERS ####
-#/////////////////////
-
+#////////
 #' Parse an Advan JSON object cell
 #'
 #' @param x Character scalar containing a JSON object, blank string, or `NA`.
@@ -147,10 +160,9 @@ device_home_areas_file = function(path) {
   file.path(device_home_areas_dir, paste0("advan_device_home_areas_", date_prefix, "_", shard, ".csv"))
 }
 
-#///////////////////////////////////////
+#////////
 #### CLEAN DIRECT ADVAN MOBILITY CSVS ####
-#///////////////////////////////////////
-
+#////////
 mobility_files = list.files(
   mobility_dir,
   pattern = paste0("^", analysis_year, "-.*\\.csv$"),
@@ -194,10 +206,9 @@ for (path_i in mobility_files) {
   log_elapsed_time(start_time, "Device home areas cleaning block")
 }
 
-#//////////////////////////////////////
+#////////
 #### CLEAN DIRECT HOME-PANEL CSVS ####
-#//////////////////////////////////////
-
+#////////
 raw_home_panel_files = list.files(
   raw_home_panel_dir,
   pattern = "^neighborhood-patterns-us-home-panel-summary_.*\\.csv$",
@@ -235,10 +246,9 @@ if (!any(stringr::str_detect(basename(home_panel_files), paste0("^advan_home_pan
   log_elapsed_time(start_time, "Cleaned monthly home-panel block")
 }
 
-#////////////////////////////////////
+#////////
 #### MONTHLY COUNTY INTERMEDIATES ####
-#////////////////////////////////////
-
+#////////
 device_home_files = list.files(
   device_home_areas_dir,
   pattern = paste0("^advan_device_home_areas_", analysis_year, "-[0-9]{2}-[0-9]{2}_[^_]+\\.csv$"),
@@ -341,10 +351,9 @@ for (year_month_i in year_month_set) {
   }
 }
 
-#//////////////////////////////////////////////////
+#////////
 #### MONTHLY STATE WITHIN-STATE COUNTY MOBILITY ####
-#//////////////////////////////////////////////////
-
+#////////
 for (year_month_i in year_month_set) {
   expected_outputs = file.path(
     monthly_state_dir,
@@ -454,10 +463,9 @@ for (year_month_i in year_month_set) {
     })
 }
 
-#////////////////////////////////////
+#////////
 #### QUARTERLY MATRICES AND PLOTS ####
-#////////////////////////////////////
-
+#////////
 state_monthly_files = list.files(
   monthly_state_dir,
   pattern = paste0("_", analysis_year, "-[0-9]{2}_within-state_county-mobility\\.csv$"),
@@ -470,6 +478,16 @@ if (length(state_monthly_files) == 0) {
 for (state_dir_i in state_lookup$STATE_DIR) {
   files_i = state_monthly_files[startsWith(basename(state_monthly_files), paste0(state_dir_i, "_"))]
   if (length(files_i) == 0) next
+
+  state_out_dir = file.path("../data", state_dir_i)
+  expected_quarterly_outputs = c(
+    file.path(state_out_dir, paste0(state_dir_i, "_quarterly-", analysis_year, "_county-connection-ranking.csv")),
+    file.path(state_out_dir, paste0(state_dir_i, "_Q", c("1", "2", "3", "4"), "-", analysis_year, "_mobility-matrix.csv"))
+  )
+  if (all(file.exists(expected_quarterly_outputs))) {
+    message("Skipping existing quarterly outputs for ", state_dir_i)
+    next
+  }
 
   message("Creating quarterly outputs and monthly plot for ", state_dir_i)
   start_time = Sys.time()
@@ -553,7 +571,6 @@ for (state_dir_i in state_lookup$STATE_DIR) {
     )) %>%
     arrange(STATE_DIR, COUNTY_ORG, COUNTY_DEST, QUARTER)
 
-  state_out_dir = file.path("../data", state_dir_i)
   dir.create(state_out_dir, showWarnings = FALSE, recursive = TRUE)
 
   quarterly %>%
@@ -588,3 +605,5 @@ for (state_dir_i in state_lookup$STATE_DIR) {
 
   log_elapsed_time(start_time, paste("Quarterly output block for", state_dir_i))
 }
+
+} # end top-level existing-output guard

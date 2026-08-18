@@ -1,4 +1,6 @@
-#///////////////////////////////////////////////////////////////////////
+#////////
+#### Script Overview ####
+#////////
 #' Compare quarterly county mobility matrices
 #'
 #' Run from the PES scripts directory or source in RStudio:
@@ -8,8 +10,7 @@
 #'
 #' @examples
 #' source("3d_compare_quarterly_mobility_heatmaps.R")
-#///////////////////////////////////////////////////////////////////////
-
+#////////
 library(tidyverse)
 library(lubridate)
 library(jsonlite)
