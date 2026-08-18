@@ -29,6 +29,7 @@ library(lubridate)
 #### USER SETUP ####
 #////////
 analysis_year = 2025
+acs_year_range = get0("ACS_YEAR_RANGE", ifnotfound = "2020-2024")
 args = commandArgs(trailingOnly = TRUE)
 year_arg = args[stringr::str_starts(args, "--year=")]
 if (length(year_arg) > 0) {
@@ -131,7 +132,7 @@ log_elapsed_time = function(start_time, label) {
 #' read_adult_pop("Texas")
 read_adult_pop = function(state_dir) {
   read_csv(
-    file.path("../data", state_dir, paste0("county_pop_by_age_", state_dir, "_2019-2023ACS.csv")),
+    file.path("../data", state_dir, paste0("county_pop_by_age_", state_dir, "_", acs_year_range, "ACS.csv")),
     col_types = cols(.default = col_character()),
     progress = FALSE
   ) %>%
