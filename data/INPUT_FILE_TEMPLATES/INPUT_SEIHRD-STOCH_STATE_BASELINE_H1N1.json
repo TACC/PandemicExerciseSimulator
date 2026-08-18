@@ -4,14 +4,14 @@
   "batch_num": "GENERATE",
   "metadata_tags": {
     "creator": "YOUR_NAME",
-    "disease": ["DISEASE"],
-    "sim_day_0": "2024-10-01",
+    "disease": ["influenza", "flu", "H1N1"],
+    "sim_day_0": null,
     "notes": ["PLACEHOLDER"]
   },
   "data": {
-    "population": "../data/STATE/county_pop_by_age_STATE_2019-2023ACS.csv",
+    "population": "../data/STATE/county_pop_by_age_STATE_2020-2024ACS.csv",
     "contact": "../data/STATE/contact_matrix_STATE_Mistry2021_all.csv",
-    "flow": "../data/STATE/STATE_Q4-2019_mobility-matrix.csv",
+    "flow": "../data/STATE/STATE_Q4-2025_mobility-matrix.csv",
     "high_risk_ratios": "../data/STATE/state_STATE_high-risk-ratios-flu-only.csv"
   },
   "disease_model": {
@@ -89,33 +89,5 @@
   ],
   "non_pharma_interventions": [],
   "antiviral_model": {},
-  "vaccine_model": {
-    "identity": "stockpile-age-risk",
-    "parameters": {
-      "age_risk_priority_groups": ["1","1","1","1","1"],
-      "vaccine_half_life_days": null,
-      "vaccine_capacity_proportion": "1.0",
-      "vaccine_adherence": [
-      "1",
-      "1",
-      "1",
-      "1",
-      "1"
-      ],
-      "vaccine_effectiveness": [
-        "1",
-        "1",
-        "1",
-        "1",
-        "1"
-      ],
-      "vaccine_eff_lag_days": 14,
-      "vaccine_stockpile": [
-        {
-          "day": "0",
-          "amount": "100"
-        }
-      ]
-    }
-  }
+  "vaccine_model": {}
 }

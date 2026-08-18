@@ -9,7 +9,7 @@
     "notes": ["PLACEHOLDER"]
   },
   "data": {
-    "population": "../data/STATE/county_pop_by_age_STATE_2019-2023ACS.csv",
+    "population": "../data/STATE/county_pop_by_age_STATE_2020-2024ACS.csv",
     "contact": "../data/STATE/contact_matrix_STATE_Mistry2021_all.csv",
     "flow": "../data/STATE/STATE_Q4-2019_mobility-matrix.csv",
     "high_risk_ratios": "../data/STATE/state_STATE_high-risk-ratios-flu-only.csv"
@@ -75,15 +75,16 @@
   "antiviral_model": {
     "identity": "stockpile-age-risk",
     "parameters": {
-      "age_risk_priority_groups": [
+      "age_risk_priority_groups": ["0.5", "0.5", "0.5", "0.5", "0.5"],
+      "compartment_priority": ["I"],
+      "antiviral_effectiveness_death": "0.25",
+      "antiviral_adherence": [
         "1.0",
         "1.0",
         "1.0",
         "1.0",
         "1.0"
       ],
-      "compartment_priority": ["I"],
-      "antiviral_effectiveness_death": "0.25",
       "antiviral_capacity_proportion": "1.0",
       "antiviral_half_life_days": null,
       "antiviral_stockpile": [
