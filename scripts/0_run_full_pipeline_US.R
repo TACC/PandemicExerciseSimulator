@@ -70,7 +70,7 @@ pacman::p_load(
 #### Section 0 Pipeline Settings ####
 #////////
 #' Optional command-line equivalent, for example:
-#' Rscript 0_run_full_pipeline_US.R --acs-year-range=2020-2024 --sim-day-0=2025-09-27,2025-10-04 --simulation-days=200 --output-dir=STATE_INIT_TEST --npi-effectiveness=0.5,0.5,0.5,0.5,0.5 --antiviral-effectiveness-hosp=0.25 --pediatric-vaccine-effectiveness=0.38 --adult-vaccine-effectiveness=0.30
+#' Rscript 0_run_full_pipeline_US.R --acs-year-range=2020-2024 --sim-day-0=2025-09-27,2025-10-04 --simulation-days=200 --output-dir=Example_TEST --npi-effectiveness=0.5,0.5,0.5,0.5,0.5 --antiviral-effectiveness-hosp=0.25 --pediatric-vaccine-effectiveness=0.38 --adult-vaccine-effectiveness=0.30
 trailing_args <- commandArgs(trailingOnly = TRUE)
 get_arg_value <- function(prefix, default) {
   match <- trailing_args[startsWith(trailing_args, prefix)]
