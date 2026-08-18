@@ -6,12 +6,38 @@ We also include example templates in 'INPUT_TEMPLATES' for each model that can b
 ## Generating Parent Datasets
 
 ### Population - `1_county_age_pop_totals.R`
-County-level population by age group was taken from the 2019-2023 American Community Survey (ACS) with `tidycensus` in R, which has the 2023+ spatial geometries needed for both Alaska and Connecticut. The data pull requires a census API key you can request from [here](https://api.census.gov/data/key_signup.html). 
+County-level population by age group is taken from the configured 5-year American Community Survey (ACS) range, currently `2020-2024` by default, with `tidycensus` in R. The ACS year range provides the 2023+ spatial geometries needed for both Alaska and Connecticut. The data pull requires a census API key you can request from [here](https://api.census.gov/data/key_signup.html).
 
 ### Between Node Mobility Networks - `3a_ct_ak_crosswalks.R` and `3b_county_mobility_timeseries_post2020census.R` 
 1. [Alaska](https://www.census.gov/programs-surveys/geography/technical-documentation/county-changes.2010.html#list-tab-957819518) split one county into 2 in 2019, but this change was not commonly used until after the pandemic and 2020 census. We created this crosswalk manually by determining the proportion of the 2019-2023 ACS population in each new county (69% and 31% split).
 2. [Connecticut](https://www.census.gov/programs-surveys/geography/technical-documentation/county-changes.January_2020.html) changed their county names and boundaries in 2023 to Planning Regions. [GeoCorr 2022](https://mcdc.missouri.edu/applications/geocorr2022.html) provides crosswalks across US boundaries including a Connecticut pre-2023 boundary under "Other geographies". CT crosswalk in `MOBILITY/connecticut_county_crosswalk_geocorr2022.csv` and combined with AK in `MOBILITY/ak_ct_crosswalk.csv`
 3. With the county crosswalk created, we translated each day of the [2019 SafeGraph](https://github.com/GeoDS/COVID19USFlows-DailyFlows/) county mobility visits to 2023 census boundaries and reduced the data to only within-state pairs. The AK and CT conversion created some rounding errors in population increasing the total daily flow by 40-50 people per county. The estimated  population traveling each day far exceed the 2019-2023 census estimates of the population within each county already, because cell-phone data captures flow of non-residents as well. We used the fraction of the total outflow per county to derive the proportions of the population traveling. We grouped daily travel by quarter of the year and provide all four, but Q4 is likely the most appropriate for modeling the influenza season in the US. Future code iterations may allow daily mobility matrices, but currently an average one is used for the entire time series. We also provide `STATE/STATE_quarterly-2019_county-connection-ranking.csv` with the total people flowing out of a county each day to help target which counties may have the largest impact on the community when infections are seeded there. Created datasets can be found in `MOBILITY/` and their respective `STATE` directories once the `../scripts` pipeline is run.
+
+### Advan Research Neighborhood Patterns Plus - `3c_advan_county_mobility.R`
+Advan Research's Foot Traffic / Neighborhood Patterns Plus dataset contains
+footfall data aggregated by census block group (CBG) in the U.S. 
+It is collected from mobile device pings
+using opt-in applications and is distributed through Dewey Data. The `3c` script
+uses Dewey's CSV exports: raw daily mobility shards from
+`../../YYYY-us-dc-mobility-data-csv/` and monthly home-panel summary CSVs from
+`../../neighborhood-patterns-us-home-panel-summary/`. It selects the needed
+columns, expands `DEVICE_HOME_AREAS`, collapses U.S. CBGs to county FIPS,
+applies the AK/CT county crosswalk, and keeps within-state county-to-county
+flows. Cleaned direct CSVs and monthly county intermediates are cached under
+`MOBILITY/Advan/`. We recommend only cleaning data for yourself on TACC.
+
+The script writes labeled monthly origin-destination (OD) tables to
+`MOBILITY/Advan/within-state_county-mobility/` as
+`STATE_YYYY-MM_within-state_county-mobility.csv`, then aggregates them into
+quarterly outputs in each `STATE/` directory:
+`STATE_quarterly-YYYY_county-connection-ranking.csv` and
+`STATE_Q*-YYYY_mobility-matrix.csv`. Matrix rows are normalized within origin
+county from adult-population-expanded device counts using the configured ACS
+population files, so each row represents the destination distribution for that
+origin county.
+
+Citation: Advan Research. (2025). Foot Traffic / Neighborhood Patterns Plus
+[Dataset]. Dewey Data. https://doi.org/10.82551/HYH5-PC45
 
 ### High Risk Ratios - `4a_flu_state_high_risk_by_age.R` and `4b_flu_county_high_risk_by_age.R`
 1. [Behavioral Risk Factor Surveillance System (BRFSS)](https://www.cdc.gov/brfss/annual_data/annual_data.htm) is a continual survey released annually of Americans 18+ to estimate the proportion of the population experiencing comorbidities and taking part in risky behaviors such as smoking. We use the [CDC's list of comorbidities](https://www.cdc.gov/flu/highrisk/index.htm) that increase the risk of hospitalization and death for adults to pull out the proportion of the population with at least one comorbidity and do not scale risk by multiple comorbidities. Anyone 65+ is technically high risk due to age, but we leave this to the user and estimate comorbid risk for this age group the same as 18-49 and 50-64.  Data files needed are `BRFSS/LLCP202*.XPT`, 2023 and 2024 are needed because Tennessee did not collect enough data in 2024.
