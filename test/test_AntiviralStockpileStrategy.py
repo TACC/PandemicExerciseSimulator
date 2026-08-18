@@ -334,3 +334,76 @@ def test_antiviral_can_treat_seihrd_priority_compartments():
     assert result[Compartments.IP.value] == 0.0
     assert result[Compartments.IS.value] == 0.0
     assert result[Compartments.T.value] == 14.0
+
+
+def test_antiviral_adherence_limits_treatment_to_incident_entries():
+    net = Network(["S", "E", "IA", "IP", "IS", "H", "T", "R", "D"])
+    node = Node(0, 0, 0, PopulationCompartments([100], [0.0]))
+    net._add_node(node)
+    group = GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.U.value)
+    node.compartments.set_compartment_vector_for(
+        group,
+        np.array([80.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 0.0]),
+    )
+    node.record_compartment_entry(group, "IS", 4.0)
+
+    params = make_params([{"day": "0", "amount": "10"}])
+    params.antiviral_parameters["compartment_priority"] = ["IS"]
+    params.antiviral_parameters["antiviral_adherence"] = ["0.5"]
+    strat = Antiviral(params).get_child("stockpile-age-risk", network=net)
+
+    strat.distribute_antivirals_to_nodes(net, day=0)
+    strat.distribute_antivirals_to_population(node, day=0)
+
+    result = node.compartments.get_compartment_vector_for(group)
+    assert strat.uses_incident_compartment_entries is True
+    assert result[Compartments.IS.value] == 8.0
+    assert result[Compartments.T.value] == 2.0
+    assert strat.node_stockpile_by_day[node.node_id][1] == 8.0
+
+
+def test_antiviral_adherence_with_high_risk_priority_does_not_treat_low_risk_incident_entries():
+    net = Network(["S", "E", "IA", "IP", "IS", "H", "T", "R", "D"])
+    node = Node(0, 0, 0, PopulationCompartments([100], [0.0]))
+    net._add_node(node)
+    low = GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.U.value)
+    high = GroupModule.Group(0, RiskGroup.H.value, VaccineGroup.U.value)
+    node.compartments.set_compartment_vector_for(
+        low,
+        np.array([70.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 20.0, 0.0]),
+    )
+    node.compartments.set_compartment_vector_for(
+        high,
+        np.array([70.0, 0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 20.0, 0.0]),
+    )
+    node.record_compartment_entry(low, "IS", 10.0)
+    node.record_compartment_entry(high, "IS", 10.0)
+
+    params = make_params([{"day": "0", "amount": "20"}])
+    params.antiviral_parameters["age_risk_priority_groups"] = ["0.5"]
+    params.antiviral_parameters["compartment_priority"] = ["IS"]
+    params.antiviral_parameters["antiviral_adherence"] = ["1.0"]
+    strat = Antiviral(params).get_child("stockpile-age-risk", network=net)
+
+    strat.distribute_antivirals_to_nodes(net, day=0)
+    strat.distribute_antivirals_to_population(node, day=0)
+
+    assert node.compartments.get_compartment_vector_for(low)[Compartments.IS.value] == 10.0
+    assert node.compartments.get_compartment_vector_for(low)[Compartments.T.value] == 0.0
+    assert node.compartments.get_compartment_vector_for(high)[Compartments.IS.value] == 0.0
+    assert node.compartments.get_compartment_vector_for(high)[Compartments.T.value] == 10.0
+    assert strat.node_stockpile_by_day[node.node_id][1] == 10.0
+
+
+def test_antiviral_adherence_accepts_scalar_and_rejects_invalid_values():
+    net = make_network_with_t()
+    params = make_params([])
+    params.antiviral_parameters["antiviral_adherence"] = "0.54"
+
+    strategy = Antiviral(params).get_child("stockpile-age-risk", network=net)
+
+    assert strategy.antiviral_adherence == [0.54]
+
+    params.antiviral_parameters["antiviral_adherence"] = ["1.2"]
+    with pytest.raises(ValueError, match="antiviral_adherence values"):
+        Antiviral(params).get_child("stockpile-age-risk", network=net)

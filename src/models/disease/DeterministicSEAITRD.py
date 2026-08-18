@@ -19,6 +19,7 @@ def SEAITRD_model(
     T_to_R_rate,
     I_to_D_rate,
     T_to_D_rate,
+    return_flows=False,
 ):
     """
     SEAITRD compartmental model ODE function.
@@ -68,7 +69,18 @@ def SEAITRD_model(
     dR_dt = i_to_r + t_to_r
     dD_dt = i_to_d + t_to_d
 
-    return np.array([dS_dt, dE_dt, dA_dt, dI_dt, dT_dt, dR_dt, dD_dt])
+    daily_change = np.array([dS_dt, dE_dt, dA_dt, dI_dt, dT_dt, dR_dt, dD_dt])
+    if not return_flows:
+        return daily_change
+
+    flows = {
+        "E": max_new_infections,
+        "A": e_to_a,
+        "I": a_to_i,
+        "R": i_to_r + t_to_r,
+        "D": i_to_d + t_to_d,
+    }
+    return daily_change, flows
 
 class DeterministicSEAITRD(DiseaseModel):
 
@@ -168,6 +180,7 @@ class DeterministicSEAITRD(DiseaseModel):
 
         # Need to update the node sense of time to get NPIs to take effect
         self.now = time
+        node.clear_incident_compartment_entries()
 
         # Snapshot: all compartments at start of the day so we don't call the updated subgroups
         compartments_today = {
@@ -237,9 +250,15 @@ class DeterministicSEAITRD(DiseaseModel):
             )
 
             # Euler's Method solve of the system, can't do integer people
-            daily_change = SEAITRD_model(focal_group_compartments_today, *model_parameters)
+            daily_change, flows = SEAITRD_model(
+                focal_group_compartments_today,
+                *model_parameters,
+                return_flows=True,
+            )
             compartments_tomorrow = focal_group_compartments_today + daily_change
             compartments_tomorrow = np.maximum(compartments_tomorrow, 0.0)
             node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
+            for label, amount in flows.items():
+                node.record_compartment_entry(focal_group, label, amount)
 
         return

@@ -59,13 +59,19 @@ def run( simulation_days:Type[Day],
     """
 
     logger.info('entered the run function')
+    antivirals_use_incident_entries = getattr(
+        antiviral_model,
+        "uses_incident_compartment_entries",
+        False,
+    )
 
     # Distribute any day 0 or less vaccines to nodes and within populations
     vaccine_model.distribute_vaccines_to_nodes(network, day=0)
     antiviral_model.distribute_antivirals_to_nodes(network, day=0)
     for node in network.nodes:
         vaccine_model.distribute_vaccines_to_population(node, day=0)
-        antiviral_model.distribute_antivirals_to_population(node, day=0)
+        if not antivirals_use_incident_entries:
+            antiviral_model.distribute_antivirals_to_population(node, day=0)
 
     # Write initial conditions
     writer.write_csv(0, network) if writer.total_sims > 1 else writer.write_json(0, network)
@@ -75,7 +81,8 @@ def run( simulation_days:Type[Day],
     for day in range(1, simulation_days.day+1):
         # Distribute vaccines from network stockpile to individual nodes and zero-out
         vaccine_model.distribute_vaccines_to_nodes(network, day)
-        antiviral_model.distribute_antivirals_to_nodes(network, day)
+        if not antivirals_use_incident_entries:
+            antiviral_model.distribute_antivirals_to_nodes(network, day)
 
         # Run distributions, treatments, stockpiles, and disease simulation for each node
         for node in network.nodes:
@@ -83,10 +90,16 @@ def run( simulation_days:Type[Day],
             vaccine_model.distribute_vaccines_to_population(node, day)
 
             # apply antivirals
-            antiviral_model.distribute_antivirals_to_population(node, day)
+            if not antivirals_use_incident_entries:
+                antiviral_model.distribute_antivirals_to_population(node, day)
 
             # simulate one step
             disease_model.simulate(node, day, vaccine_model)
+
+        if antivirals_use_incident_entries:
+            antiviral_model.distribute_antivirals_to_nodes(network, day)
+            for node in network.nodes:
+                antiviral_model.distribute_antivirals_to_population(node, day)
 
         # Run travel model
         travel_model.travel(network, disease_model, parameters, day, vaccine_model)

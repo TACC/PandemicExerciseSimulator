@@ -188,6 +188,7 @@ class StochasticSEAITRD(DiseaseModel):
         logger.debug(f'node={node}, time={time}')
 
         self.now = time
+        node.clear_incident_compartment_entries()
         t_max = self.now + 1
         self._reconcile_antiviral_transitions(node)
         #group_cache = np.zeros((self.parameters.number_of_age_groups, len(RiskGroup), len(VaccineGroup)))
@@ -267,6 +268,7 @@ class StochasticSEAITRD(DiseaseModel):
 
         node.compartments.decrement(group, old_compartment)
         node.compartments.increment(group, new_compartment)
+        node.record_compartment_entry(group, new_compartment, 1.0)
         return
 
 

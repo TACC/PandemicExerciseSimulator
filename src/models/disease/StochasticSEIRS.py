@@ -18,6 +18,7 @@ def SEITRS_model(
     T_to_R_rate,
     omega,
     rng,
+    return_flows=False,
 ):
     """
     SEITRS compartmental model ODE function.
@@ -57,9 +58,19 @@ def SEITRS_model(
     dT_dt = -t_to_r
     dR_dt = i_to_r + t_to_r - r_to_s
 
-    return np.array([dS_dt, dE_dt, dI_dt, dT_dt, dR_dt])
+    daily_change = np.array([dS_dt, dE_dt, dI_dt, dT_dt, dR_dt])
+    if not return_flows:
+        return daily_change
 
-def SEIRS_model(y, transmission_rate, sigma, gamma, omega, rng):
+    flows = {
+        "S": r_to_s,
+        "E": max_new_infections,
+        "I": e_to_i,
+        "R": i_to_r + t_to_r,
+    }
+    return daily_change, flows
+
+def SEIRS_model(y, transmission_rate, sigma, gamma, omega, rng, return_flows=False):
     """
     SEIRS compartmental model ODE function.
     Parameters:
@@ -94,7 +105,17 @@ def SEIRS_model(y, transmission_rate, sigma, gamma, omega, rng):
     dI_dt = e_to_i - i_to_r
     dR_dt = i_to_r - r_to_s
 
-    return np.array([dS_dt, dE_dt, dI_dt, dR_dt])
+    daily_change = np.array([dS_dt, dE_dt, dI_dt, dR_dt])
+    if not return_flows:
+        return daily_change
+
+    flows = {
+        "S": r_to_s,
+        "E": max_new_infections,
+        "I": e_to_i,
+        "R": i_to_r,
+    }
+    return daily_change, flows
 
 class StochasticSEIRS(DiseaseModel):
 
@@ -189,6 +210,7 @@ class StochasticSEIRS(DiseaseModel):
 
         # Need to update the node sense of time to get NPIs to take effect
         self.now = time
+        node.clear_incident_compartment_entries()
 
         # Snapshot: all compartments at start of the day so we don't call the updated subgroups
         compartments_today = {
@@ -255,7 +277,12 @@ class StochasticSEIRS(DiseaseModel):
                     self.T_to_R_rate,      # T => R
                     self.omega             # R => S
                 )
-                daily_change = SEITRS_model(focal_group_compartments_today, *model_parameters, rng=self.rng)
+                daily_change, flows = SEITRS_model(
+                    focal_group_compartments_today,
+                    *model_parameters,
+                    rng=self.rng,
+                    return_flows=True,
+                )
             else:
                 model_parameters = (
                     transmission_rate,     # S => E
@@ -263,9 +290,16 @@ class StochasticSEIRS(DiseaseModel):
                     self.gamma,            # I => R
                     self.omega             # R => S
                 )
-                daily_change = SEIRS_model(focal_group_compartments_today, *model_parameters, rng=self.rng)
+                daily_change, flows = SEIRS_model(
+                    focal_group_compartments_today,
+                    *model_parameters,
+                    rng=self.rng,
+                    return_flows=True,
+                )
 
             compartments_tomorrow = focal_group_compartments_today + daily_change
             node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
+            for label, amount in flows.items():
+                node.record_compartment_entry(focal_group, label, amount)
 
         return

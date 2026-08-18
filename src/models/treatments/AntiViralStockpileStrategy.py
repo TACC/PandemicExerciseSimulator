@@ -45,6 +45,23 @@ class AntiviralStockpileStrategy(Antiviral):
         self.antiviral_capacity = float(
             self.parameters.antiviral_parameters.get("antiviral_capacity_proportion", 1.0)
         )
+        raw_adherence = self.parameters.antiviral_parameters.get("antiviral_adherence", None)
+        if raw_adherence is None:
+            self.antiviral_adherence = None
+            self.uses_incident_compartment_entries = False
+        else:
+            self.antiviral_adherence = [
+                float(x) for x in (
+                    raw_adherence
+                    if isinstance(raw_adherence, list)
+                    else [raw_adherence] * num_age_grps
+                )
+            ]
+            if len(self.antiviral_adherence) != num_age_grps:
+                raise ValueError(f"antiviral_adherence must have length {num_age_grps}")
+            if any(adherence < 0.0 or adherence > 1.0 for adherence in self.antiviral_adherence):
+                raise ValueError("antiviral_adherence values must be between 0 and 1")
+            self.uses_incident_compartment_entries = True
 
         input_half_life = self.parameters.antiviral_parameters.get(
             "antiviral_half_life_days", None
@@ -206,6 +223,8 @@ class AntiviralStockpileStrategy(Antiviral):
                 for vaccine in (VaccineGroup.U.value, VaccineGroup.V.value):
                     group = Group(age, risk, vaccine)
                     eligible = self._eligible_in_group(node, group)
+                    if self.antiviral_adherence is not None:
+                        eligible *= self.antiviral_adherence[age]
                     if eligible > 0:
                         eligible_groups.append({
                             "group": group,
@@ -218,6 +237,9 @@ class AntiviralStockpileStrategy(Antiviral):
         return float(sum(group["eligible"] for group in self._eligible_by_group(node)))
 
     def _eligible_in_group(self, node: Type[Node], group: Type[Group]) -> float:
+        if self.uses_incident_compartment_entries:
+            return node.incident_compartment_entry_count(group, self.compartment_priority)
+
         vector = node.compartments.get_compartment_vector_for(group)
         return float(sum(vector[getattr(Compartments, label).value] for label in self.compartment_priority))
 

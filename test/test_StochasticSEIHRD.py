@@ -174,13 +174,15 @@ def test_stochastic_seihrd_uses_treated_variant_when_t_compartment_exists(monkey
     )
     calls = {"base": 0, "treated": 0}
 
-    def fake_base(y, *args, rng):
+    def fake_base(y, *args, rng, return_flows=False):
         calls["base"] += 1
-        return np.zeros_like(y)
+        result = np.zeros_like(y)
+        return (result, {}) if return_flows else result
 
-    def fake_treated(y, *args, rng):
+    def fake_treated(y, *args, rng, return_flows=False):
         calls["treated"] += 1
-        return np.zeros_like(y)
+        result = np.zeros_like(y)
+        return (result, {}) if return_flows else result
 
     monkeypatch.setattr(StochasticSEIHRDModule, "SEIHRD_model", fake_base)
     monkeypatch.setattr(StochasticSEIHRDModule, "SEITHRD_model", fake_treated)
@@ -196,13 +198,15 @@ def test_stochastic_seihrd_uses_base_variant_without_t_compartment(monkeypatch):
     model, node = make_model(["S", "E", "IA", "IP", "IS", "H", "R", "D"])
     calls = {"base": 0, "treated": 0}
 
-    def fake_base(y, *args, rng):
+    def fake_base(y, *args, rng, return_flows=False):
         calls["base"] += 1
-        return np.zeros_like(y)
+        result = np.zeros_like(y)
+        return (result, {}) if return_flows else result
 
-    def fake_treated(y, *args, rng):
+    def fake_treated(y, *args, rng, return_flows=False):
         calls["treated"] += 1
-        return np.zeros_like(y)
+        result = np.zeros_like(y)
+        return (result, {}) if return_flows else result
 
     monkeypatch.setattr(StochasticSEIHRDModule, "SEIHRD_model", fake_base)
     monkeypatch.setattr(StochasticSEIHRDModule, "SEITHRD_model", fake_treated)
@@ -237,3 +241,16 @@ def test_seihrd_rejects_invalid_antiviral_effectiveness_hosp():
 
     with pytest.raises(ValueError, match="antiviral_effectiveness_hosp"):
         parent.get_child("seihrd-stochastic")
+
+
+def test_seihrd_records_incident_compartment_entries():
+    model, node = make_model(["S", "E", "IA", "IP", "IS", "H", "T", "R", "D"])
+    group = GroupModule.Group(0, RiskGroup.L.value, VaccineGroup.U.value)
+    node.compartments.set_compartment_vector_for(
+        group,
+        np.array([90.0, 0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    )
+
+    model.simulate(node, time=1, vaccine_model=DummyVax())
+
+    assert node.incident_compartment_entry_count(group, ["IS"]) == 10.0

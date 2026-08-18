@@ -24,6 +24,7 @@ class Node:
         self.events = []    # list of event objects
         self.requires_antiviral_event_reconciliation = False
         self.pending_antiviral_transitions = []
+        self.incident_compartment_entries = {}
         
         # the contact counter struct is a 3-dimensional array of ints
         # the fields are [number of age groups][risk group size][vaccinated group size]
@@ -45,6 +46,32 @@ class Node:
                                               ))
         logger.debug(f'instantiated Node object with ID: {self.node_id} and FIPS: {self.fips_id}')
         return
+
+    def clear_incident_compartment_entries(self):
+        self.incident_compartment_entries = {}
+
+    def record_compartment_entry(self, group: Type[Group], compartment, amount: float):
+        if amount <= 0:
+            return
+
+        if isinstance(compartment, str):
+            label = compartment.strip().upper()
+        else:
+            label = list(Compartments)[int(compartment)].name
+
+        key = (group.age, group.risk, group.vaccine, label)
+        self.incident_compartment_entries[key] = (
+            self.incident_compartment_entries.get(key, 0.0) + float(amount)
+        )
+
+    def incident_compartment_entry_count(self, group: Type[Group], compartment_labels: list[str]) -> float:
+        return float(sum(
+            self.incident_compartment_entries.get(
+                (group.age, group.risk, group.vaccine, str(label).strip().upper()),
+                0.0,
+            )
+            for label in compartment_labels
+        ))
 
     def __str__(self) -> str:
         data={}
