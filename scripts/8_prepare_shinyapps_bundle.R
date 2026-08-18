@@ -24,6 +24,13 @@ preview_states <- get0(
     ifnotfound = c("District-of-Columbia", "Connecticut", "Massachusetts")
   )
 )
+preview_scenarios <- get0(
+  "DASHBOARD_PREVIEW_SCENARIOS",
+  ifnotfound = get0(
+    "SELECTED_RUN_SCENARIOS",
+    ifnotfound = c("BASELINE", "VACCINE", "ANTIVIRAL", "NPI", "ALL_INTERVENTIONS")
+  )
+)
 preview_output_subdir <- get0("DASHBOARD_PREVIEW_OUTPUT_SUBDIR", ifnotfound = "WEB_OUTPUTS")
 
 source_app <- file.path(repo_root, "scripts", "7b_sim_dashboard_app.R")
@@ -64,14 +71,21 @@ if (nrow(metadata_preview) == 0) {
   )
 }
 
-expected_scenarios <- tibble::tribble(
-  ~vaccine_used, ~antiviral_used, ~npi_used,
-  FALSE,         FALSE,           FALSE,
-  TRUE,          FALSE,           FALSE,
-  FALSE,         TRUE,            FALSE,
-  FALSE,         FALSE,           TRUE,
-  TRUE,          TRUE,            TRUE
+scenario_lookup <- tibble::tribble(
+  ~scenario_label,       ~vaccine_used, ~antiviral_used, ~npi_used,
+  "BASELINE",            FALSE,         FALSE,           FALSE,
+  "VACCINE",             TRUE,          FALSE,           FALSE,
+  "ANTIVIRAL",           FALSE,         TRUE,            FALSE,
+  "NPI",                 FALSE,         FALSE,           TRUE,
+  "ALL_INTERVENTIONS",   TRUE,          TRUE,            TRUE
 )
+unknown_preview_scenarios <- setdiff(preview_scenarios, scenario_lookup$scenario_label)
+if (length(unknown_preview_scenarios) > 0) {
+  stop("Unknown dashboard preview scenario label(s): ", paste(unknown_preview_scenarios, collapse = ", "))
+}
+expected_scenarios <- scenario_lookup %>%
+  dplyr::filter(.data$scenario_label %in% preview_scenarios) %>%
+  dplyr::select(-.data$scenario_label)
 
 metadata_preview <- metadata_preview %>%
   dplyr::mutate(created_at_utc = as.POSIXct(.data$created_at_utc, tz = "UTC")) %>%
@@ -154,6 +168,8 @@ file.copy(
 message(
   "Refreshed shinyapps.io bundle for ",
   paste(preview_states, collapse = ", "),
+  " and scenarios ",
+  paste(preview_scenarios, collapse = ", "),
   ": ",
   bundle_dir
 )
