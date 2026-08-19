@@ -545,7 +545,12 @@ for (state_dir in state_lookup$state_dir) {
     source = "Flu Scenario Modeling Hub time-series",
     source_file = hospitalization_file,
     lowrisk_hosp_rate_file = lowrisk_hosp_rate_source,
-    target = "inc hosp",
+    target = list(
+      compartment = "H",
+      measure = "incident",
+      label = "Incident hospitalizations",
+      observed_column = "incident_hospitalizations"
+    ),
     sim_start_date = as.character(SIM_START_DATE),
     fit_start_date = as.character(first_complete_mmwr_week_end(SIM_START_DATE)),
     observed_date_type = "week ending date",
