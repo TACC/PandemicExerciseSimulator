@@ -7,7 +7,7 @@
     "disease": ["influenza", "flu", "H3N2"],
     "sim_day_0": "2025-10-01",
     "notes": [
-      "H3N2-dominant 2025-26 seasonal influenza baseline",
+      "H3N2-dominant 2025-26 seasonal influenza no-intervention scenario",
       "Outcome probabilities should be validated against CDC preliminary 2025-26 burden estimates when finalized",
       "IS omitted from travel model: unmedicated symptomatic infectious people are assumed not to participate in cross-county contacts"
     ]
