@@ -1,5 +1,5 @@
 {
- "output_dir_path": "SEIRS-DET-Alabama_BASELINE",
+ "output_dir_path": "SEIRS-DET-Alabama_NONE",
   "realization_range": ["0", "99"],
   "batch_num": "0",
   "data": {

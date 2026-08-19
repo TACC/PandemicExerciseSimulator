@@ -1,5 +1,5 @@
 {
-  "output_dir_path": "SEAITRD-STOCH-Alabama_BASELINE",
+  "output_dir_path": "SEAITRD-DET-Alabama_NONE",
   "realization_range": ["0", "99"],
   "batch_num": "0",
   "data": {
@@ -9,7 +9,7 @@
     "high_risk_ratios": "../data/Alabama/state_Alabama_high-risk-ratios-flu-only.csv"
   },
   "disease_model": {
-    "identity": "seaitrd-stochastic",
+    "identity": "seaitrd-deterministic",
     "parameters": {
       "compartments": ["S", "E", "A", "I", "T", "R", "D"],
       "R0": "3",

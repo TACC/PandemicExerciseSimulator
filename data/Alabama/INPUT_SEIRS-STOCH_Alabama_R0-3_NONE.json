@@ -1,5 +1,5 @@
 {
-  "output_dir_path": "SEIR-DET-Alabama_BASELINE",
+ "output_dir_path": "SEIRS-STOCH-Alabama_NONE",
   "realization_range": ["0", "99"],
   "batch_num": "0",
   "data": {
@@ -9,12 +9,13 @@
     "high_risk_ratios": "../data/Alabama/state_Alabama_high-risk-ratios-flu-only.csv"
   },
   "disease_model": {
-    "identity": "seirs-deterministic",
+    "identity": "seirs-stochastic",
     "parameters": {
       "compartments": ["S", "E", "I", "R"],
       "R0": "3",
       "E_to_I_days": "7",
-      "I_to_R_days": "14"
+      "I_to_R_days": "14",
+      "R_to_S_days": "120"
     }
   },
   "travel_model": {
