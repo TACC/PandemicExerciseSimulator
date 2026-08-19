@@ -100,7 +100,7 @@ split_numeric_arg <- function(value, default) {
 ACS_YEAR_RANGE    = get_arg_value("--acs-year-range=", "2020-2024")
 ACS_YEAR          = as.integer(stringr::str_extract(ACS_YEAR_RANGE, "\\d{4}$"))
 # comma-separated dates, no spaces e.g. "2025-09-27,2025-10-04"
-SIM_DAY_0_ARG <- get_arg_value("--sim-day-0=", "2025-09-27,2025-10-04") 
+SIM_DAY_0_ARG <- get_arg_value("--sim-day-0=", "2025-10-04") # "2025-09-27,2025-10-04"
 SIM_DAY_0_VALUES <- as.Date(split_arg(SIM_DAY_0_ARG, character())) 
 if (any(is.na(SIM_DAY_0_VALUES))) {
   stop("Invalid --sim-day-0 value. Use one date or comma-separated dates like 2025-09-27,2025-10-04.")
