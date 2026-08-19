@@ -28,7 +28,7 @@ preview_scenarios <- get0(
   "DASHBOARD_PREVIEW_SCENARIOS",
   ifnotfound = get0(
     "SELECTED_RUN_SCENARIOS",
-    ifnotfound = c("BASELINE", "VACCINE", "ANTIVIRAL", "NPI", "ALL_INTERVENTIONS")
+    ifnotfound = c("NONE", "VACCINE", "ANTIVIRAL", "NPI", "ALL_INTERVENTIONS")
   )
 )
 preview_output_subdir <- get0("DASHBOARD_PREVIEW_OUTPUT_SUBDIR", ifnotfound = "WEB_OUTPUTS")
@@ -73,7 +73,7 @@ if (nrow(metadata_preview) == 0) {
 
 scenario_lookup <- tibble::tribble(
   ~scenario_label,       ~vaccine_used, ~antiviral_used, ~npi_used,
-  "BASELINE",            FALSE,         FALSE,           FALSE,
+  "NONE",            FALSE,         FALSE,           FALSE,
   "VACCINE",             TRUE,          FALSE,           FALSE,
   "ANTIVIRAL",           FALSE,         TRUE,            FALSE,
   "NPI",                 FALSE,         FALSE,           TRUE,

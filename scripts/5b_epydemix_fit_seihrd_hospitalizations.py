@@ -41,7 +41,7 @@ DEFAULT_INPUT_JSON = (
     REPO_ROOT
     / "STATE_INIT_TEST"
     / "SEED_INPUT_JSONS"
-    / "INPUT_SEIHRD-STOCH_District-of-Columbia_SEED_BASELINE.json"
+    / "INPUT_SEIHRD-STOCH_District-of-Columbia_SEED_NONE.json"
 )
 DEFAULT_HOSPITALIZATION_FILE = (
     REPO_ROOT / "data" / "FLU_HUB" / "time-series_2026-07-13.csv"
@@ -73,7 +73,7 @@ def parse_args() -> argparse.Namespace:
         "--all-states",
         action="store_true",
         help=(
-            "Fit every baseline JSON in STATE_INIT_TEST/SEED_INPUT_JSONS. "
+            "Fit every no-intervention JSON in STATE_INIT_TEST/SEED_INPUT_JSONS. "
             "Per-state calibration outputs are written under --output-dir/<input-json-stem>/."
         ),
     )
@@ -85,7 +85,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--input-json-glob",
-        default="INPUT_SEIHRD-STOCH_*_SEED_BASELINE.json",
+        default="INPUT_SEIHRD-STOCH_*_SEED_NONE.json",
         help="Filename glob used with --all-states.",
     )
     parser.add_argument(
@@ -260,7 +260,7 @@ def spectral_radius(matrix: np.ndarray) -> float:
     return float(np.max(np.linalg.eigvals(matrix).real))
 
 
-def estimate_baseline_beta(
+def estimate_none_intervention_beta(
     contact_matrix: np.ndarray,
     R0: float,
     w: np.ndarray,
@@ -489,7 +489,7 @@ def corrected_split_rates(params: dict[str, Any]) -> tuple[np.ndarray, np.ndarra
     return is_to_h, is_to_r, h_to_d, h_to_r
 
 
-def baseline_beta(params: dict[str, Any]) -> float:
+def none_intervention_beta(params: dict[str, Any]) -> float:
     w = compute_w(
         params["prop_E_to_IA"],
         params["IP_to_IS_rate"],
@@ -499,7 +499,7 @@ def baseline_beta(params: dict[str, Any]) -> float:
         rel_inf_IP=params["rel_inf_IP_to_IS"],
         rel_inf_IA=params["rel_inf_IA_to_IS"],
     )
-    return estimate_baseline_beta(
+    return estimate_none_intervention_beta(
         params["contact_matrix"],
         float(params["R0"]),
         w,
@@ -530,7 +530,7 @@ def simulate_seihrd(params: dict[str, Any]) -> dict[str, Any]:
     R = np.zeros(n_age)
     D = np.zeros(n_age)
 
-    beta = baseline_beta(params)
+    beta = none_intervention_beta(params)
     is_to_h_rate, is_to_r_rate, h_to_d_rate, h_to_r_rate = corrected_split_rates(params)
     weekly_metric = []
 
@@ -833,7 +833,7 @@ def discover_input_jsons(args: argparse.Namespace) -> list[Path]:
 def state_label_from_input_json(input_json: Path) -> str:
     state = input_json.stem
     state = state.removeprefix("INPUT_SEIHRD-STOCH_")
-    state = state.removesuffix("_SEED_BASELINE")
+    state = state.removesuffix("_SEED_NONE")
     return state.replace("-", " ")
 
 

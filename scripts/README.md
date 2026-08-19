@@ -10,7 +10,7 @@ scripts `0` through `6`. Python dependencies are managed through Poetry.
 ## State Data Preparation
 
 Start here: `0_run_full_pipeline_US.R` is the entry point for the full state/DC
-pipeline. It orchestrates steps `1` through `6`, including seed baseline
+pipeline. It orchestrates steps `1` through `6`, including seed no-intervention
 generation, Epydemix fitting, intervention scenario generation, and command
 creation. A complete run can take more than an hour because it processes large
 survey and mobility datasets. Individual scripts can be run separately when only
@@ -26,7 +26,7 @@ Rscript 0_run_full_pipeline_US.R \
   --epydemix-nsim=1000 \
   --run-web-preview=true \
   --selected-states=District-of-Columbia,Connecticut,Massachusetts \
-  --selected-scenarios=BASELINE,VACCINE,ANTIVIRAL,NPI,ALL_INTERVENTIONS \
+  --selected-scenarios=NONE,VACCINE,ANTIVIRAL,NPI,ALL_INTERVENTIONS \
   --deploy-shinyapps=false
 ```
 
@@ -60,11 +60,11 @@ files out of commits.
 | 4a | `4a_flu_state_high_risk_by_age.R` | Estimates state-and-age influenza high-risk proportions using BRFSS and NSCH survey data. |
 | 4b | `4b_flu_county_high_risk_by_age.R` | Distributes state high-risk estimates to counties using CDC PLACES comorbidity burden, with SVI used for comparison. |
 | 5a | `5a_derive_initial_exposures.R` | Derives state/DC county-age low-risk exposures from Flu Hub age-stratified incident hospitalization data using `prop_IS_to_H_lowrisk` from the SEIHRD template by default, or an explicit `--lowrisk-hosp-rate-file`, then writes dated seed JSONs under `<PIPELINE_OUTPUT_DIR>/SEED_INPUT_JSONS/<sim_day_0>/`. The orchestrator skips this step when the dated summaries, 51 dated seed JSONs, and 51 dated validation files already exist for `--sim-day-0`. |
-| 5b | `5b_epydemix_fit_seihrd_hospitalizations.py` | Uses Epydemix ABC to fit the five-age-group SEIHRD hospitalization curve to Flu Hub age-stratified incident hospitalization time series, either one state or all `5a` baseline JSONs. The orchestrator writes/checks calibrated JSONs under `<PIPELINE_OUTPUT_DIR>/epydemix_fit/<sim_day_0>/` and skips this step when all 51 files there record the same fit start date as `--sim-day-0`. |
+| 5b | `5b_epydemix_fit_seihrd_hospitalizations.py` | Uses Epydemix ABC to fit the five-age-group SEIHRD hospitalization curve to Flu Hub age-stratified incident hospitalization time series, either one state or all `5a` no-intervention JSONs. The orchestrator writes/checks calibrated JSONs under `<PIPELINE_OUTPUT_DIR>/epydemix_fit/<sim_day_0>/` and skips this step when all 51 files there record the same fit start date as `--sim-day-0`. |
 | 6a | `6a_vaccine_coverage_by_state.R` | Converts influenza coverage and effectiveness assumptions into weekly state vaccine-stockpile schedules. |
 | 6b | `6b_outpatient_antiviral_coverage_by_state.R` | Estimates state-specific insured high-risk counts for outpatient antiviral stockpile scenarios. Skips when both final antiviral CSVs exist and caches downloaded ACS PUMS extracts under `data/RISK_RATIOS/PUMS_CACHE/`. |
 | 6c | `6c_weekend_npi_schedule.R` | Expands a prototype Weekend Mobility Decrease NPI across the configured simulation window. |
-| 6d | `6d_create_intervention_inputs.R` | Layers intervention templates onto calibrated baselines and writes scenario JSONs per state/DC to dated folders under `<PIPELINE_OUTPUT_DIR>/TACC_FILES`. |
+| 6d | `6d_create_intervention_inputs.R` | Layers intervention templates onto calibrated seed inputs and writes scenario JSONs per state/DC to dated folders under `<PIPELINE_OUTPUT_DIR>/TACC_FILES`. |
 | 6e | `6e_create_parallel_commands.R` | Creates `<PIPELINE_OUTPUT_DIR>/TACC_FILES/state_commands.txt` beside the dated TACC JSON folders and copies `data/INPUT_FILE_TEMPLATES/state_launcher.sh` to `<PIPELINE_OUTPUT_DIR>/TACC_FILES/state_launcher.sh` if missing. |
 | 6f | `6f_run_selected_scenarios.R` | Runs a user-selected subset of states and scenarios locally, writing selected JSON copies and `web_state_commands.sh` to `<PIPELINE_OUTPUT_DIR>/WEB_INPUTS`, with generated outputs under `<PIPELINE_OUTPUT_DIR>/WEB_OUTPUTS`. |
 | 7a | `7a_process_output_to_db.R` | Processes generated simulator outputs under `<PIPELINE_OUTPUT_DIR>`, updates `metadata_master.csv`, writes Parquet files under `sim_data/`, and skips already complete `(scenario_hash, batch_num)` pairs. |
@@ -199,10 +199,10 @@ subset with:
 
 ```bash
 --selected-states=District-of-Columbia,Connecticut,Massachusetts
---selected-scenarios=BASELINE,VACCINE,ANTIVIRAL,NPI,ALL_INTERVENTIONS
+--selected-scenarios=NONE,VACCINE,ANTIVIRAL,NPI,ALL_INTERVENTIONS
 ```
 
-Allowed scenario labels are `BASELINE`, `VACCINE`, `ANTIVIRAL`, `NPI`, and
+Allowed scenario labels are `NONE`, `VACCINE`, `ANTIVIRAL`, `NPI`, and
 `ALL_INTERVENTIONS`. The selected JSON copies are written under
 `<PIPELINE_OUTPUT_DIR>/WEB_INPUTS`, and the selected outputs are written
 under `<PIPELINE_OUTPUT_DIR>/WEB_OUTPUTS` so `7a` can ingest them with its
@@ -303,7 +303,7 @@ Delaware init-test file:
 
 ```bash
 python3 scripts/5b_epydemix_fit_seihrd_hospitalizations.py \
-  --input-json Example_TEST/SEED_INPUT_JSONS/2025-10-01/INPUT_SEIHRD-STOCH_Delaware_SEED_BASELINE.json \
+  --input-json Example_TEST/SEED_INPUT_JSONS/2025-10-01/INPUT_SEIHRD-STOCH_Delaware_SEED_NONE.json \
   --output-dir Example_TEST/epydemix_fit/2025-10-01 \
   --hosp-file data/FLU_HUB/time-series_2026-07-13.csv \
   --nsim 1000 \
@@ -311,7 +311,7 @@ python3 scripts/5b_epydemix_fit_seihrd_hospitalizations.py \
   --write-calibrated-json
 ```
 
-To fit every baseline JSON produced by `5a`, use:
+To fit every no-intervention JSON produced by `5a`, use:
 
 ```bash
 python3 scripts/5b_epydemix_fit_seihrd_hospitalizations.py \

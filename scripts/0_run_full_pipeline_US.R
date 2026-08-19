@@ -15,7 +15,7 @@
 #'   - PIPELINE_OUTPUT_DIR: parent folder where generated inputs/outputs live.
 #'   - SELECTED_RUN_STATES: state directory names to run locally for preview.
 #'   - SELECTED_RUN_SCENARIOS: which generated scenario labels to run/preview.
-#'   - BASELINE_TEMPLATE_FILE: the baseline JSON shape.
+#'   - NONE_TEMPLATE_FILE: the no-intervention JSON shape.
 #'   - INTERVENTION_TEMPLATE_FILES: named intervention JSON shapes.
 #'
 #' Scenario labels are not intervention mechanics. SELECTED_RUN_SCENARIOS only
@@ -110,9 +110,9 @@ SIM_DAY_0_LABEL   = as.character(SIM_DAY_0)
 SIMULATION_DAYS   = as.integer(get_arg_value("--simulation-days=", "200"))
 PIPELINE_OUTPUT_DIR = get_arg_value("--output-dir=", "STATE_WKLYFIT_TEST")
 INPUT_TEMPLATE_DIR = get_arg_value("--input-template-dir=", "../data/INPUT_FILE_TEMPLATES")
-BASELINE_TEMPLATE_FILE = get_arg_value(
-  "--baseline-template=",
-  file.path(INPUT_TEMPLATE_DIR, "INPUT_SEIHRD-STOCH_STATE_BASELINE_H3N2.json")
+NONE_TEMPLATE_FILE = get_arg_value(
+  "--none-template=",
+  file.path(INPUT_TEMPLATE_DIR, "INPUT_SEIHRD-STOCH_STATE_NONE_H3N2.json")
 )
 INTERVENTION_TEMPLATE_FILES = c(
   VACCINE = get_arg_value("--vaccine-template=", file.path(INPUT_TEMPLATE_DIR, "INPUT_SEIHRD-STOCH_STATE_VAX_H3N2.json")),
@@ -153,7 +153,7 @@ SELECTED_RUN_STATES = split_arg(
 ))
 SELECTED_RUN_SCENARIOS = split_arg(
   get_arg_value("--selected-scenarios=", ""),
-  c("BASELINE", names(INTERVENTION_TEMPLATE_FILES))
+  c("NONE", names(INTERVENTION_TEMPLATE_FILES))
 )
 WEB_PREVIEW_STATES = SELECTED_RUN_STATES
 DEPLOY_SHINYAPPS = get_bool_arg("--deploy-shinyapps=", FALSE)
@@ -251,7 +251,7 @@ cat("  ACS_YEAR = ", ACS_YEAR, "\n", sep = "")
 cat("  SIM_DAY_0 = ", paste(as.character(SIM_DAY_0_VALUES), collapse = ", "), "\n", sep = "")
 cat("  SIMULATION_DAYS = ", SIMULATION_DAYS, "\n", sep = "")
 cat("  PIPELINE_OUTPUT_DIR = ", PIPELINE_OUTPUT_DIR, "\n", sep = "")
-cat("  BASELINE_TEMPLATE_FILE = ", BASELINE_TEMPLATE_FILE, "\n", sep = "")
+cat("  NONE_TEMPLATE_FILE = ", NONE_TEMPLATE_FILE, "\n", sep = "")
 cat("  INTERVENTION_TEMPLATE_FILES = ", paste(names(INTERVENTION_TEMPLATE_FILES), INTERVENTION_TEMPLATE_FILES, sep = ":", collapse = ", "), "\n", sep = "")
 cat("  NPI_EFFECTIVENESS_BY_AGE = ", paste(NPI_EFFECTIVENESS_BY_AGE, collapse = ", "), "\n", sep = "")
 cat("  ANTIVIRAL_EFFECTIVENESS_HOSP = ", ANTIVIRAL_EFFECTIVENESS_HOSP, "\n", sep = "")
@@ -381,9 +381,9 @@ for (SIM_DAY_0 in SIM_DAY_0_VALUES) {
   section_banner(paste0("Running Date-Dependent Pipeline For ", SIM_DAY_0_LABEL))
 
 #////////
-#### Section 5a Seed Baseline Inputs ####
+#### Section 5a Seed None Inputs ####
 #////////
-section_banner("Section 5a Running Seed Baseline Inputs")
+section_banner("Section 5a Running Seed None Inputs")
 seed_input_dir <- file.path(pipeline_output_root, "SEED_INPUT_JSONS", SIM_DAY_0_LABEL)
 validation_fit_data_dir <- file.path(pipeline_output_root, "validation_fit_data")
 derived_initial_exposed_dir <- file.path(pipeline_output_root, "DERIVED_INITIAL_EXPOSED")
@@ -397,7 +397,7 @@ county_initial_exposed_file <- file.path(
 )
 seed_input_files <- list.files(
   seed_input_dir,
-  pattern = "^INPUT_SEIHRD-STOCH_.*_SEED_BASELINE\\.json$",
+  pattern = "^INPUT_SEIHRD-STOCH_.*_SEED_NONE\\.json$",
   full.names = TRUE
 )
 validation_fit_files <- list.files(
@@ -416,7 +416,7 @@ if (
   seed_inputs_match_sim_day_0
 ) {
   cat(
-    "Seed baseline inputs already exist for sim_day_0 ",
+    "Seed no-intervention inputs already exist for sim_day_0 ",
     SIM_DAY_0_LABEL,
     ": ",
     length(seed_input_files),
@@ -426,7 +426,7 @@ if (
     sep = ""
   )
 } else {
-  cat("Seed baseline inputs missing or not all for sim_day_0 ", SIM_DAY_0_LABEL, "; running 5a.\n", sep = "")
+  cat("Seed no-intervention inputs missing or not all for sim_day_0 ", SIM_DAY_0_LABEL, "; running 5a.\n", sep = "")
   source("5a_derive_initial_exposures.R")
 }
 
@@ -445,7 +445,7 @@ epydemix_output_dir <- normalizePath(
 dir.create(epydemix_output_dir, showWarnings = FALSE, recursive = TRUE)
 epydemix_seed_files <- list.files(
   epydemix_input_dir,
-  pattern = "^INPUT_SEIHRD-STOCH_.*_SEED_BASELINE\\.json$",
+  pattern = "^INPUT_SEIHRD-STOCH_.*_SEED_NONE\\.json$",
   full.names = TRUE
 )
 expected_calibrated_jsons <- file.path(
@@ -497,7 +497,7 @@ if (length(epydemix_seed_files) >= 51 && calibrated_jsons_match_sim_day_0) {
 #////////
 #### Section 6 Intervention Inputs ####
 #////////
-#' Build vaccine stockpiles and NPI schedules only after calibrated baselines exist.
+#' Build vaccine stockpiles and NPI schedules only after calibrated no-intervention inputs exist.
 section_banner("Section 6 Running Intervention Inputs")
 source("6a_vaccine_coverage_by_state.R")
 source("6b_outpatient_antiviral_coverage_by_state.R")

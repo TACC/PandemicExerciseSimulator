@@ -16,7 +16,7 @@ library(lubridate)
 library(jsonlite)
 
 state_dir = "all"
-baseline_year = 2019
+reference_year = 2019
 comparison_year = 2025
 
 args = commandArgs(trailingOnly = TRUE)
@@ -96,35 +96,35 @@ read_quarterly_od = function(state_dir, year) {
 #' @examples
 #' write_state_heatmap("Texas")
 write_state_heatmap = function(state_dir) {
-  baseline = read_quarterly_od(state_dir, baseline_year)
+  reference = read_quarterly_od(state_dir, reference_year)
   comparison = read_quarterly_od(state_dir, comparison_year)
-  counties = sort(unique(c(baseline$COUNTY_ORG, baseline$COUNTY_DEST, comparison$COUNTY_ORG, comparison$COUNTY_DEST)))
+  counties = sort(unique(c(reference$COUNTY_ORG, reference$COUNTY_DEST, comparison$COUNTY_ORG, comparison$COUNTY_DEST)))
   figure_dir = file.path("../figures/quarterly-matrix-comparison")
   dir.create(figure_dir, showWarnings = FALSE, recursive = TRUE)
 
   plot_df = bind_rows(
-    baseline %>% mutate(COMPARISON_ROW = as.character(baseline_year)),
+    reference %>% mutate(COMPARISON_ROW = as.character(reference_year)),
     comparison %>% mutate(COMPARISON_ROW = as.character(comparison_year)),
     full_join(
-      baseline,
+      reference,
       comparison,
       by = c("COUNTY_ORG", "COUNTY_DEST", "QUARTER"),
-      suffix = c("_baseline", "_comparison")
+      suffix = c("_reference", "_comparison")
     ) %>%
       transmute(
         COUNTY_ORG,
         COUNTY_DEST,
         QUARTER,
         MOBILITY_MATRIX_VALUE = replace_na(MOBILITY_MATRIX_VALUE_comparison, 0) -
-          replace_na(MOBILITY_MATRIX_VALUE_baseline, 0),
-        COMPARISON_ROW = paste0(comparison_year, " minus ", baseline_year)
+          replace_na(MOBILITY_MATRIX_VALUE_reference, 0),
+        COMPARISON_ROW = paste0(comparison_year, " minus ", reference_year)
       )
   ) %>%
     mutate(
       COUNTY_ORG = factor(COUNTY_ORG, levels = counties),
       COUNTY_DEST = factor(COUNTY_DEST, levels = counties),
       QUARTER = factor(QUARTER, levels = paste0("Q", 1:4)),
-      COMPARISON_ROW = factor(COMPARISON_ROW, levels = c(as.character(baseline_year), as.character(comparison_year), paste0(comparison_year, " minus ", baseline_year))),
+      COMPARISON_ROW = factor(COMPARISON_ROW, levels = c(as.character(reference_year), as.character(comparison_year), paste0(comparison_year, " minus ", reference_year))),
       hover_text = paste0(
         "Origin county: ", COUNTY_ORG,
         "<br>Destination county: ", COUNTY_DEST,
@@ -136,7 +136,7 @@ write_state_heatmap = function(state_dir) {
 
   out_file = file.path(
     figure_dir,
-    paste0(state_dir, "_", baseline_year, "_", comparison_year, "_quarterly_mobility_matrix_comparison.html")
+    paste0(state_dir, "_", reference_year, "_", comparison_year, "_quarterly_mobility_matrix_comparison.html")
   )
 
   panel_levels = levels(plot_df$COMPARISON_ROW)
@@ -280,7 +280,7 @@ write_state_heatmap = function(state_dir) {
 states_to_plot = if (tolower(state_dir) == "all") {
   list.dirs("../data", full.names = FALSE, recursive = FALSE) %>%
     setdiff(c("MOBILITY")) %>%
-    keep(~ file.exists(file.path("../data", .x, paste0(.x, "_quarterly-", baseline_year, "_mobility.csv"))))
+    keep(~ file.exists(file.path("../data", .x, paste0(.x, "_quarterly-", reference_year, "_mobility.csv"))))
 } else {
   state_dir
 }

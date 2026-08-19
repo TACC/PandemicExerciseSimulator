@@ -15,7 +15,7 @@
 #' Default target:
 #'   - simulation start: 2025-10-01
 #'   - hospitalization source: data/Flu-Hub-Data/time-series_2026-07-13.csv
-#'   - disease/template source: data/INPUT_FILE_TEMPLATES/INPUT_SEIHRD-STOCH_STATE_BASELINE_H3N2.json
+#'   - disease/template source: data/INPUT_FILE_TEMPLATES/INPUT_SEIHRD-STOCH_STATE_NONE_H3N2.json
 #'
 #' Outputs:
 #'   - STATE_INIT_TEST/DERIVED_INITIAL_EXPOSED/derived_initial_exposed_state_age_2025-10-01.csv
@@ -38,7 +38,7 @@ suppressPackageStartupMessages({
 
 SIM_START_DATE <- as.Date(get0("SIM_DAY_0", ifnotfound = "2025-10-01"))
 HOSPITALIZATION_FILE <- file.path("data", "FLU_HUB", "time-series_2026-07-13.csv")
-TEMPLATE_FILE <- file.path("data", "INPUT_FILE_TEMPLATES", "INPUT_SEIHRD-STOCH_STATE_BASELINE_H3N2.json")
+TEMPLATE_FILE <- file.path("data", "INPUT_FILE_TEMPLATES", "INPUT_SEIHRD-STOCH_STATE_NONE_H3N2.json")
 LOWRISK_HOSP_RATE_FILE <- NA_character_
 OUTPUT_DIR <- get0("PIPELINE_OUTPUT_DIR", ifnotfound = "STATE_INIT_TEST")
 INPUT_JSON_DIR <- file.path(OUTPUT_DIR, "SEED_INPUT_JSONS")
@@ -530,7 +530,7 @@ for (state_dir in state_lookup$state_dir) {
   state_template$metadata_tags$disease <- list("influenza", "flu", "H3N2")
   state_template$metadata_tags$sim_day_0 <- as.character(SIM_START_DATE)
   state_template$metadata_tags$notes <- c(
-    "Baseline seed input for Epydemix calibration; manuscript inputs are generated separately.",
+    "No-intervention seed input for Epydemix calibration; manuscript inputs are generated separately.",
     paste0(
       "Initial exposures derived from first age-stratified incident influenza hospitalizations in ",
       state_meta$state_name,
@@ -565,7 +565,7 @@ for (state_dir in state_lookup$state_dir) {
   state_template$non_pharma_interventions <- list()
   state_template$initial_exposed <- state_json_rows
 
-  output_file <- file.path(input_json_dir, paste0("INPUT_SEIHRD-STOCH_", state_dir, "_SEED_BASELINE.json"))
+  output_file <- file.path(input_json_dir, paste0("INPUT_SEIHRD-STOCH_", state_dir, "_SEED_NONE.json"))
   jsonlite::write_json(state_template, output_file, auto_unbox = TRUE, pretty = TRUE, null = "null")
   json_files <- c(json_files, output_file)
 }

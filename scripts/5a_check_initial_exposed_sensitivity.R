@@ -26,7 +26,7 @@ suppressPackageStartupMessages({
 
 SIM_START_DATES <- c("2025-10-01", "2025-10-04")
 HOSPITALIZATION_FILE <- file.path("data", "FLU_HUB", "time-series_2026-07-13.csv")
-TEMPLATE_FILE <- file.path("data", "INPUT_FILE_TEMPLATES", "INPUT_SEIHRD-STOCH_STATE_BASELINE_H3N2.json")
+TEMPLATE_FILE <- file.path("data", "INPUT_FILE_TEMPLATES", "INPUT_SEIHRD-STOCH_STATE_NONE_H3N2.json")
 LOWRISK_HOSP_RATE_FILE <- NA_character_
 OUTPUT_FILE <- file.path("STATE_INIT_TEST", "initial_exposed_sensitivity.csv")
 STATE_FILTER <- NA_character_
@@ -399,7 +399,7 @@ if (plot_results) {
 }
 
 if (length(sim_start_dates) >= 2) {
-  baseline_date <- min(sim_start_dates)
+  reference_date <- min(sim_start_dates)
   comparison <- estimates |>
     dplyr::filter(.data$first_week_rule == "first_week_on_or_after_start") |>
     dplyr::select(
@@ -416,34 +416,34 @@ if (length(sim_start_dates) >= 2) {
     )
 
   date_cols <- grep("^start_", names(comparison), value = TRUE)
-  baseline_col <- paste0("start_", baseline_date)
-  if (baseline_col %in% date_cols) {
-    comparison_dates <- setdiff(date_cols, baseline_col)
+  reference_col <- paste0("start_", reference_date)
+  if (reference_col %in% date_cols) {
+    comparison_dates <- setdiff(date_cols, reference_col)
     if (length(comparison_dates) > 0) {
-      comparison$max_abs_difference_from_baseline <- do.call(
+      comparison$max_abs_difference_from_reference <- do.call(
         pmax,
         c(
-          lapply(comparison_dates, function(col) abs(comparison[[col]] - comparison[[baseline_col]])),
+          lapply(comparison_dates, function(col) abs(comparison[[col]] - comparison[[reference_col]])),
           list(na.rm = TRUE)
         )
       )
     } else {
-      comparison$max_abs_difference_from_baseline <- 0
+      comparison$max_abs_difference_from_reference <- 0
     }
     comparison <- comparison |>
-      dplyr::arrange(dplyr::desc(.data$max_abs_difference_from_baseline))
+      dplyr::arrange(dplyr::desc(.data$max_abs_difference_from_reference))
 
-    message("\nLargest state-age differences from earliest supplied date (", baseline_date, "):")
+    message("\nLargest state-age differences from earliest supplied date (", reference_date, "):")
     print(head(comparison, print_top_n), n = print_top_n)
 
-    plot_date_cols <- setdiff(date_cols, baseline_col)
+    plot_date_cols <- setdiff(date_cols, reference_col)
     if (plot_results && length(plot_date_cols) > 0) {
       diff_plot_data <- comparison |>
         dplyr::select(
           "state_name",
           "age_group",
           "method",
-          dplyr::all_of(baseline_col),
+          dplyr::all_of(reference_col),
           dplyr::all_of(plot_date_cols)
         ) |>
         tidyr::pivot_longer(
@@ -452,8 +452,8 @@ if (length(sim_start_dates) >= 2) {
           values_to = "comparison_initial_exposed"
         ) |>
         dplyr::mutate(
-          baseline_initial_exposed = .data[[baseline_col]],
-          difference = .data$comparison_initial_exposed - .data$baseline_initial_exposed,
+          reference_initial_exposed = .data[[reference_col]],
+          difference = .data$comparison_initial_exposed - .data$reference_initial_exposed,
           comparison_start = sub("^start_", "", .data$comparison_start),
           method = factor(.data$method, levels = names(plot_method_labels), labels = plot_method_labels),
           state_age = paste(.data$state_name, .data$age_group, sep = " / ")
@@ -487,7 +487,7 @@ if (length(sim_start_dates) >= 2) {
         ) +
         ggplot2::labs(
           title = "Largest State-Age Initial Exposed Differences",
-          subtitle = paste("Difference from baseline sim start", baseline_date),
+          subtitle = paste("Difference from reference sim start", reference_date),
           x = "Initial exposed difference",
           y = NULL
         ) +

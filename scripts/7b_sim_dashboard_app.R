@@ -190,12 +190,12 @@ intervention_label <- function(vaccine_used, antiviral_used, npi_used) {
     vaccine_used                             ~ "Vaccine",
     antiviral_used                           ~ "Antiviral",
     npi_used                                 ~ "NPI",
-    TRUE                                     ~ "Baseline"
+    TRUE                                     ~ "None"
   )
 }
 
 INTERVENTION_LEVELS <- c(
-  "Baseline",
+  "None",
   "Antiviral",
   "NPI",
   "Vaccine",
@@ -206,7 +206,7 @@ INTERVENTION_LEVELS <- c(
 )
 
 INTERVENTION_COLORS <- c(
-  "Baseline" = "#4D4D4D",
+  "None" = "#4D4D4D",
   "Antiviral" = "#F28E2B",
   "NPI" = "#59A14F",
   "Vaccine" = "#4E79A7",
@@ -1149,12 +1149,12 @@ server <- function(input, output, session) {
     selected_now <- intersect(isolate(input$validation_primary_scenario), validation_df$scenario_hash)
 
     if (length(selected_now) == 0) {
-      baseline_hashes <- validation_df %>%
-        dplyr::filter(.data$interventions == "Baseline") %>%
+      none_hashes <- validation_df %>%
+        dplyr::filter(.data$interventions == "None") %>%
         dplyr::pull(.data$scenario_hash)
       selected_now <- c(
-        baseline_hashes,
-        setdiff(validation_df$scenario_hash, baseline_hashes)
+        none_hashes,
+        setdiff(validation_df$scenario_hash, none_hashes)
       )[[1]]
     } else {
       selected_now <- selected_now[[1]]

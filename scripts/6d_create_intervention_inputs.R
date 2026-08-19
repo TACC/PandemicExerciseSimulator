@@ -3,7 +3,7 @@
 #////////
 #' Generate date/state/scenario input JSONs from named templates.
 #'
-#' BASELINE_TEMPLATE_FILE defines the baseline scenario. INTERVENTION_TEMPLATE_FILES
+#' NONE_TEMPLATE_FILE defines the no-intervention scenario. INTERVENTION_TEMPLATE_FILES
 #' is a named character vector of intervention templates to layer onto each
 #' date/state. SELECTED_RUN_SCENARIOS controls which scenarios are written.
 #'
@@ -18,11 +18,11 @@ source("6c_weekend_npi_schedule.R")
 SIM_DAY_0 <- as.Date(get0("SIM_DAY_0", ifnotfound = "2025-10-01"))
 SIMULATION_DAYS <- as.integer(get0("SIMULATION_DAYS", ifnotfound = 300L))
 PIPELINE_OUTPUT_DIR <- get0("PIPELINE_OUTPUT_DIR", ifnotfound = "STATE_INIT_TEST")
-BASELINE_TEMPLATE_FILE <- get0("BASELINE_TEMPLATE_FILE", ifnotfound = "")
+NONE_TEMPLATE_FILE <- get0("NONE_TEMPLATE_FILE", ifnotfound = "")
 INTERVENTION_TEMPLATE_FILES <- get0("INTERVENTION_TEMPLATE_FILES", ifnotfound = character())
 SELECTED_RUN_SCENARIOS <- get0(
   "SELECTED_RUN_SCENARIOS",
-  ifnotfound = c("BASELINE", names(INTERVENTION_TEMPLATE_FILES))
+  ifnotfound = c("NONE", names(INTERVENTION_TEMPLATE_FILES))
 )
 INPUT_CREATOR <- get0("INPUT_CREATOR", ifnotfound = "Emily M Javan")
 NPI_EFFECTIVENESS_BY_AGE <- get0("NPI_EFFECTIVENESS_BY_AGE", ifnotfound = c(0.5, 0.5, 0.5, 0.5, 0.5))
@@ -86,7 +86,7 @@ relativize_data_paths_6d <- function(config) {
 state_from_seed_path <- function(path) {
   basename(path) %>%
     stringr::str_remove("^INPUT_SEIHRD-STOCH_") %>%
-    stringr::str_remove("_SEED_BASELINE\\.json$")
+    stringr::str_remove("_SEED_NONE\\.json$")
 }
 
 find_calibrated_json <- function(seed_path) {
@@ -289,7 +289,7 @@ write_scenario <- function(config, state_dir, scenario_label) {
 
 seed_files <- list.files(
   seed_input_dir,
-  pattern = "^INPUT_SEIHRD-STOCH_.*_SEED_BASELINE\\.json$",
+  pattern = "^INPUT_SEIHRD-STOCH_.*_SEED_NONE\\.json$",
   full.names = TRUE
 )
 if (length(seed_files) == 0) {
@@ -301,8 +301,8 @@ intervention_templates <- purrr::map(
   jsonlite::fromJSON,
   simplifyVector = FALSE
 )
-baseline_template <- if (nzchar(BASELINE_TEMPLATE_FILE) && file.exists(BASELINE_TEMPLATE_FILE)) {
-  jsonlite::fromJSON(BASELINE_TEMPLATE_FILE, simplifyVector = FALSE)
+none_template <- if (nzchar(NONE_TEMPLATE_FILE) && file.exists(NONE_TEMPLATE_FILE)) {
+  jsonlite::fromJSON(NONE_TEMPLATE_FILE, simplifyVector = FALSE)
 } else {
   NULL
 }
@@ -317,19 +317,19 @@ for (seed_file in seed_files) {
     jsonlite::fromJSON(seed_file, simplifyVector = FALSE)
   }
 
-  if (!is.null(baseline_template)) {
-    baseline <- replace_STATE_tokens(baseline_template, state_dir = state_dir)
-    baseline <- copy_calibrated_fields(baseline, calibrated)
+  if (!is.null(none_template)) {
+    none <- replace_STATE_tokens(none_template, state_dir = state_dir)
+    none <- copy_calibrated_fields(none, calibrated)
   } else {
-    baseline <- calibrated
-    baseline$antiviral_model <- structure(list(), names = character())
-    baseline$vaccine_model <- structure(list(), names = character())
-    baseline$non_pharma_interventions <- list()
+    none <- calibrated
+    none$antiviral_model <- structure(list(), names = character())
+    none$vaccine_model <- structure(list(), names = character())
+    none$non_pharma_interventions <- list()
   }
-  if ("BASELINE" %in% SELECTED_RUN_SCENARIOS) {
-    baseline <- apply_experiment_overrides(baseline)
-    baseline <- set_generic_metadata(baseline, state_dir, "BASELINE")
-    json_files <- c(json_files, write_scenario(baseline, state_dir, "BASELINE"))
+  if ("NONE" %in% SELECTED_RUN_SCENARIOS) {
+    none <- apply_experiment_overrides(none)
+    none <- set_generic_metadata(none, state_dir, "NONE")
+    json_files <- c(json_files, write_scenario(none, state_dir, "NONE"))
   }
 
   for (scenario_label in intersect(names(intervention_templates), SELECTED_RUN_SCENARIOS)) {

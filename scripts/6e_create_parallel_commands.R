@@ -20,7 +20,7 @@ selected_run_states <- get0("SELECTED_RUN_STATES", ifnotfound = character())
 intervention_template_files <- get0("INTERVENTION_TEMPLATE_FILES", ifnotfound = character())
 selected_run_scenarios <- get0(
   "SELECTED_RUN_SCENARIOS",
-  ifnotfound = c("BASELINE", names(intervention_template_files))
+  ifnotfound = c("NONE", names(intervention_template_files))
 )
 sim_day_0_values <- as.character(get0("SIM_DAY_0_VALUES", ifnotfound = character()))
 input_dir <- file.path("..", pipeline_output_dir, "TACC_FILES")
