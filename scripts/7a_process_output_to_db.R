@@ -37,6 +37,7 @@ if (is.na(pipeline_search_root) || !nzchar(pipeline_search_root)) {
 SEARCH_ROOT  <- normalizePath(pipeline_search_root, mustWork = FALSE)
 MASTER_CSV   <- file.path(SEARCH_ROOT, "metadata_master.csv")
 PARQUET_ROOT <- file.path(SEARCH_ROOT, "sim_data")   # partitioned: <hash>/<batch>/
+FEATURES_PARQUET <- file.path(SEARCH_ROOT, "scenario_features.parquet")
 
 # Set TRUE once a local MongoDB instance is running (install.packages("mongolite"))
 MONGO_ENABLED    <- FALSE
@@ -76,6 +77,153 @@ resolve_search_root_path <- function(path) {
     return(normalizePath(path, mustWork = FALSE))
   }
   normalizePath(file.path(SEARCH_ROOT, path), mustWork = FALSE)
+}
+
+feature_value_type <- function(x) {
+  if (is.null(x)) return("null")
+  if (is.logical(x)) return("logical")
+  if (is.numeric(x)) return("numeric")
+  if (inherits(x, "Date") || inherits(x, "POSIXt")) return("date")
+  if (is.character(x)) return("character")
+  if (is.list(x)) return("object")
+  typeof(x)
+}
+
+canonicalize_json_value <- function(x) {
+  if (is.data.frame(x)) {
+    return(as.data.frame(lapply(x, canonicalize_json_value), stringsAsFactors = FALSE))
+  }
+
+  if (is.list(x)) {
+    names_x <- names(x)
+    if (!is.null(names_x) && any(nzchar(names_x))) {
+      x <- x[sort(names_x)]
+    }
+    return(lapply(x, canonicalize_json_value))
+  }
+
+  x
+}
+
+feature_value_display <- function(x) {
+  if (is.null(x)) return("null")
+  if (length(x) == 0) return("[]")
+  if (is.atomic(x) && length(x) == 1) return(as.character(x))
+  unclass(jsonlite::toJSON(canonicalize_json_value(x), auto_unbox = TRUE, null = "null"))
+}
+
+flatten_feature_list <- function(x, prefix = character(0)) {
+  if (is.null(x)) {
+    return(tibble(
+      feature_path = paste(prefix, collapse = "."),
+      feature_value = "null",
+      feature_type = "null"
+    ))
+  }
+
+  if (is.list(x) && !is.data.frame(x)) {
+    names_x <- names(x)
+
+    if (length(x) == 0) {
+      return(tibble(
+        feature_path = paste(prefix, collapse = "."),
+        feature_value = "[]",
+        feature_type = "array"
+      ))
+    }
+
+    if (is.null(names_x) || all(!nzchar(names_x))) {
+      return(tibble(
+        feature_path = paste(prefix, collapse = "."),
+        feature_value = feature_value_display(x),
+        feature_type = "array"
+      ))
+    }
+
+    return(purrr::imap_dfr(
+      x,
+      function(value, name) flatten_feature_list(value, c(prefix, name))
+    ))
+  }
+
+  tibble(
+    feature_path = paste(prefix, collapse = "."),
+    feature_value = feature_value_display(x),
+    feature_type = if (length(x) > 1) "array" else feature_value_type(x)
+  )
+}
+
+write_scenario_features <- function(master_df) {
+  if (is.null(master_df) || nrow(master_df) == 0) {
+    arrow::write_parquet(
+      tibble(
+        scenario_hash = character(),
+        geo_region = character(),
+        feature_path = character(),
+        feature_group = character(),
+        feature_value = character(),
+        feature_type = character()
+      ),
+      FEATURES_PARQUET,
+      compression = "zstd"
+    )
+    return(invisible(NULL))
+  }
+
+  excluded_roots <- c(
+    "batch_num",
+    "created_at_utc",
+    "file_path",
+    "git_info",
+    "output_dir_path",
+    "realization_indices",
+    "scenario_hash"
+  )
+
+  scenario_sources <- master_df %>%
+    dplyr::filter(!is.na(.data$scenario_hash), nzchar(.data$scenario_hash), file.exists(.data$file_path)) %>%
+    dplyr::arrange(dplyr::desc(.data$created_at_utc)) %>%
+    dplyr::group_by(.data$scenario_hash) %>%
+    dplyr::slice(1) %>%
+    dplyr::ungroup() %>%
+    dplyr::select("scenario_hash", "geo_region", "file_path")
+
+  features <- purrr::pmap_dfr(
+    scenario_sources,
+    function(scenario_hash, geo_region, file_path) {
+      tryCatch(
+        {
+          jsonlite::read_json(file_path) %>%
+            flatten_feature_list() %>%
+            dplyr::filter(
+              nzchar(.data$feature_path),
+              !stringr::word(.data$feature_path, 1, sep = stringr::fixed(".")) %in% excluded_roots
+            ) %>%
+            dplyr::mutate(
+              scenario_hash = scenario_hash,
+              geo_region = geo_region,
+              feature_group = stringr::word(.data$feature_path, 1, sep = stringr::fixed("."))
+            ) %>%
+            dplyr::select(
+              "scenario_hash",
+              "geo_region",
+              "feature_path",
+              "feature_group",
+              "feature_value",
+              "feature_type"
+            )
+        },
+        error = function(e) {
+          warning(sprintf("Failed to flatten scenario features for %s: %s", file_path, e$message))
+          tibble()
+        }
+      )
+    }
+  )
+
+  arrow::write_parquet(features, FEATURES_PARQUET, compression = "zstd")
+  message(sprintf("Scenario feature parquet: %s  (%d row(s))", FEATURES_PARQUET, nrow(features)))
+  invisible(features)
 }
 
 get_batch_file_sizes <- function(scenario_hash, batch_num) {
@@ -655,3 +803,6 @@ if (nrow(new_rows) > 0) {
 } else {
   message("Nothing new to ingest.")
 }
+
+current_master <- if (exists("updated_master")) updated_master else master
+write_scenario_features(current_master)
