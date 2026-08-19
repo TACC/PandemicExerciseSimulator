@@ -1,4 +1,9 @@
+#////////
+#### Deploy Bundle ####
+#////////
+
 # Refresh the small shinyapps.io deployment bundle for the dashboard.
+# hosted by Posit Cloud https://emjavan-pandemicsimexplorer.share.connect.posit.cloud/ 
 
 library(readr)
 library(dplyr)
