@@ -15,8 +15,7 @@ library(tidyverse)
 library(jsonlite)
 
 simulation_days <- as.integer(get0("SIMULATION_DAYS", ifnotfound = 300L))
-pipeline_output_dir <- get0("PIPELINE_OUTPUT_DIR", ifnotfound = "STATE_INIT_TEST")
-selected_run_states <- get0("SELECTED_RUN_STATES", ifnotfound = character())
+pipeline_output_dir <- get0("PIPELINE_OUTPUT_DIR", ifnotfound = "STATE_WKLYFIT_TEST")
 intervention_template_files <- get0("INTERVENTION_TEMPLATE_FILES", ifnotfound = character())
 selected_run_scenarios <- get0(
   "SELECTED_RUN_SCENARIOS",
@@ -68,38 +67,38 @@ input_metadata <- tibble(INPUT_FILE = input_files) %>%
     )
   )
 
-if (length(selected_run_states) > 0) {
-  input_metadata <- input_metadata %>%
-    filter(.data$state %in% selected_run_states)
-}
+# TACC commands intentionally cover all generated state/DC inputs. Only
+# sim_day_0 and scenario labels are filtered here; SELECTED_RUN_STATES is for
+# local/web preview runs in 6f.
 if (length(sim_day_0_values) > 0) {
   input_metadata <- input_metadata %>%
-    filter(.data$sim_day_0 %in% sim_day_0_values)
+    dplyr::filter(.data$sim_day_0 %in% sim_day_0_values)
+}
+input_metadata <- input_metadata %>%
+  dplyr::filter(.data$scenario %in% selected_run_scenarios)
+if (nrow(input_metadata) == 0) {
+  stop(
+    "No TACC JSONs matched selected scenario label(s): ",
+    paste(selected_run_scenarios, collapse = ", ")
+  )
 }
 
 all_commands_script <- input_metadata %>%
   mutate(
-    state_order = match(.data$state, selected_run_states),
-    state_order = if_else(is.na(.data$state_order), row_number(), .data$state_order),
     date_order = match(.data$sim_day_0, sim_day_0_values),
     date_order = if_else(is.na(.data$date_order), row_number(), .data$date_order),
     scenario_order = match(.data$scenario, selected_run_scenarios),
     scenario_order = if_else(is.na(.data$scenario_order), row_number(), .data$scenario_order)
   ) %>%
-  arrange(.data$state_order, .data$date_order, .data$scenario_order) %>%
+  arrange(.data$state, .data$date_order, .data$scenario_order) %>%
   mutate(
     final_poetry_command = paste(
-      paste0("echo 'START sim_day_0=", .data$sim_day_0, " state=", .data$state, " scenario=", .data$scenario, "';"),
-      "mkdir -p GENERATE;",
       "poetry run python3",
-      shQuote(simulator_file_rel),
+      simulator_file_rel,
       "-l INFO -d",
       simulation_days,
       "-i",
-      shQuote(file.path(.data$sim_day_0, basename(.data$INPUT_FILE))),
-      "; status=$?;",
-      "rmdir GENERATE 2>/dev/null || true;",
-      "exit $status"
+      shQuote(file.path(.data$sim_day_0, basename(.data$INPUT_FILE)))
     )
   ) %>%
   dplyr::select(final_poetry_command)
