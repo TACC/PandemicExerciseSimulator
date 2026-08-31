@@ -19,6 +19,7 @@
 #     the next line begins until no more tasks exist or job time runs out.
 # 3. The number of compute nodes you need depends on total tasks and how long they run for.
 #    Always check the first command of state_commands.txt runs as expected on a development node
+#    $SCRATCH deletes unused files after a couple weeks so `git restore .` may be needed from the root dir
 
 
 # Load launcher
