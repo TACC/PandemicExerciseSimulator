@@ -14,52 +14,118 @@ fi
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
+STATUS_DIR="$(cd "$(dirname "$STATUS_CSV")" && pwd)"
+STATUS_BASE="$(basename "$STATUS_CSV")"
+STATUS_ABS="$STATUS_DIR/$STATUS_BASE"
 
+find_latest_timing() {
+   local output_dir="$1"
+
+   [[ -n "$output_dir" && "$output_dir" != "NA" ]] || return 0
+
+   if [[ -d "$output_dir" ]]; then
+      find "$output_dir" -maxdepth 1 -type f -name 'simulation_times_batch-*.csv' -print0 \
+         | xargs -0 ls -t 2>/dev/null \
+         | head -n 1
+      return 0
+   fi
+
+   if [[ "$output_dir" != /* && -d "$STATUS_DIR/$output_dir" ]]; then
+      find "$STATUS_DIR/$output_dir" -maxdepth 1 -type f -name 'simulation_times_batch-*.csv' -print0 \
+         | xargs -0 ls -t 2>/dev/null \
+         | head -n 1
+      return 0
+   fi
+}
+
+RUNTIME_TSV="$TMP_DIR/runtime_lookup.tsv"
 awk -F',' '
 function unquote(x) {
+   gsub(/\r$/, "", x)
+   gsub(/^"/, "", x)
+   gsub(/"$/, "", x)
+   gsub(/""/, "\"", x)
+   return x
+}
+NR == 1 {
+   for (i = 1; i <= NF; i++) {
+      col[unquote($i)] = i
+   }
+   next
+}
+{
+   timing_file = unquote($col["timing_file"])
+   output_dir = unquote($col["output_dir"])
+   print NR - 1 "\t" timing_file "\t" output_dir
+}
+' "$STATUS_ABS" | while IFS=$'\t' read -r row_num timing_file output_dir; do
+   resolved="$timing_file"
+
+   if [[ -z "$resolved" || "$resolved" == "NA" || ! -f "$resolved" ]]; then
+      if [[ "$timing_file" != /* && -f "$STATUS_DIR/$timing_file" ]]; then
+         resolved="$STATUS_DIR/$timing_file"
+      else
+         resolved="$(find_latest_timing "$output_dir")"
+      fi
+   fi
+
+   if [[ -z "$resolved" || "$resolved" == "NA" || ! -f "$resolved" ]]; then
+      printf '%s\t0\t0\n' "$row_num"
+      continue
+   fi
+
+   awk -F',' -v row_num="$row_num" '
+      NR == 1 {
+         for (i = 1; i <= NF; i++) {
+            gsub(/\r$/, "", $i)
+            gsub(/^"|"$/, "", $i)
+            if ($i == "time_seconds") time_col = i
+         }
+         next
+      }
+      time_col {
+         val = $time_col
+         gsub(/\r$/, "", val)
+         gsub(/^"|"$/, "", val)
+         if (val ~ /^-?[0-9]+([.][0-9]+)?$/) {
+            sum += val
+            count++
+         }
+      }
+      END {
+         printf "%s\t%.12g\t%d\n", row_num, sum + 0, count + 0
+      }
+   ' "$resolved"
+done > "$RUNTIME_TSV"
+
+awk -F',' \
+  -v summary_file="$TMP_DIR/summary.txt" \
+  -v state_file="$TMP_DIR/states.txt" \
+  -v state_totals_file="$TMP_DIR/state_totals.txt" \
+  -v scenario_file="$TMP_DIR/scenarios.txt" \
+  -v scenario_totals_file="$TMP_DIR/scenario_totals.txt" \
+  -v runtime_file="$RUNTIME_TSV" \
+'
+function unquote(x) {
+   gsub(/\r$/, "", x)
    gsub(/^"/, "", x)
    gsub(/"$/, "", x)
    gsub(/""/, "\"", x)
    return x
 }
 
-function read_time_file(path,    line,n,i,name,time_col,val) {
-   rt_sum = 0
-   rt_count = 0
-
-   if (path == "" || path == "NA") return
-
-   if ((getline line < path) <= 0) {
-      close(path)
-      return
-   }
-
-   n = split(line, header, ",")
-   time_col = 0
-   for (i = 1; i <= n; i++) {
-      name = unquote(header[i])
-      if (name == "time_seconds") time_col = i
-   }
-
-   if (!time_col) {
-      close(path)
-      return
-   }
-
-   while ((getline line < path) > 0) {
-      n = split(line, fields, ",")
-      val = unquote(fields[time_col])
-      if (val ~ /^-?[0-9]+([.][0-9]+)?$/) {
-         rt_sum += val
-         rt_count++
-      }
-   }
-   close(path)
-}
-
 function mean_or_na(sum, count) {
    if (count <= 0) return "NA"
    return sprintf("%.1f", sum / count)
+}
+
+BEGIN {
+   while ((getline line < runtime_file) > 0) {
+      split(line, fields, "\t")
+      runtime_sum[fields[1]] = fields[2] + 0
+      runtime_count[fields[1]] = fields[3] + 0
+   }
+   close(runtime_file)
 }
 
 NR == 1 {
@@ -71,13 +137,14 @@ NR == 1 {
 }
 
 {
+   row_num = NR - 1
    state = unquote($col["state"])
    scenario = unquote($col["scenario"])
-   timing_file = unquote($col["timing_file"])
    finished = $col["finished"] + 0
    missing = $col["missing"] + 0
 
-   read_time_file(timing_file)
+   rt_sum = runtime_sum[row_num]
+   rt_count = runtime_count[row_num]
 
    status = "not_started"
    if (missing == 0) {
@@ -153,12 +220,7 @@ END {
       scenario_rollup["done"], scenario_rollup["running"], scenario_rollup["not_started"], \
       scenario_rollup["done"] + scenario_rollup["running"] + scenario_rollup["not_started"] > scenario_totals_file
 }
-' summary_file="$TMP_DIR/summary.txt" \
-  state_file="$TMP_DIR/states.txt" \
-  state_totals_file="$TMP_DIR/state_totals.txt" \
-  scenario_file="$TMP_DIR/scenarios.txt" \
-  scenario_totals_file="$TMP_DIR/scenario_totals.txt" \
-  "$STATUS_CSV"
+' "$STATUS_ABS"
 
 cat "$TMP_DIR/summary.txt"
 echo "STATES"
