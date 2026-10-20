@@ -2,6 +2,10 @@
   "output_dir_path": "GENERATE",
   "realization_range": ["0", "99"],
   "batch_num": "GENERATE",
+  "execution": {
+    "mode": "parallel",
+    "workers": "auto"
+  },
   "metadata_tags": {
     "creator": "Emily M Javan",
     "disease": ["influenza", "flu", "H3N2"],
