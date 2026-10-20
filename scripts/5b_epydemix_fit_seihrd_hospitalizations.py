@@ -37,6 +37,13 @@ except ImportError as exc:  # pragma: no cover - this is an environment guard.
 
 AGE_GROUPS = ["0-4", "5-17", "18-49", "50-64", "65+"]
 FLU_HUB_AGE_RECODE = {"65-130": "65+"}
+FIT_TARGET_TO_GENERATED_METRIC = {
+    "hosp_incident": "admissions",
+    "hosp_increase": "h_positive_increase",
+}
+GENERATED_METRIC_TO_FIT_TARGET = {
+    metric: target for target, metric in FIT_TARGET_TO_GENERATED_METRIC.items()
+}
 DEFAULT_INPUT_JSON = (
     REPO_ROOT
     / "STATE_INIT_TEST"
@@ -147,12 +154,22 @@ def parse_args() -> argparse.Namespace:
         help="Posterior estimate to write into the calibrated JSON. Defaults to best-distance particle.",
     )
     parser.add_argument(
-        "--generated-metric",
-        choices=["h_positive_increase", "admissions"],
-        default="admissions",
+        "--fit-target",
+        choices=sorted(FIT_TARGET_TO_GENERATED_METRIC),
+        default="hosp_incident",
         help=(
-            "Model quantity compared with observed incident hospitalizations. "
-            "admissions sums new IS-to-H flows over each observed MMWR week."
+            "Model quantity compared with observed Flu Hub incident hospitalizations. "
+            "hosp_incident sums new IS-to-H admissions over each observed MMWR week; "
+            "hosp_increase sums positive daily increases in the H compartment."
+        ),
+    )
+    parser.add_argument(
+        "--generated-metric",
+        choices=sorted(GENERATED_METRIC_TO_FIT_TARGET),
+        default=None,
+        help=(
+            "Deprecated alias for --fit-target. Use admissions for hosp_incident "
+            "or h_positive_increase for hosp_increase."
         ),
     )
     parser.add_argument(
@@ -176,7 +193,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--peak-height-weight",
         type=float,
-        default=0.15,
+        default=0.25, # inceased from 0.15 to try and dampen R0
         help="Weight for peak-height log-ratio error when --distance-objective aggregate_peak.",
     )
     parser.add_argument(
@@ -198,7 +215,14 @@ def parse_args() -> argparse.Namespace:
             "Failures are reported in batch_manifest.json and cause a nonzero exit after the batch."
         ),
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.generated_metric is not None:
+        generated_fit_target = GENERATED_METRIC_TO_FIT_TARGET[args.generated_metric]
+        if args.fit_target != "hosp_incident" and args.fit_target != generated_fit_target:
+            parser.error("--fit-target conflicts with deprecated --generated-metric.")
+        args.fit_target = generated_fit_target
+    args.generated_metric = FIT_TARGET_TO_GENERATED_METRIC[args.fit_target]
+    return args
 
 
 def resolve_repo_path(path: str | Path, base: Path) -> Path:
@@ -744,6 +768,15 @@ def summarize_aggregate_fit(
     }
 
 
+def distance_settings(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "distance_objective": args.distance_objective,
+        "peak_week_weight": args.peak_week_weight,
+        "shape_weight": args.shape_weight,
+        "peak_height_weight": args.peak_height_weight,
+    }
+
+
 def update_calibrated_json(
     config: dict[str, Any],
     base_params: dict[str, Any],
@@ -751,6 +784,7 @@ def update_calibrated_json(
     output_file: Path,
     estimator: str,
     rewrite_initial_exposed: bool,
+    distance_settings: dict[str, Any],
 ) -> None:
     calibrated = json.loads(json.dumps(config))
     posterior_params = {**base_params, **calibrated_params}
@@ -776,7 +810,9 @@ def update_calibrated_json(
         "fit_end_date": str(pd.Timestamp(base_params["dates"][-1]).date()),
         "simulation_start_date": str(pd.Timestamp(base_params["simulation_start_date"]).date()),
         "mmwr_week_alignment": "Sun-Sat weeks dated by Saturday; partial first week skipped",
+        "fit_target": base_params.get("fit_target"),
         "generated_metric": base_params.get("generated_metric"),
+        "distance_settings": distance_settings,
     }
     if not rewrite_initial_exposed:
         with open(output_file, "w") as fp:
@@ -843,8 +879,10 @@ def run_one(args: argparse.Namespace) -> dict[str, Any]:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     config, data = load_config_and_data(args)
     base_params = build_base_parameters(config, data)
+    base_params["fit_target"] = args.fit_target
     base_params["generated_metric"] = args.generated_metric
     base_params["initial_exposed_scale"] = args.initial_exposed_scale
+    fit_distance_settings = distance_settings(args)
     results = run_calibration(base_params, data.observed, args)
     posterior = posterior_with_distances(results)
 
@@ -862,8 +900,11 @@ def run_one(args: argparse.Namespace) -> dict[str, Any]:
                 "distance": float(posterior.iloc[0]["distance"]),
                 "parameters": best_params,
                 "posterior_median": median_params,
+                "fit_target": args.fit_target,
                 "generated_metric": args.generated_metric,
                 "distance_objective": args.distance_objective,
+                "peak_height_weight": args.peak_height_weight,
+                "distance_settings": fit_distance_settings,
                 "aggregate_fit_summary": summarize_aggregate_fit(
                     data.dates,
                     data.observed,
@@ -890,6 +931,7 @@ def run_one(args: argparse.Namespace) -> dict[str, Any]:
             calibrated_json_file,
             estimator=args.calibrated_json_estimator,
             rewrite_initial_exposed=args.fit_initial_exposed_scale or args.initial_exposed_scale != 1.0,
+            distance_settings=fit_distance_settings,
         )
 
     print(f"Wrote posterior samples: {posterior_file}")
@@ -914,6 +956,10 @@ def run_one(args: argparse.Namespace) -> dict[str, Any]:
         "best_params_file": str(best_params_file),
         "fit_file": str(fit_file),
         "calibrated_json_file": str(calibrated_json_file) if calibrated_json_file else None,
+        "fit_target": args.fit_target,
+        "generated_metric": args.generated_metric,
+        "distance_settings": fit_distance_settings,
+        "peak_height_weight": args.peak_height_weight,
         "best_distance": float(posterior.iloc[0]["distance"]),
         "best_params": best_params,
     }
@@ -972,6 +1018,10 @@ def main() -> None:
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "input_json_dir": str(args.input_json_dir.resolve()),
         "input_json_glob": args.input_json_glob,
+        "fit_target": args.fit_target,
+        "generated_metric": args.generated_metric,
+        "distance_settings": distance_settings(args),
+        "peak_height_weight": args.peak_height_weight,
         "result_count": len(results),
         "failure_count": len(failures),
         "results": results,
