@@ -14,6 +14,9 @@
 #////////
 library(tidyverse)
 library(jsonlite)
+if (!exists("ls6_command_prefix", mode = "function")) {
+  source("0_pipeline_helpers.R", local = TRUE)
+}
 
 simulation_days <- as.integer(get0("SIMULATION_DAYS", ifnotfound = 300L))
 pipeline_output_dir <- get0("PIPELINE_OUTPUT_DIR", ifnotfound = "STATE_WKLYFIT_TEST")
@@ -30,8 +33,12 @@ launcher_py_file <- file.path(input_dir, "state_pylauncher.py")
 launcher_sh_template_file <- file.path("..", "data", "INPUT_FILE_TEMPLATES", "state_pylauncher.sh")
 launcher_py_template_file <- file.path("..", "data", "INPUT_FILE_TEMPLATES", "state_pylauncher.py")
 simulator_file_rel <- file.path("..", "..", "src", "simulator.py")
+container_image <- get0("LS6_CONTAINER_IMAGE", ifnotfound = "")
+execution_target <- get0("EXECUTION_TARGET", ifnotfound = "local")
 
 dir.create(input_dir, showWarnings = FALSE, recursive = TRUE)
+command_prefix <- ls6_command_prefix("poetry run python3", input_dir,
+  container_image, normalizePath(".."), execution_target)
 
 input_files <- list.files(
   input_dir,
@@ -102,7 +109,7 @@ all_commands_script <- input_metadata %>%
   arrange(.data$state, .data$date_order, .data$scenario_order) %>%
   mutate(
     final_poetry_command = paste(
-      "poetry run python3",
+      command_prefix,
       simulator_file_rel,
       "-l WARNING -d",
       simulation_days,
@@ -131,6 +138,8 @@ if (!file.exists(launcher_sh_file)) {
 } else {
   message("TACC pylauncher shell launcher already exists, leaving unchanged: ", launcher_sh_file)
 }
+
+ensure_ls6_apptainer_module(launcher_sh_file, execution_target)
 
 if (!file.exists(launcher_py_file)) {
   if (!file.exists(launcher_py_template_file)) {

@@ -141,6 +141,10 @@ initialize_pipeline_inputs <- function(config_file = NULL, args = character(), r
     PIPELINE_OUTPUT_DIR <- get_arg_value("--output-dir=")
     PIPELINE_PHASE <- get_arg_value("--pipeline-phase=")
     EXECUTION_TARGET <- get_arg_value("--execution-target=")
+    LS6_CONTAINER_IMAGE <- get_arg_value("--ls6-container-image=", "")
+    if (nzchar(LS6_CONTAINER_IMAGE)) {
+      LS6_CONTAINER_IMAGE <- pipeline_input_path(path.expand(LS6_CONTAINER_IMAGE), repo_root)
+    }
     if (!PIPELINE_PHASE %in% c("all", "fit", "scenarios", "results")) {
       stop("pipeline_phase must be all, fit, scenarios, or results.")
     }
@@ -168,7 +172,7 @@ initialize_pipeline_inputs <- function(config_file = NULL, args = character(), r
     if (R0_FIT_METHOD %in% c("wis_small_states", "wis_county_threshold")) {
       R0_FIT_METHOD <- "simulator_county_threshold"
     }
-    sys.source(file.path(repo_root, "scripts", "Rm_search_helpers.R"), envir = environment())
+    sys.source(file.path(repo_root, "scripts", "5c_Rm_search_helpers.R"), envir = environment())
     R0_SELECTION_METRIC = get_arg_value("--r0-selection-metric=")
     R0_SEARCH_METRICS = get_arg_value("--r0-search-metrics=")
     if (R0_SELECTION_METRIC == "all") R0_SELECTION_METRIC <- "peak_height"
@@ -260,7 +264,7 @@ initialize_pipeline_inputs <- function(config_file = NULL, args = character(), r
     INTERVENTION_TEMPLATE_FILES <- vapply(INTERVENTION_TEMPLATE_FILES, pipeline_input_path, character(1), repo_root = repo_root)
     # Catch syntax errors before any long-running fitting work starts.
     if (R0_FIT_METHOD == "simulator_county_threshold") {
-      invisible(parse(file = file.path(repo_root, "scripts", "5c_Rm_sweep_all_interventions.R")))
+      invisible(parse(file = file.path(repo_root, "scripts", "5c_Rm_search.R")))
     }
     available_state_dirs <- basename(list.dirs(file.path(repo_root, "data"), recursive = FALSE, full.names = TRUE))
     missing_state_dirs <- setdiff(SELECTED_RUN_STATES, available_state_dirs)
@@ -583,7 +587,7 @@ prepare_reused_fit_outputs <- function(envir = parent.frame()) {
         fit_files <- list.files(file.path(pipeline_output_root, "epydemix_fit", date),
           pattern = "_EPYDEMIX_R0_ONLY\\.json$", recursive = TRUE, full.names = TRUE)
         if (!length(fit_files)) stop("No calibrated fits available to reuse for ", date)
-        candidates <- list.files(file.path(pipeline_output_root, "Rm_sweep", date),
+        candidates <- list.files(file.path(pipeline_output_root, "Rm_search", date),
           pattern = "^metadata_batch-.*\\.json$", recursive = TRUE, full.names = TRUE)
         for (fit_file in fit_files) {
           fit <- jsonlite::read_json(fit_file)
@@ -691,29 +695,59 @@ pipeline_relative_path <- function(path, from) {
   if (length(parts)) paste(parts, collapse = "/") else "."
 }
 
+#' Build a shell-safe command prefix for optional LS6 container execution.
+ls6_command_prefix <- function(command, batch_dir, image = "", repo_root,
+                               execution_target = "local") {
+  if (execution_target != "ls6") return(command)
+  wrapper <- pipeline_relative_path(file.path(repo_root, "scripts", "ls6_container_exec.sh"), batch_dir)
+  image_args <- if (is.null(image) || !nzchar(image)) "" else paste(" --image", shQuote(image))
+  paste0("bash ", shQuote(wrapper), image_args, " ", command)
+}
+
+#' Ensure a generated container launcher loads Apptainer, preserving user edits.
+ensure_ls6_apptainer_module <- function(shell_file, execution_target = "local") {
+  if (execution_target != "ls6") return(invisible(NULL))
+  lines <- readLines(shell_file)
+  if (any(grepl("^[[:space:]]*module[[:space:]]+load[[:space:]].*tacc-apptainer", lines))) {
+    return(invisible(NULL))
+  }
+  position <- grep("^[[:space:]]*(module[[:space:]]+load[[:space:]]+pylauncher|python3[[:space:]])", lines)
+  if (!length(position)) stop("Cannot locate PyLauncher startup in ", shell_file)
+  lines <- append(lines, "module load tacc-apptainer", after = position[[1]] - 1L)
+  writeLines(lines, shell_file)
+  invisible(NULL)
+}
+
 #' Write state-level R_m fitting commands for LS6 PyLauncher
 #'
-#' Creates one command per state with isolated state outputs. Commands run
-#' from batch_dir using relative paths. The PyLauncher template's core setting
-#' is preserved. An existing shell launcher
-#' is preserved so allocation edits are retained.
+#' Commands run from batch_dir using relative script paths. When configured,
+#' LS6_CONTAINER_IMAGE selects the image used by the shared runtime wrapper.
+#' Existing allocation settings are retained; container jobs load Apptainer.
 #'
 #' @param states Character vector of state directory names to fit.
 #' @param fit_args Character vector of Rscript arguments for the fitting stage.
-#' @param batch_dir Directory receiving commands, launcher files, and a logs
-#'   subdirectory for per-state fitting logs.
+#' @param batch_dir Directory receiving commands, launchers, and state logs.
 #' @return The generated shell commands, invisibly.
-#' @details Reads repo_root from the enclosing pipeline environment. Writes
-#'   fit_state_commands.txt, fit_state_pylauncher.py, and, if absent,
-#'   fit_state_pylauncher.sh;
-#'   does not submit jobs or launch simulations.
+#' @details Reads repo_root from the enclosing pipeline environment. Does not
+#'   submit jobs or launch simulations.
 write_rm_fit_launcher <- function(states, fit_args, batch_dir) {
   # States share inputs and simulation directories, but write private checkpoint
   # and log files. Combined sweep tables are published by the scenarios phase.
+  # Enforce queue order here as well as upstream so every caller gets the same
+  # fewest-to-most-counties ordering, with state name breaking ties.
+  county_counts <- vapply(states, county_count_for_state, integer(1))
+  state_order <- order(county_counts, states)
+  states <- states[state_order]
+  county_counts <- county_counts[state_order]
+  message("State fit command order by county count: ",
+    paste0(states, " (", county_counts, ")", collapse = ", "))
   dir.create(batch_dir, recursive = TRUE, showWarnings = FALSE)
   batch_dir <- normalizePath(batch_dir, mustWork = TRUE)
   dir.create(file.path(batch_dir, "logs"), showWarnings = FALSE)
-  script <- pipeline_relative_path(file.path(repo_root, "scripts", "5c_Rm_sweep_all_interventions.R"), batch_dir)
+  script <- pipeline_relative_path(file.path(repo_root, "scripts", "5c_Rm_search.R"), batch_dir)
+  image <- get0("LS6_CONTAINER_IMAGE", ifnotfound = "")
+  target <- get0("EXECUTION_TARGET", ifnotfound = "local")
+  command_prefix <- ls6_command_prefix("Rscript", batch_dir, image, repo_root, target)
   # Direct Rscript calls keep each line readable; input initialization already
   # parsed the fitting script before any launch files were written.
   fit_args <- c(script, fit_args[-seq_len(if (fit_args[[1]] == "-e") 2L else 1L)])
@@ -736,7 +770,7 @@ write_rm_fit_launcher <- function(states, fit_args, batch_dir) {
     quoted <- vapply(state_args, function(arg) {
       if (grepl("^[A-Za-z0-9_./=,:+-]+$", arg)) arg else shQuote(arg)
     }, character(1), USE.NAMES = FALSE)
-    paste0("Rscript ", paste(quoted, collapse = " "),
+    paste0(command_prefix, " ", paste(quoted, collapse = " "),
       " > logs/", state, "_fit.log 2>&1")
   }, character(1), USE.NAMES = FALSE)
   writeLines(commands, file.path(batch_dir, "fit_state_commands.txt"))
@@ -753,6 +787,7 @@ write_rm_fit_launcher <- function(states, fit_args, batch_dir) {
     template <- sub("^(#SBATCH[[:space:]]+-e[[:space:]]+)[^[:space:]]+", "\\1fit_state_Rm.%j.e", template)
     writeLines(template, shell_file)
   }
+  ensure_ls6_apptainer_module(shell_file, target)
   message("Prepared ", length(commands), " state fit commands using the PyLauncher template:\n  ", batch_dir,
     "\nSet the allocation in fit_state_pylauncher.sh, then submit it from that directory.")
   invisible(commands)
@@ -810,11 +845,11 @@ log_pipeline_settings <- function() {
 #' @return TRUE, invisibly. Incomplete or mismatched state checkpoints cause an
 #'   error before combined CSVs are written.
 #' @details Reads state-specific RDS files in each date's checkpoints directory
-#'   and atomically publishes Rm_sweep_*.csv tables in the shared date directory.
+#'   and atomically publishes Rm_search_*.csv tables in the shared date directory.
 #'   Called once by the scenarios phase; performs no fitting or simulations.
-aggregate_rm_sweep_checkpoints <- function(states = gsub(" ", "-", c(state.name, "District of Columbia"))) {
+aggregate_rm_search_checkpoints <- function(states = gsub(" ", "-", c(state.name, "District of Columbia"))) {
   for (date in as.character(SIM_DAY_0_VALUES)) {
-    root <- file.path(pipeline_output_root, "Rm_sweep", date)
+    root <- file.path(pipeline_output_root, "Rm_search", date)
     checkpoints <- file.path(root, "checkpoints")
     expected <- list(sim_day_0 = date, scenario = R0_FIT_SCENARIO,
       simulation_days = as.integer(SIMULATION_DAYS), realization_range = as.integer(R0_SEARCH_REALIZATION_RANGE),
@@ -825,7 +860,7 @@ aggregate_rm_sweep_checkpoints <- function(states = gsub(" ", "-", c(state.name,
     tables <- list()
     missing <- character()
     for (state in states) {
-      prefix <- paste0(state, "_Rm_sweep_")
+      prefix <- paste0(state, "_Rm_search_")
       settings <- file.path(checkpoints, paste0(prefix, "settings.rds"))
       paths <- file.path(checkpoints, paste0(prefix, required, ".rds"))
       if (!file.exists(settings) || !identical(readRDS(settings), expected) || !all(file.exists(paths))) {
@@ -857,7 +892,7 @@ aggregate_rm_sweep_checkpoints <- function(states = gsub(" ", "-", c(state.name,
       readr::write_csv(tables[[name]], temporary)
       if (!file.rename(temporary, path)) stop("Could not publish combined sweep table: ", path)
     }
-    message("Published ", length(tables), " combined Rm_sweep CSV tables for ", date, ".")
+    message("Published ", length(tables), " combined Rm_search CSV tables for ", date, ".")
   }
   invisible(TRUE)
 }
@@ -1242,7 +1277,7 @@ run_pipeline_fits <- function() {
         # source() parses the entire file before evaluating it. Direct Rscript
         # execution can discover a syntax error only after earlier fits finish.
         sprintf("source(%s)", encodeString(
-          file.path(repo_root, "scripts", "5c_Rm_sweep_all_interventions.R"),
+          file.path(repo_root, "scripts", "5c_Rm_search.R"),
           quote = '"'
         )),
         paste0("--output-dir=", PIPELINE_OUTPUT_DIR),
@@ -1268,7 +1303,7 @@ run_pipeline_fits <- function() {
       cat("  Rscript ", paste(shQuote(wis_args), collapse = " "), "\n", sep = "")
       if (R0_FIT_LAUNCH == "pylauncher") {
         write_rm_fit_launcher(wis_missing_or_stale$state_dir, wis_args,
-          file.path(pipeline_output_root, "Rm_sweep", SIM_DAY_0_LABEL))
+          file.path(pipeline_output_root, "Rm_search", SIM_DAY_0_LABEL))
         return(invisible(FALSE))
       }
       wis_status <- run_logged_command("Rscript", wis_args, workdir = repo_root)

@@ -45,17 +45,26 @@ Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/1_RU
 ```
 
 This prepares data and writes the fitting launcher under
-`<output_dir>/Rm_sweep/<date>/`. Set the allocation in that directory's
+`<output_dir>/Rm_search/<date>/`. Set the allocation in that directory's
 `fit_state_pylauncher.sh`, then submit it with `sbatch fit_state_pylauncher.sh`.
 The fitting files are `fit_state_commands.txt`, `fit_state_pylauncher.py`, and
 `fit_state_pylauncher.sh`. The Python launcher retains the template's `cores=4`
 and the shell job name is `fit_state_Rm`. Scenario launchers keep their original
 `state_*` names.
 Per-state fitting logs are written under `<date>/logs/`.
+Fitting commands are ordered by county count, fewest first, with state name
+breaking ties. Script 0 prints the ordered states and counts when writing them.
+Parallel execution means jobs can finish in a different order.
+Selecting `execution_target = "ls6"` automatically generates container
+commands for fitting and scenarios, using `$WORK/pes_pipeline_r442_py312.sif`
+on the job's compute node. Shell launchers load Apptainer and the shared wrapper
+restores the image's R/Python environment. `ls6_container_image` is an optional
+path override; local execution stays native. See the
+[container build instructions](../containers/README.md).
 All fitting states share the original `<date>/candidate_inputs/`, `sim_outputs/`,
 and `plots/` directories. Fitting tasks write private state-specific RDS files
 under `<date>/checkpoints/`; they never write combined sweep CSVs. Once all
-fits finish, `2_RUN_SCENARIOS.R` publishes `Rm_sweep_*.csv` files directly under
+fits finish, `2_RUN_SCENARIOS.R` publishes `Rm_search_*.csv` files directly under
 `<date>/`. This removes shared summary-table writes from parallel fitting.
 After fitting finishes:
 
@@ -144,7 +153,7 @@ files out of commits.
 | 4b | `4b_flu_county_high_risk_by_age.R` | Distributes state high-risk estimates to counties using CDC PLACES comorbidity burden, with SVI used for comparison. |
 | 5a | `5a_derive_initial_exposures.R` | Derives state/DC county-age low-risk exposures from Flu Hub age-stratified incident hospitalization data using `prop_IS_to_H_lowrisk` from the SEIHRD template by default, or an explicit `--lowrisk-hosp-rate-file`, then writes dated seed JSONs under `<PIPELINE_OUTPUT_DIR>/SEED_INPUT_JSONS/<sim_day_0>/`. The orchestrator skips this step when the dated summaries, 51 dated seed JSONs, and 51 dated validation files already exist for `--sim-day-0`. |
 | 5b | `5b_epydemix_fit_seihrd_hospitalizations.py` | Uses Epydemix ABC to fit the five-age-group SEIHRD hospitalization curve to Flu Hub age-stratified incident hospitalization time series, either one state or all `5a` no-intervention JSONs. The default target is weekly incident hospital admissions; pass `--epydemix-fit-target=hosp_increase` to the orchestrator, or `--fit-target hosp_increase` to the Python script, to compare against the older positive H-compartment-increase target. The orchestrator writes/checks calibrated JSONs under `<PIPELINE_OUTPUT_DIR>/epydemix_fit/<sim_day_0>/` and skips this step when all 51 files there record the same fit start date as `--sim-day-0`. |
-| 5c | `5c_wis_r0_sweep_all_interventions.R` | Full-simulator R0 search, defaulting to absolute total incident-hospitalization error. Outputs use `Rm_sweep/<sim_day_0>/`. `--r0-fit-method=simulator_county_threshold` uses it for counties `<= --r0-county-threshold` (default 255), with Epydemix for larger states. `--r0-realization-range=0,9` is independent of the final simulator range; legacy `--r0-wis-*` flags and fit-method names remain aliases. The existing weekly hospitalization series is scored over complete MMWR weeks within the simulation window. Individual criteria are `total`, `peak_height`, `peak_timing`, and optional `wis`; `--r0-search-metrics=all` explores the three features, and `all,wis` adds WIS. `--r0-selection-metric` chooses the downstream calibrated JSON (default `total`). There is no combined penalty loss. Candidate realizations default to `--execution-mode=parallel --workers=auto`. |
+| 5c | `5c_Rm_search.R` | Full-simulator R0 search, defaulting to absolute total incident-hospitalization error. Outputs use `Rm_search/<sim_day_0>/`. `--r0-fit-method=simulator_county_threshold` uses it for counties `<= --r0-county-threshold` (default 255), with Epydemix for larger states. `--r0-realization-range=0,9` is independent of the final simulator range; legacy `--r0-wis-*` flags and fit-method names remain aliases. The existing weekly hospitalization series is scored over complete MMWR weeks within the simulation window. Individual criteria are `total`, `peak_height`, `peak_timing`, and optional `wis`; `--r0-search-metrics=all` explores the three features, and `all,wis` adds WIS. `--r0-selection-metric` chooses the downstream calibrated JSON (default `total`). There is no combined penalty loss. Candidate realizations default to `--execution-mode=parallel --workers=auto`. |
 | 6a | `6a_vaccine_coverage_by_state.R` | Converts influenza coverage and effectiveness assumptions into weekly state vaccine-stockpile schedules. |
 | 6b | `6b_outpatient_antiviral_coverage_by_state.R` | Estimates state-specific insured high-risk counts for outpatient antiviral stockpile scenarios. Skips when both final antiviral CSVs exist and caches downloaded ACS PUMS extracts under `data/RISK_RATIOS/PUMS_CACHE/`. |
 | 6c | `6c_weekend_npi_schedule.R` | Expands a prototype Weekend Mobility Decrease NPI across the configured simulation window. |
@@ -161,7 +170,7 @@ If a full-simulator R0 run finishes its simulations but stops before writing its
 calibrated JSONs, replay the search from saved outputs with the original settings:
 
 ```bash
-Rscript scripts/5c_wis_r0_sweep_all_interventions.R \
+Rscript scripts/5c_Rm_search.R \
   --output-dir=MANUSCRIPT_EXAMPLE_TEST --sim-day-0=2025-10-04 \
   --selected-states=District-of-Columbia,Delaware,Rhode-Island \
   --simulation-days=200 --realization-range=0,9 \

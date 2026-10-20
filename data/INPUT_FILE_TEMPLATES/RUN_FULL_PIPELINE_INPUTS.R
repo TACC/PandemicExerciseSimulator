@@ -12,6 +12,7 @@ pipeline_inputs <- list(
   # Local example: run the complete pipeline, including selected preview states.
   pipeline_phase = "all",            # "all", "fit", "scenarios", or "results".
   execution_target = "local",        # "local" runs sims; "ls6" writes launchers.
+  ls6_container_image = NULL,         # Optional LS6 image override; default is $WORK/pes_pipeline_r442_py312.sif.
   # Experiment: outputs are created under this directory, relative to the repo.
   output_dir = "LOCAL_PIPELINE_TEST",
   sim_day_0 = "2025-10-04",           # One date, or c("2025-09-27", "2025-10-04").
@@ -46,7 +47,7 @@ pipeline_inputs <- list(
   workers = "auto",                 # "auto" or a positive integer, e.g. 32L.
   r0_fit_launch = "direct",         # "direct" runs fits during 0.
   # "pylauncher" prepares inputs + state_commands.txt + state_pylauncher.{sh,py}
-  # under <output_dir>/Rm_sweep/<date>/, then stops before running fits.
+  # under <output_dir>/Rm_search/<date>/, then stops before running fits.
   # LS6 100-sim example: r0_realization_range=c(0L,99L), workers=32L,
   # r0_fit_launch="pylauncher". Set the allocation in the generated .sh and submit it.
   # After fitting, rerun with r0_fit_launch="direct" to reuse fits and continue.

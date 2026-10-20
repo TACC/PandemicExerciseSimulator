@@ -11,6 +11,9 @@ pipeline_inputs <- list(
   # Shared LS6 experiment settings used by all three phase files.
   pipeline_phase = "fit",            # "all", "fit", "scenarios", or "results".
   execution_target = "ls6",          # LS6 phases prepare launchers instead of running sims.
+  # LS6 commands automatically use $WORK/pes_pipeline_r442_py312.sif.
+  # Optional override for an image stored elsewhere; local execution stays native.
+  ls6_container_image = NULL,
   # Experiment: outputs are created under this directory, relative to the repo.
   output_dir = "LS6_RmSweep_TEST",
   sim_day_0 = "2025-10-04",           # One date, or c("2025-09-27", "2025-10-04").
