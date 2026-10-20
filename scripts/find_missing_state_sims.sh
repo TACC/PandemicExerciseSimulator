@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Check TACC launcher progress for state_commands.txt outputs.
 # Run from STATE_WKLYFIT_TEST/TACC_FILES on TACC:
-#   bash ../../scripts/find_missing_state_sims.sh state_commands.txt .
+#   bash ../../scripts/find_missing_state_sims.sh state_resubmit_commands.txt .
 #
 # Or from repo root:
 #   bash scripts/find_missing_state_sims.sh STATE_WKLYFIT_TEST/TACC_FILES/state_commands.txt STATE_WKLYFIT_TEST/TACC_FILES
@@ -154,7 +154,7 @@ find_output_dir() {
    return 1
 }
 
-printf 'state,scenario,input_file,output_dir,timing_file,finished,missing,last_sim_id,percent_complete,needs_resubmit,missing_ids\n' > "$STATUS_CSV"
+printf 'state,scenario,input_file,output_dir,timing_file,finished,missing,last_sim_id,percent_complete,status,needs_resubmit,missing_ids\n' > "$STATUS_CSV"
 : > "$RESUBMIT_FILE"
 
 total=0
@@ -200,15 +200,22 @@ while IFS= read -r cmd; do
    fi
 
    missing=$((EXPECTED_COUNT - finished))
+   status="not_started"
    if [[ "$missing" -le 0 ]]; then
       needs=0
       missing=0
+      status="complete"
       complete=$((complete + 1))
    else
       echo "$cmd" >> "$RESUBMIT_FILE"
       if [[ "$finished" -gt 0 ]]; then
+         status="partial"
          partial=$((partial + 1))
+      elif [[ "$output_dir" != "NA" ]]; then
+         status="started_no_finish"
+         not_started=$((not_started + 1))
       else
+         status="not_started"
          not_started=$((not_started + 1))
       fi
    fi
@@ -223,7 +230,9 @@ while IFS= read -r cmd; do
       csv_quote "$timing_file"; printf ','
       printf '%s,%s,' "$finished" "$missing"
       csv_quote "$last_id"; printf ','
-      printf '%s,%s,' "$percent" "$needs"
+      printf '%s,' "$percent"
+      csv_quote "$status"; printf ','
+      printf '%s,' "$needs"
       csv_quote "$ids"; printf '\n'
    } >> "$STATUS_CSV"
 done < "$COMMAND_FILE"
