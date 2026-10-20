@@ -17,6 +17,7 @@ source("6c_weekend_npi_schedule.R")
 
 SIM_DAY_0 <- as.Date(get0("SIM_DAY_0", ifnotfound = "2025-10-01"))
 SIMULATION_DAYS <- as.integer(get0("SIMULATION_DAYS", ifnotfound = 300L))
+SIM_REALIZATION_RANGE <- as.integer(get0("SIM_REALIZATION_RANGE", ifnotfound = c(0L, 99L)))
 PIPELINE_OUTPUT_DIR <- get0("PIPELINE_OUTPUT_DIR", ifnotfound = "STATE_INIT_TEST")
 NONE_TEMPLATE_FILE <- get0("NONE_TEMPLATE_FILE", ifnotfound = "")
 INTERVENTION_TEMPLATE_FILES <- get0("INTERVENTION_TEMPLATE_FILES", ifnotfound = character())
@@ -25,10 +26,6 @@ SELECTED_RUN_SCENARIOS <- get0(
   ifnotfound = c("NONE", names(INTERVENTION_TEMPLATE_FILES))
 )
 INPUT_CREATOR <- get0("INPUT_CREATOR", ifnotfound = "Emily M Javan")
-NPI_EFFECTIVENESS_BY_AGE <- get0("NPI_EFFECTIVENESS_BY_AGE", ifnotfound = c(0.5, 0.5, 0.5, 0.5, 0.5))
-ANTIVIRAL_EFFECTIVENESS_HOSP <- get0("ANTIVIRAL_EFFECTIVENESS_HOSP", ifnotfound = 0.25)
-PEDIATRIC_VACCINE_EFFECTIVENESS <- get0("PEDIATRIC_VACCINE_EFFECTIVENESS", ifnotfound = 0.38)
-ADULT_VACCINE_EFFECTIVENESS <- get0("ADULT_VACCINE_EFFECTIVENESS", ifnotfound = 0.30)
 
 seed_input_dir <- file.path("..", PIPELINE_OUTPUT_DIR, "SEED_INPUT_JSONS", as.character(SIM_DAY_0))
 epydemix_fit_dir <- file.path("..", PIPELINE_OUTPUT_DIR, "epydemix_fit", as.character(SIM_DAY_0))
@@ -131,35 +128,6 @@ copy_calibrated_fields <- function(target, calibrated) {
   target
 }
 
-format_effectiveness <- function(values) {
-  as.character(values)
-}
-
-match_effectiveness_by_age <- function(values, target_len) {
-  values <- as.numeric(values)
-  if (length(values) == target_len) {
-    return(values)
-  }
-  stop(
-    "NPI_EFFECTIVENESS_BY_AGE length must match the template NPI effectiveness age-group length (",
-    target_len,
-    ")."
-  )
-}
-
-vaccine_effectiveness_by_age <- function(target_len) {
-  if (target_len == 1) {
-    return(ADULT_VACCINE_EFFECTIVENESS)
-  }
-  if (target_len == 2) {
-    return(c(PEDIATRIC_VACCINE_EFFECTIVENESS, ADULT_VACCINE_EFFECTIVENESS))
-  }
-  c(
-    rep(PEDIATRIC_VACCINE_EFFECTIVENESS, min(2, target_len)),
-    rep(ADULT_VACCINE_EFFECTIVENESS, max(target_len - 2, 0))
-  )
-}
-
 state_name_from_dir <- function(state_dir) {
   stringr::str_replace_all(state_dir, "-", " ")
 }
@@ -206,18 +174,13 @@ apply_state_stockpiles <- function(config, state_dir, scenario_label) {
   config
 }
 
-apply_experiment_overrides <- function(config) {
+apply_run_overrides <- function(config) {
+  if (!is.null(config$realization_range)) {
+    config$realization_range <- as.character(SIM_REALIZATION_RANGE)
+  }
+
   npis <- purrr::pluck(config, "non_pharma_interventions", .default = NULL)
   if (length(npis) > 0) {
-    npis <- purrr::map(npis, function(npi_row) {
-      if (!is.null(npi_row$effectiveness)) {
-        target_len <- length(npi_row$effectiveness)
-        npi_row$effectiveness <- format_effectiveness(
-          match_effectiveness_by_age(NPI_EFFECTIVENESS_BY_AGE, target_len)
-        )
-      }
-      npi_row
-    })
     weekend_rows <- purrr::map_lgl(
       npis,
       ~ identical(as.character(.x$identity), "weekend-mobility-decrease")
@@ -233,28 +196,6 @@ apply_experiment_overrides <- function(config) {
     config$non_pharma_interventions <- npis
   }
 
-  antiviral_hosp <- purrr::pluck(
-    config,
-    "antiviral_model", "parameters", "antiviral_effectiveness_hosp",
-    .default = NULL
-  )
-  if (!is.null(antiviral_hosp)) {
-    config$antiviral_model$parameters$antiviral_effectiveness_hosp <-
-      as.character(ANTIVIRAL_EFFECTIVENESS_HOSP)
-  }
-
-  vaccine_effectiveness <- purrr::pluck(
-    config,
-    "vaccine_model", "parameters", "vaccine_effectiveness",
-    .default = NULL
-  )
-  if (!is.null(vaccine_effectiveness)) {
-    target_len <- length(vaccine_effectiveness)
-    config$vaccine_model$parameters$vaccine_effectiveness <- format_effectiveness(
-      vaccine_effectiveness_by_age(target_len)
-    )
-  }
-
   config
 }
 
@@ -267,10 +208,7 @@ set_generic_metadata <- function(config, state_dir, scenario_label) {
   config$metadata_tags$state_dir <- state_dir
   config$metadata_tags$scenario_label <- scenario_label
   config$metadata_tags$experiment_controls <- list(
-    npi_effectiveness_by_age = as.numeric(NPI_EFFECTIVENESS_BY_AGE),
-    antiviral_effectiveness_hosp = as.numeric(ANTIVIRAL_EFFECTIVENESS_HOSP),
-    pediatric_vaccine_effectiveness = as.numeric(PEDIATRIC_VACCINE_EFFECTIVENESS),
-    adult_vaccine_effectiveness = as.numeric(ADULT_VACCINE_EFFECTIVENESS)
+    sim_realization_range = as.integer(SIM_REALIZATION_RANGE)
   )
   config$output_dir_path <- "GENERATE"
   config$batch_num <- "GENERATE"
@@ -327,7 +265,7 @@ for (seed_file in seed_files) {
     none$non_pharma_interventions <- list()
   }
   if ("NONE" %in% SELECTED_RUN_SCENARIOS) {
-    none <- apply_experiment_overrides(none)
+    none <- apply_run_overrides(none)
     none <- set_generic_metadata(none, state_dir, "NONE")
     json_files <- c(json_files, write_scenario(none, state_dir, "NONE"))
   }
@@ -336,7 +274,7 @@ for (seed_file in seed_files) {
     intervention_config <- replace_STATE_tokens(intervention_templates[[scenario_label]], state_dir = state_dir)
     intervention_config <- copy_calibrated_fields(intervention_config, calibrated)
     intervention_config <- apply_state_stockpiles(intervention_config, state_dir, scenario_label)
-    intervention_config <- apply_experiment_overrides(intervention_config)
+    intervention_config <- apply_run_overrides(intervention_config)
     intervention_config <- set_generic_metadata(intervention_config, state_dir, scenario_label)
     json_files <- c(json_files, write_scenario(intervention_config, state_dir, scenario_label))
   }
