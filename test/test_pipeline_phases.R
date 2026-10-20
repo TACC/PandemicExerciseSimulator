@@ -22,10 +22,15 @@ for (name in names(phases)) {
     identical(env$SIM_REALIZATION_RANGE, env$R0_SEARCH_REALIZATION_RANGE),
     env$R0_WORKERS == "32", !env$DEPLOY_SHINYAPPS,
     env$R0_FIT_LAUNCH == if (name == "1_RUN_FIT.R") "pylauncher" else "direct")
+  prefix <- env$ls6_command_prefix("Rscript", repo, env$LS6_CONTAINER_IMAGE,
+    repo, env$EXECUTION_TARGET)
+  stopifnot(grepl("ls6_container_exec.sh", prefix, fixed = TRUE))
 }
 local <- setup(file.path(templates, "RUN_FULL_PIPELINE_INPUTS.R"))
 stopifnot(local$PIPELINE_PHASE == "all", local$EXECUTION_TARGET == "local",
-  length(local$SELECTED_RUN_STATES) > 0L)
+  length(local$SELECTED_RUN_STATES) > 0L,
+  local$ls6_command_prefix("Rscript", repo, "/ignored/image.sif", repo,
+    local$EXECUTION_TARGET) == "Rscript")
 override <- setup(file.path(templates, "1_RUN_FIT.R"), c("--execution-target=local", "--workers=2"))
 stopifnot(override$R0_FIT_LAUNCH == "direct", override$R0_WORKERS == "2")
 expect_error(setup(file.path(templates, "1_RUN_FIT.R"), "--pipeline-phase=unknown"))
@@ -74,7 +79,7 @@ run_phase <- function(name, target = "ls6", fail_fits = FALSE, fail_outputs = FA
         record("fit"); invisible(env$R0_FIT_LAUNCH != "pylauncher")
       }
       env$prepare_reused_fit_outputs <- function() record("reuse")
-      env$aggregate_rm_sweep_checkpoints <- function() record("aggregate")
+      env$aggregate_rm_search_checkpoints <- function() record("aggregate")
       env$require_completed_pipeline_fits <- function() {
         record("check-fits")
         if (fail_fits) stop("Incomplete fits")

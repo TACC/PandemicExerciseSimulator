@@ -1,6 +1,6 @@
 # Run with Rscript --vanilla test/test_wis_recovery.R from the repository root.
 # Extract the runner without sourcing the script's pipeline side effects.
-expressions <- parse(file = "scripts/5c_Rm_sweep_all_interventions.R")
+expressions <- parse(file = "scripts/5c_Rm_search.R")
 runner <- Filter(function(expr) {
   is.call(expr) && identical(expr[[1]], as.name("<-")) &&
     identical(expr[[2]], as.name("run_candidate"))

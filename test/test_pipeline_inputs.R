@@ -106,7 +106,7 @@ inputs$source <- function(file, local = FALSE, ...) {
 }
 stopifnot(identical(inputs$run_pipeline_fits(), invisible(FALSE)),
           identical(inputs$SELECTED_RUN_SCENARIOS, "NONE"), length(sources) == 4L)
-batch_dir <- file.path(inputs$pipeline_output_root, "Rm_sweep", inputs$SIM_DAY_0_LABEL)
+batch_dir <- file.path(inputs$pipeline_output_root, "Rm_search", inputs$SIM_DAY_0_LABEL)
 commands <- readLines(file.path(batch_dir, "fit_state_commands.txt"))
 stopifnot(length(commands) == 2L, all(grepl("--realization-range=0,99", commands, fixed = TRUE)),
           all(grepl("--state-output-subdir=false", commands, fixed = TRUE)),
@@ -124,6 +124,36 @@ stopifnot(length(commands) == 2L, all(grepl("--realization-range=0,99", commands
               readLines(file.path(repo, "data", "INPUT_FILE_TEMPLATES", "state_pylauncher.py")), fixed = TRUE)),
           any(grepl("#SBATCH -J fit_state_Rm", readLines(file.path(batch_dir, "fit_state_pylauncher.sh")), fixed = TRUE)),
           any(grepl("python3 fit_state_pylauncher.py", readLines(file.path(batch_dir, "fit_state_pylauncher.sh")), fixed = TRUE)))
+
+# Container commands preserve state arguments and user allocation edits.
+container_batch <- file.path(temporary, "container batch")
+original_target <- inputs$EXECUTION_TARGET
+inputs$EXECUTION_TARGET <- "ls6"
+# Merely selecting LS6 must produce container commands without an image setting.
+inputs$write_rm_fit_launcher(rev(states), c("scripts/5c_Rm_search.R",
+  "--selected-states=Delaware"), container_batch)
+automatic_commands <- readLines(file.path(container_batch, "fit_state_commands.txt"))
+stopifnot(all(startsWith(automatic_commands, "bash ")),
+  all(grepl("ls6_container_exec.sh", automatic_commands, fixed = TRUE)),
+  !any(grepl("--image", automatic_commands, fixed = TRUE)),
+  grepl("--selected-states=Delaware", automatic_commands[[1]], fixed = TRUE),
+  grepl("--selected-states=Nevada", automatic_commands[[2]], fixed = TRUE))
+inputs$LS6_CONTAINER_IMAGE <- file.path(temporary, "image with spaces.sif")
+inputs$write_rm_fit_launcher(states, c("scripts/5c_Rm_search.R",
+  "--selected-states=Delaware", "--realization-range=0,99"), container_batch)
+container_commands <- readLines(file.path(container_batch, "fit_state_commands.txt"))
+stopifnot(all(startsWith(container_commands, "bash ")),
+  all(grepl("ls6_container_exec.sh", container_commands, fixed = TRUE)),
+  all(grepl(shQuote(inputs$LS6_CONTAINER_IMAGE), container_commands, fixed = TRUE)),
+  all(grepl("--realization-range=0,99", container_commands, fixed = TRUE)))
+container_shell <- file.path(container_batch, "fit_state_pylauncher.sh")
+write("# User allocation marker", container_shell, append = TRUE)
+inputs$write_rm_fit_launcher(states, c("scripts/5c_Rm_search.R",
+  "--selected-states=Delaware"), container_batch)
+stopifnot(sum(grepl("^module load tacc-apptainer$", readLines(container_shell))) == 1L,
+  tail(readLines(container_shell), 1) == "# User allocation marker")
+inputs$LS6_CONTAINER_IMAGE <- ""
+inputs$EXECUTION_TARGET <- original_target
 
 # Resuming in direct mode must recognize those fits and avoid running them again.
 for (state in states) {
@@ -161,7 +191,7 @@ for (state in states) {
   stopifnot(!reuse$wis_calibrated_fit_matches(fit_path, "2025-10-04", 200L, c(0L,99L),
     "peak_height", expected_scenario = "ALL_INTERVENTIONS"))
   for (candidate in c(2.6, 2.7)) {
-    batch <- file.path(reuse$pipeline_output_root, "Rm_sweep", "2025-10-04", state,
+    batch <- file.path(reuse$pipeline_output_root, "Rm_search", "2025-10-04", state,
       "sim_outputs", as.character(candidate), "batch-1")
     dir.create(batch, recursive = TRUE)
     metadata <- list(metadata_tags = list(state_dir = state, scenario_label = "VACCINE",
@@ -220,7 +250,7 @@ for (i in seq_len(nrow(reuse$REUSED_FIT_OUTPUTS))) {
 stopifnot(reuse$require_completed_scenario_outputs(states = states))
 
 # Combined sweep CSVs appear only after all state checkpoints are ready.
-checkpoint_dir <- file.path(reuse$pipeline_output_root, "Rm_sweep", "2025-10-04", "checkpoints")
+checkpoint_dir <- file.path(reuse$pipeline_output_root, "Rm_search", "2025-10-04", "checkpoints")
 dir.create(checkpoint_dir, recursive = TRUE)
 settings <- list(sim_day_0 = "2025-10-04", scenario = reuse$R0_FIT_SCENARIO,
   simulation_days = reuse$SIMULATION_DAYS, realization_range = reuse$R0_SEARCH_REALIZATION_RANGE,
@@ -229,19 +259,19 @@ settings <- list(sim_day_0 = "2025-10-04", scenario = reuse$R0_FIT_SCENARIO,
 tables <- c("search_trace", "scores_by_week", "quantile_predictions", "best_by_state",
   "summary", "featured_candidate_comparison", "calibrated_json_manifest")
 for (state in states) {
-  saveRDS(settings, file.path(checkpoint_dir, paste0(state, "_Rm_sweep_settings.rds")))
+  saveRDS(settings, file.path(checkpoint_dir, paste0(state, "_Rm_search_settings.rds")))
   for (table in tables) saveRDS(data.frame(geo_region = state, disease_R0 = 2.6),
-    file.path(checkpoint_dir, paste0(state, "_Rm_sweep_", table, ".rds")))
+    file.path(checkpoint_dir, paste0(state, "_Rm_search_", table, ".rds")))
 }
-missing <- file.path(checkpoint_dir, "Nevada_Rm_sweep_settings.rds")
+missing <- file.path(checkpoint_dir, "Nevada_Rm_search_settings.rds")
 file.rename(missing, paste0(missing, ".hold"))
-expect_error(reuse$aggregate_rm_sweep_checkpoints(states = states))
+expect_error(reuse$aggregate_rm_search_checkpoints(states = states))
 sweep_dir <- dirname(checkpoint_dir)
-stopifnot(length(list.files(sweep_dir, pattern = "^Rm_sweep_.*\\.csv$")) == 0L)
+stopifnot(length(list.files(sweep_dir, pattern = "^Rm_search_.*\\.csv$")) == 0L)
 file.rename(paste0(missing, ".hold"), missing)
-reuse$aggregate_rm_sweep_checkpoints(states = states)
-stopifnot(length(list.files(sweep_dir, pattern = "^Rm_sweep_.*\\.csv$")) == 7L,
-  nrow(readr::read_csv(file.path(sweep_dir, "Rm_sweep_best_by_state.csv"), show_col_types = FALSE)) == 2L)
+reuse$aggregate_rm_search_checkpoints(states = states)
+stopifnot(length(list.files(sweep_dir, pattern = "^Rm_search_.*\\.csv$")) == 7L,
+  nrow(readr::read_csv(file.path(sweep_dir, "Rm_search_best_by_state.csv"), show_col_types = FALSE)) == 2L)
 timing <- file.path(dirname(reuse$REUSED_FIT_OUTPUTS$metadata_file[[1]]), "simulation_times_batch-1.csv")
 readr::write_csv(data.frame(sim_id = 0:9), timing)
 expect_error(reuse$require_completed_scenario_outputs(states = states))

@@ -1,7 +1,7 @@
 # Run: Rscript --vanilla test/test_r0_total_search.R
 suppressPackageStartupMessages({library(dplyr); library(tidyr); library(purrr); library(tibble)})
 `%||%` <- function(x, y) if (is.null(x) || !length(x)) y else x
-source("scripts/Rm_search_helpers.R")
+source("scripts/5c_Rm_search_helpers.R")
 
 stopifnot(identical(parse_r0_search_metrics("all"), c("total", "peak_height", "peak_timing")),
           identical(parse_r0_search_metrics("all,wis"), c("total", "peak_height", "peak_timing", "wis")))
@@ -32,7 +32,7 @@ stopifnot(inherits(tryCatch(r0_weekly_incident_samples(filter(daily, sim_id == 0
                          error = identity), "error"))
 
 # Extract functions without launching the pipeline or simulations.
-expressions <- as.list(parse(file = "scripts/5c_Rm_sweep_all_interventions.R"))
+expressions <- as.list(parse(file = "scripts/5c_Rm_search.R"))
 load_function <- function(name, env = .GlobalEnv) {
   assignment <- Filter(function(expr) is.call(expr) && identical(expr[[1]], as.name("<-")) &&
                          identical(expr[[2]], as.name(name)), expressions)
@@ -117,10 +117,10 @@ stopifnot(all(vapply(jobs, isTRUE, logical(1))),
 defer_sweep_tables <- TRUE
 sweep_root <- temporary
 states <- "Private-State"
-combined <- file.path(sweep_root, "Rm_sweep_search_trace.csv")
+combined <- file.path(sweep_root, "Rm_search_search_trace.csv")
 private <- sweep_table_path(combined)
 write_csv_preserving_existing(saved, private)
-stopifnot(endsWith(private, "Private-State_Rm_sweep_search_trace.rds"),
+stopifnot(endsWith(private, "Private-State_Rm_search_search_trace.rds"),
   file.exists(private), !file.exists(combined), nrow(read_sweep_table(private)) == 1L)
 defer_sweep_tables <- FALSE
 
