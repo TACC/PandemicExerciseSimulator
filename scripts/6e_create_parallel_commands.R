@@ -9,7 +9,8 @@
 #' This script does not write simulator input JSONs. It writes launcher files
 #' next to those dated input directories:
 #'   STATE_INIT_TEST/TACC_FILES/state_commands.txt
-#'   STATE_INIT_TEST/TACC_FILES/state_launcher.sh
+#'   STATE_INIT_TEST/TACC_FILES/state_pylauncher.sh
+#'   STATE_INIT_TEST/TACC_FILES/state_pylauncher.py
 #////////
 library(tidyverse)
 library(jsonlite)
@@ -24,8 +25,10 @@ selected_run_scenarios <- get0(
 sim_day_0_values <- as.character(get0("SIM_DAY_0_VALUES", ifnotfound = character()))
 input_dir <- file.path("..", pipeline_output_dir, "TACC_FILES")
 commands_file <- file.path(input_dir, "state_commands.txt")
-launcher_file <- file.path(input_dir, "state_launcher.sh")
-launcher_template_file <- file.path("..", "data", "INPUT_FILE_TEMPLATES", "state_launcher.sh")
+launcher_sh_file <- file.path(input_dir, "state_pylauncher.sh")
+launcher_py_file <- file.path(input_dir, "state_pylauncher.py")
+launcher_sh_template_file <- file.path("..", "data", "INPUT_FILE_TEMPLATES", "state_pylauncher.sh")
+launcher_py_template_file <- file.path("..", "data", "INPUT_FILE_TEMPLATES", "state_pylauncher.py")
 simulator_file_rel <- file.path("..", "..", "src", "simulator.py")
 
 dir.create(input_dir, showWarnings = FALSE, recursive = TRUE)
@@ -83,6 +86,12 @@ if (nrow(input_metadata) == 0) {
   )
 }
 
+reused_fit_outputs <- get0("REUSED_FIT_OUTPUTS", ifnotfound = NULL)
+if (!is.null(reused_fit_outputs) && nrow(reused_fit_outputs)) {
+  input_metadata <- dplyr::anti_join(input_metadata, reused_fit_outputs,
+    by = c("state", "sim_day_0", "scenario"))
+}
+
 all_commands_script <- input_metadata %>%
   mutate(
     date_order = match(.data$sim_day_0, sim_day_0_values),
@@ -95,7 +104,7 @@ all_commands_script <- input_metadata %>%
     final_poetry_command = paste(
       "poetry run python3",
       simulator_file_rel,
-      "-l INFO -d",
+      "-l WARNING -d",
       simulation_days,
       "-i",
       shQuote(file.path(.data$sim_day_0, basename(.data$INPUT_FILE)))
@@ -112,15 +121,25 @@ write.table(
   quote = FALSE
 )
 
-if (!file.exists(launcher_file)) {
-  if (!file.exists(launcher_template_file)) {
-    stop("No TACC launcher template found at ", launcher_template_file)
+if (!file.exists(launcher_sh_file)) {
+  if (!file.exists(launcher_sh_template_file)) {
+    stop("No TACC pylauncher shell template found at ", launcher_sh_template_file)
   }
-  file.copy(launcher_template_file, launcher_file, overwrite = FALSE)
-  Sys.chmod(launcher_file, mode = "0755")
-  message("Copied TACC launcher template to ", launcher_file)
+  file.copy(launcher_sh_template_file, launcher_sh_file, overwrite = FALSE)
+  Sys.chmod(launcher_sh_file, mode = "0755")
+  message("Copied TACC pylauncher shell template to ", launcher_sh_file)
 } else {
-  message("TACC launcher already exists, leaving unchanged: ", launcher_file)
+  message("TACC pylauncher shell launcher already exists, leaving unchanged: ", launcher_sh_file)
+}
+
+if (!file.exists(launcher_py_file)) {
+  if (!file.exists(launcher_py_template_file)) {
+    stop("No TACC pylauncher Python template found at ", launcher_py_template_file)
+  }
+  file.copy(launcher_py_template_file, launcher_py_file, overwrite = FALSE)
+  message("Copied TACC pylauncher Python template to ", launcher_py_file)
+} else {
+  message("TACC pylauncher Python launcher already exists, leaving unchanged: ", launcher_py_file)
 }
 
 message("Wrote ", nrow(all_commands_script), " simulator commands to ", commands_file)
