@@ -37,6 +37,14 @@ split_arg_6f <- function(value, default) {
   pieces <- trimws(unlist(strsplit(value, ",", fixed = TRUE)))
   pieces[nzchar(pieces)]
 }
+normalize_state_dir_names_6f <- function(states) {
+  stringr::str_replace_all(trimws(states), "\\s+", "-")
+}
+closest_state_suggestion_6f <- function(state, available_states) {
+  if (length(available_states) == 0) return(NA_character_)
+  distances <- utils::adist(state, available_states, ignore.case = TRUE)
+  available_states[which.min(distances)]
+}
 
 PIPELINE_OUTPUT_DIR <- get0(
   "PIPELINE_OUTPUT_DIR",
@@ -46,13 +54,13 @@ SIMULATION_DAYS <- as.integer(get0(
   "SIMULATION_DAYS",
   ifnotfound = get_arg_value_6f("--simulation-days=", "300")
 ))
-SELECTED_RUN_STATES <- get0(
+SELECTED_RUN_STATES <- normalize_state_dir_names_6f(get0(
   "SELECTED_RUN_STATES",
   ifnotfound = split_arg_6f(
     get_arg_value_6f("--selected-states=", ""),
     c("District-of-Columbia", "Connecticut", "Massachusetts")
   )
-)
+))
 INTERVENTION_TEMPLATE_FILES <- get0("INTERVENTION_TEMPLATE_FILES", ifnotfound = character())
 SELECTED_RUN_SCENARIOS <- get0(
   "SELECTED_RUN_SCENARIOS",
@@ -88,6 +96,11 @@ dir.create(selected_input_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(selected_output_dir, recursive = TRUE, showWarnings = FALSE)
 selected_input_dir_abs <- normalizePath(selected_input_dir, mustWork = TRUE)
 selected_output_dir_abs <- normalizePath(selected_output_dir, mustWork = TRUE)
+candidate_output_roots <- tibble::tribble(
+  ~source_label, ~output_root,
+  "WEB_OUTPUTS", selected_output_dir,
+  "TACC_FILES", input_dir
+)
 if (length(SIM_DAY_0_VALUES) == 0) {
   SIM_DAY_0_VALUES <- list.dirs(input_dir, recursive = FALSE, full.names = FALSE)
 }
@@ -128,6 +141,15 @@ selected_inputs <- tibble(source_file = generated_input_files) %>%
   arrange(.data$state_order, .data$date_order, .data$scenario_order) %>%
   select(-config, -state_order, -date_order, -scenario_order)
 
+available_generated_states <- tibble(source_file = generated_input_files) %>%
+  mutate(
+    config = purrr::map(.data$source_file, jsonlite::fromJSON, simplifyVector = FALSE),
+    state = purrr::map_chr(.data$config, metadata_tag_chr_6f, "state_dir")
+  ) %>%
+  distinct(.data$state) %>%
+  pull(.data$state)
+missing_generated_states <- setdiff(SELECTED_RUN_STATES, available_generated_states)
+
 expected_selected_inputs <- tidyr::expand_grid(
   state = SELECTED_RUN_STATES,
   sim_day_0 = SIM_DAY_0_VALUES,
@@ -136,13 +158,38 @@ expected_selected_inputs <- tidyr::expand_grid(
 missing_selected_inputs <- expected_selected_inputs %>%
   anti_join(selected_inputs, by = c("state", "sim_day_0", "scenario"))
 if (nrow(missing_selected_inputs) > 0) {
+  state_hint <- ""
+  if (length(missing_generated_states) > 0) {
+    suggestions <- vapply(
+      missing_generated_states,
+      closest_state_suggestion_6f,
+      character(1),
+      available_states = available_generated_states
+    )
+    state_hint <- paste0(
+      " Missing selected state(s) in TACC_FILES: ",
+      paste(
+        paste0(missing_generated_states, " (closest generated state: ", suggestions, ")"),
+        collapse = ", "
+      ),
+      ". If you added states, rerun Section 6d before Section 6f."
+    )
+  }
   stop(
     "Missing generated input JSON(s) for selected combinations: ",
     paste(
       paste(missing_selected_inputs$state, missing_selected_inputs$sim_day_0, missing_selected_inputs$scenario, sep = " | "),
       collapse = ", "
-    )
+    ),
+    ".",
+    state_hint
   )
+}
+
+reused_fit_outputs <- get0("REUSED_FIT_OUTPUTS", ifnotfound = NULL)
+if (!is.null(reused_fit_outputs) && nrow(reused_fit_outputs)) {
+  selected_inputs <- dplyr::anti_join(selected_inputs, reused_fit_outputs,
+    by = c("state", "sim_day_0", "scenario"))
 }
 
 selected_inputs <- selected_inputs %>%
@@ -220,7 +267,7 @@ input_json_matches_6f <- function(existing_input_file, expected_input_file) {
 
 metadata_batch_status_6f <- function(metadata_file, state, scenario, expected_ids,
                                      expected_sim_day_0, expected_simulation_days,
-                                     expected_input_file) {
+                                     expected_input_file, source_label) {
   metadata <- tryCatch(
     jsonlite::fromJSON(metadata_file, simplifyVector = FALSE),
     error = function(e) NULL
@@ -263,8 +310,11 @@ metadata_batch_status_6f <- function(metadata_file, state, scenario, expected_id
     expected = length(expected_ids),
     missing = setdiff(expected_ids, sim_ids),
     extra = setdiff(sim_ids, expected_ids),
+    source_label = source_label,
     metadata_reason = paste0(
-      "metadata sim_day_0=", as.character(metadata_sim_day_0),
+      "source=", source_label,
+      " metadata=", metadata_file,
+      " sim_day_0=", as.character(metadata_sim_day_0),
       " days=", metadata_simulation_days,
       " batch=", as.character(batch_num),
       " input_config_match=", input_matches
@@ -272,9 +322,9 @@ metadata_batch_status_6f <- function(metadata_file, state, scenario, expected_id
   )
 }
 
-selected_output_status_6f <- function(output_root, state, scenario, expected_ids,
-                                      expected_sim_day_0, expected_simulation_days,
-                                      expected_input_file) {
+selected_output_status_for_root_6f <- function(output_root, source_label, state, scenario,
+                                               expected_ids, expected_sim_day_0,
+                                               expected_simulation_days, expected_input_file) {
   metadata_files <- list.files(
     output_root,
     pattern = "^metadata_batch-.*\\.json$",
@@ -289,7 +339,8 @@ selected_output_status_6f <- function(output_root, state, scenario, expected_ids
     expected_ids = expected_ids,
     expected_sim_day_0 = expected_sim_day_0,
     expected_simulation_days = expected_simulation_days,
-    expected_input_file = expected_input_file
+    expected_input_file = expected_input_file,
+    source_label = source_label
   ))
 
   if (length(batch_statuses) == 0) {
@@ -303,7 +354,8 @@ selected_output_status_6f <- function(output_root, state, scenario, expected_ids
       output_dir = NA_character_,
       scenario_hash = NA_character_,
       batch_num = NA_character_,
-      metadata_reason = "no matching generated metadata/input config"
+      source_label = source_label,
+      metadata_reason = paste0("source=", source_label, " no matching generated metadata/input config")
     ))
   }
 
@@ -317,7 +369,55 @@ selected_output_status_6f <- function(output_root, state, scenario, expected_ids
   batch_statuses[[1]]
 }
 
-cat("\nChecking selected local scenario outputs before running simulator commands...\n")
+selected_output_status_6f <- function(output_roots, state, scenario, expected_ids,
+                                      expected_sim_day_0, expected_simulation_days,
+                                      expected_input_file) {
+  root_statuses <- purrr::pmap(
+    output_roots,
+    function(source_label, output_root) {
+      selected_output_status_for_root_6f(
+        output_root,
+        source_label,
+        state,
+        scenario,
+        expected_ids,
+        expected_sim_day_0,
+        expected_simulation_days,
+        expected_input_file
+      )
+    }
+  )
+
+  complete_statuses <- purrr::keep(root_statuses, ~ isTRUE(.x$complete))
+  if (length(complete_statuses) > 0) {
+    return(complete_statuses[[1]])
+  }
+
+  existing_statuses <- purrr::keep(root_statuses, ~ isTRUE(.x$exists))
+  if (length(existing_statuses) > 0) {
+    existing_statuses <- existing_statuses[order(vapply(existing_statuses, function(x) x$completed, integer(1)), decreasing = TRUE)]
+    return(existing_statuses[[1]])
+  }
+
+  list(
+    complete = FALSE,
+    exists = FALSE,
+    completed = 0L,
+    expected = length(expected_ids),
+    missing = expected_ids,
+    extra = integer(0),
+    output_dir = NA_character_,
+    scenario_hash = NA_character_,
+    batch_num = NA_character_,
+    source_label = NA_character_,
+    metadata_reason = paste0(
+      "no matching generated metadata/input config in ",
+      paste(output_roots$source_label, collapse = " or ")
+    )
+  )
+}
+
+cat("\nChecking selected local/TACC scenario outputs before running simulator commands...\n")
 selected_inputs$expected_sim_ids <- purrr::map(selected_inputs$selected_file, expected_sim_ids_6f)
 selected_inputs$output_status <- purrr::pmap(
   list(
@@ -329,7 +429,7 @@ selected_inputs$output_status <- purrr::pmap(
   ),
   function(state, scenario, expected_sim_ids, expected_sim_day_0, selected_file) {
     selected_output_status_6f(
-      selected_output_dir,
+      candidate_output_roots,
       state,
       scenario,
       expected_sim_ids,
@@ -349,6 +449,7 @@ selected_inputs <- selected_inputs %>%
     scenario_hash = purrr::map_chr(.data$output_status, "scenario_hash"),
     output_dir = purrr::map_chr(.data$output_status, "output_dir"),
     batch_num = purrr::map_chr(.data$output_status, "batch_num"),
+    output_source = purrr::map_chr(.data$output_status, "source_label"),
     metadata_reason = purrr::map_chr(.data$output_status, "metadata_reason")
   )
 
@@ -356,7 +457,8 @@ purrr::pwalk(
   selected_inputs,
   function(state, sim_day_0, scenario, source_file, source_stem, expected_sim_day_0, selected_file,
            selected_command_input, expected_sim_ids, output_status, output_complete, output_exists,
-           completed_sims, expected_sims, scenario_hash, output_dir, batch_num, metadata_reason) {
+           completed_sims, expected_sims, scenario_hash, output_dir, batch_num, output_source,
+           metadata_reason) {
     label <- paste(state, scenario)
     if (isTRUE(output_complete)) {
       cat("  SKIP complete selected scenario ", label, ": sims ",
@@ -364,6 +466,7 @@ purrr::pwalk(
           " present (", completed_sims, "/", expected_sims,
           "), sim_day_0 ", expected_sim_day_0,
           ", days ", SIMULATION_DAYS,
+          ", source ", output_source,
           ", hash ", substr(scenario_hash, 1, 8),
           ", batch ", batch_num, ".\n", sep = "")
       return(invisible(NULL))
@@ -376,10 +479,10 @@ purrr::pwalk(
           completed_sims, "/", expected_sims,
           " present; missing ", missing_preview,
           "; ", metadata_reason,
-          ". Keeping existing files.\n", sep = "")
+          ". Keeping existing files and running local preview output.\n", sep = "")
     } else {
       cat("  RUN missing selected scenario ", label,
-          ": no complete output found for this generated input JSON, sim_day_0 ",
+          ": no complete output found in WEB_OUTPUTS or TACC_FILES for this generated input JSON, sim_day_0 ",
           expected_sim_day_0, ", days ", SIMULATION_DAYS,
           ".\n", sep = "")
     }
@@ -401,7 +504,8 @@ selected_commands <- c(
     selected_inputs_to_run,
     function(state, sim_day_0, scenario, source_file, source_stem, expected_sim_day_0, selected_file,
              selected_command_input, expected_sim_ids, output_status, output_complete, output_exists,
-             completed_sims, expected_sims, scenario_hash, output_dir, batch_num, metadata_reason) {
+             completed_sims, expected_sims, scenario_hash, output_dir, batch_num, output_source,
+             metadata_reason) {
       c(
         paste0("# sim_day_0=", expected_sim_day_0, " state=", state, " scenario=", scenario),
         paste0("echo 'START sim_day_0=", expected_sim_day_0, " state=", state, " scenario=", scenario, " at '$(date '+%Y-%m-%d %H:%M:%S')"),
@@ -412,7 +516,7 @@ selected_commands <- c(
           "&& set +e",
           "&& poetry run python3",
           shQuote(simulator_file_rel_from_web_outputs),
-          "-l INFO -d",
+          "-l WARNING -d",
           SIMULATION_DAYS,
           "-i",
           shQuote(file.path("..", "WEB_INPUTS", expected_sim_day_0, basename(selected_command_input))),
@@ -432,7 +536,7 @@ Sys.chmod(selected_commands_file, mode = "0755")
 cat("Wrote ", nrow(selected_inputs_to_run), " selected simulator commands to ", selected_commands_file, "\n", sep = "")
 
 if (nrow(selected_inputs_to_run) == 0) {
-  cat("All selected local scenarios already have complete simulation_times and matching metadata; no simulator commands to run.\n")
+  cat("All selected scenarios already have complete simulation_times and matching metadata in WEB_OUTPUTS or TACC_FILES; no simulator commands to run.\n")
   selected_status <- 0L
 } else {
   if (exists("run_logged_command", mode = "function")) {
