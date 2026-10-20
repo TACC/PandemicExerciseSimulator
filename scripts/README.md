@@ -9,12 +9,94 @@ scripts `0` through `6`. Python dependencies are managed through Poetry.
 
 ## State Data Preparation
 
-Start here: `0_run_full_pipeline_US.R` is the entry point for the full state/DC
-pipeline. It orchestrates steps `1` through `6`, including seed no-intervention
-generation, Epydemix fitting, intervention scenario generation, and command
-creation. A complete run can take more than an hour because it processes large
+Start here: `0_run_full_pipeline_US.R` shows the numbered `0`–`9` pipeline.
+Experiment settings and their explanations live in
+`data/INPUT_FILE_TEMPLATES/RUN_FULL_PIPELINE_INPUTS.R`; copy that input-only file
+for each experiment. Parsing, validation and launch helpers live in
+`0_pipeline_helpers.R`, so the main script stays focused on the workflow.
+A complete run can take more than an hour because it processes large
 survey and mobility datasets. Individual scripts can be run separately when only
 one source needs to be refreshed.
+
+From the repository root:
+
+```bash
+Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/RUN_FULL_PIPELINE_INPUTS.R
+```
+
+Command-line values override the input file. Add `--check-config` to validate and
+print the settings without installing packages, downloading data or running fits.
+In RStudio, set `PIPELINE_CONFIG_FILE` to your input file and source `0`.
+
+### LS6 phases
+
+`RUN_FULL_PIPELINE_INPUTS.R` is the local full-pipeline example. For LS6, copy
+`LS6_PIPELINE_INPUTS.R`, `1_RUN_FIT.R`, `2_RUN_SCENARIOS.R`, and `3_RUN_FIGURES.R`
+from `data/INPUT_FILE_TEMPLATES/` into one experiment directory. Edit scientific
+settings once in `LS6_PIPELINE_INPUTS.R`; all three phase files inherit them.
+The LS6 example uses all states, 100 realizations, 32 workers per fitting
+candidate, all four search criteria, peak-height selection, and reuse of the
+winning All Interventions batch. Publication is disabled.
+
+Run from the repository root (replace config paths if you copied the files):
+
+```bash
+Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/1_RUN_FIT.R
+```
+
+This prepares data and writes the fitting launcher under
+`<output_dir>/Rm_sweep/<date>/`. Set the allocation in that directory's
+`fit_state_pylauncher.sh`, then submit it with `sbatch fit_state_pylauncher.sh`.
+The fitting files are `fit_state_commands.txt`, `fit_state_pylauncher.py`, and
+`fit_state_pylauncher.sh`. The Python launcher retains the template's `cores=4`
+and the shell job name is `fit_state_Rm`. Scenario launchers keep their original
+`state_*` names.
+Per-state fitting logs are written under `<date>/logs/`.
+All fitting states share the original `<date>/candidate_inputs/`, `sim_outputs/`,
+and `plots/` directories. Fitting tasks write private state-specific RDS files
+under `<date>/checkpoints/`; they never write combined sweep CSVs. Once all
+fits finish, `2_RUN_SCENARIOS.R` publishes `Rm_sweep_*.csv` files directly under
+`<date>/`. This removes shared summary-table writes from parallel fitting.
+After fitting finishes:
+
+```bash
+Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/2_RUN_SCENARIOS.R
+```
+
+This requires matching fits for all states and dates, prepares the downstream
+inputs and launcher under `<output_dir>/TACC_FILES/`, then stops. Submit that
+directory's `state_pylauncher.sh`. The retained fitting scenario has no rerun
+commands. After the scenario jobs finish:
+
+```bash
+Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/3_RUN_FIGURES.R
+```
+
+This requires completed selected scenarios, then builds Parquet data, the
+deployment bundle, and figures. It never generates inputs or simulation
+commands. Keep `deploy_shinyapps = FALSE` to publish separately after review.
+Use `--check-config` with any phase file to check merged settings without work.
+
+The explicit `pipeline_phase` values are `fit`, `scenarios`, and `results`.
+With `execution_target = "local"`, the fit and scenarios phases execute locally
+instead of preparing LS6 jobs. The default local `pipeline_phase = "all"`
+preserves the complete 0–9 workflow. Results processing never starts simulations.
+
+`r0_fit_scenario` chooses the scenario fitted to observed hospitalizations
+(for example, `"ALL_INTERVENTIONS"` or `"VACCINE"`). `r0_selection_metric`
+chooses the winning R_m, which all downstream scenario inputs inherit.
+Set `reuse_best_fit_simulations = TRUE` to use that winning candidate's saved
+simulations for downstream analyses and omit its TACC and local rerun commands.
+Keep the fitting scenario in `selected_scenarios` to include those results.
+Reuse requires matching fitting/downstream realization ranges and full-simulator
+fitting for all states (`r0_county_threshold = 255L`). Other scenarios still run
+normally. The selected batches are recorded in `reused_fit_outputs.csv`; ingestion
+and bundling read those batches without copying the whole sweep.
+The example preserves the previous defaults: 10 fitting realizations, auto
+workers and direct fitting. For LS6 preparation, set `r0_realization_range` to
+`c(0L, 99L)`, `workers` to `32L` and `r0_fit_launch` to `"pylauncher"` in your copy.
+
+Existing command-line-only runs continue to work, for example:
 
 ```bash
 cd scripts
@@ -27,11 +109,12 @@ Rscript 0_run_full_pipeline_US.R \
   --run-web-preview=true \
   --selected-states=District-of-Columbia,Connecticut,Massachusetts \
   --selected-scenarios=NONE,VACCINE,ANTIVIRAL,NPI,ALL_INTERVENTIONS \
+  --r0-fit-method=epydemix_all \
   --deploy-shinyapps=false
 ```
 
-The orchestrator prints large section banners such as
-`###### Section 5b Running Epydemix Fits ######` so long console output is easy
+The orchestrator prints numbered stage banners such as
+`5b/5c. R_m fitting` so long console output is easy
 to scan. It also writes a timestamped run log under the selected
 `--output-dir`, for example:
 
@@ -60,7 +143,8 @@ files out of commits.
 | 4a | `4a_flu_state_high_risk_by_age.R` | Estimates state-and-age influenza high-risk proportions using BRFSS and NSCH survey data. |
 | 4b | `4b_flu_county_high_risk_by_age.R` | Distributes state high-risk estimates to counties using CDC PLACES comorbidity burden, with SVI used for comparison. |
 | 5a | `5a_derive_initial_exposures.R` | Derives state/DC county-age low-risk exposures from Flu Hub age-stratified incident hospitalization data using `prop_IS_to_H_lowrisk` from the SEIHRD template by default, or an explicit `--lowrisk-hosp-rate-file`, then writes dated seed JSONs under `<PIPELINE_OUTPUT_DIR>/SEED_INPUT_JSONS/<sim_day_0>/`. The orchestrator skips this step when the dated summaries, 51 dated seed JSONs, and 51 dated validation files already exist for `--sim-day-0`. |
-| 5b | `5b_epydemix_fit_seihrd_hospitalizations.py` | Uses Epydemix ABC to fit the five-age-group SEIHRD hospitalization curve to Flu Hub age-stratified incident hospitalization time series, either one state or all `5a` no-intervention JSONs. The orchestrator writes/checks calibrated JSONs under `<PIPELINE_OUTPUT_DIR>/epydemix_fit/<sim_day_0>/` and skips this step when all 51 files there record the same fit start date as `--sim-day-0`. |
+| 5b | `5b_epydemix_fit_seihrd_hospitalizations.py` | Uses Epydemix ABC to fit the five-age-group SEIHRD hospitalization curve to Flu Hub age-stratified incident hospitalization time series, either one state or all `5a` no-intervention JSONs. The default target is weekly incident hospital admissions; pass `--epydemix-fit-target=hosp_increase` to the orchestrator, or `--fit-target hosp_increase` to the Python script, to compare against the older positive H-compartment-increase target. The orchestrator writes/checks calibrated JSONs under `<PIPELINE_OUTPUT_DIR>/epydemix_fit/<sim_day_0>/` and skips this step when all 51 files there record the same fit start date as `--sim-day-0`. |
+| 5c | `5c_wis_r0_sweep_all_interventions.R` | Full-simulator R0 search, defaulting to absolute total incident-hospitalization error. Outputs use `Rm_sweep/<sim_day_0>/`. `--r0-fit-method=simulator_county_threshold` uses it for counties `<= --r0-county-threshold` (default 255), with Epydemix for larger states. `--r0-realization-range=0,9` is independent of the final simulator range; legacy `--r0-wis-*` flags and fit-method names remain aliases. The existing weekly hospitalization series is scored over complete MMWR weeks within the simulation window. Individual criteria are `total`, `peak_height`, `peak_timing`, and optional `wis`; `--r0-search-metrics=all` explores the three features, and `all,wis` adds WIS. `--r0-selection-metric` chooses the downstream calibrated JSON (default `total`). There is no combined penalty loss. Candidate realizations default to `--execution-mode=parallel --workers=auto`. |
 | 6a | `6a_vaccine_coverage_by_state.R` | Converts influenza coverage and effectiveness assumptions into weekly state vaccine-stockpile schedules. |
 | 6b | `6b_outpatient_antiviral_coverage_by_state.R` | Estimates state-specific insured high-risk counts for outpatient antiviral stockpile scenarios. Skips when both final antiviral CSVs exist and caches downloaded ACS PUMS extracts under `data/RISK_RATIOS/PUMS_CACHE/`. |
 | 6c | `6c_weekend_npi_schedule.R` | Expands a prototype Weekend Mobility Decrease NPI across the configured simulation window. |
@@ -69,6 +153,52 @@ files out of commits.
 | 6f | `6f_run_selected_scenarios.R` | Runs a user-selected subset of states and scenarios locally, writing selected JSON copies and `web_state_commands.sh` to `<PIPELINE_OUTPUT_DIR>/WEB_INPUTS`, with generated outputs under `<PIPELINE_OUTPUT_DIR>/WEB_OUTPUTS`. |
 | 7a | `7a_process_output_to_db.R` | Processes generated simulator outputs under `<PIPELINE_OUTPUT_DIR>`, updates `metadata_master.csv`, writes Parquet files under `sim_data/`, and skips already complete `(scenario_hash, batch_num)` pairs. |
 | 8 | `8_prepare_shinyapps_bundle.R` | Refreshes the Shiny deployment bundle by copying the current `7b` dashboard as `app.R` and packaging the selected preview states and scenarios. |
+| 9a | `9a_pre_sim_input_plots.R` | Draws pre-simulation input figures, including mobility matrix flow maps, under `<PIPELINE_OUTPUT_DIR>/validation_scores/plots/`. |
+| 9b | `9b_score_validation_hubverse_style.R` | Scores validation outputs, writes WIS summaries, and writes validation figures under `<PIPELINE_OUTPUT_DIR>/validation_scores/plots/`. |
+| 9c | `9c_score_validation_run_diagnostics.R` | Calculates additional simulations needed for a 95% CI and runtime diagnostics by state/scenario, then writes a combined runtime plot and a compartment-level heatmap. |
+
+If a full-simulator R0 run finishes its simulations but stops before writing its summary or
+calibrated JSONs, replay the search from saved outputs with the original settings:
+
+```bash
+Rscript scripts/5c_wis_r0_sweep_all_interventions.R \
+  --output-dir=MANUSCRIPT_EXAMPLE_TEST --sim-day-0=2025-10-04 \
+  --selected-states=District-of-Columbia,Delaware,Rhode-Island \
+  --simulation-days=200 --realization-range=0,9 \
+  --r0-selection-metric=total --recover-existing=true \
+  --write-calibrated-jsons=true
+```
+
+Set `--selected-states` to the states from the interrupted run. Recovery never
+launches the simulator: it stops if a required candidate is missing. Preserve
+any nondefault search settings from the original invocation. Each finished
+state now saves its trace, weekly scores, predictions, best R0, and requested
+calibrated JSON before plotting or proceeding to another state. After recovery,
+the orchestrator can reuse the calibrated JSONs and continue generating TACC inputs.
+
+The simulation end date is `sim_day_0 + simulation_days` (day 0 is initialization).
+Both validation points and the existing simulated series are restricted to complete
+Sun–Sat MMWR weeks inside days 1 through that end date; a final partial week is
+excluded on both sides. Extinct realizations are zero-padded through the same
+window. Total error compares the sum of weekly simulated medians with the sum of
+observations on those weeks. The existing calculation of simulated hospitalizations is unchanged; this version
+updates the search criteria and common scoring window. Old folders are preserved.
+
+To rerun the full pipeline using total hospitalizations only:
+
+```bash
+Rscript scripts/0_run_full_pipeline_US.R \
+  --output-dir=MANUSCRIPT_EXAMPLE_TEST --sim-day-0=2025-10-04 \
+  --simulation-days=200 --r0-fit-method=simulator_county_threshold \
+  --r0-selection-metric=total --r0-search-metrics=total \
+  --r0-realization-range=0,9 --execution-mode=parallel --workers=auto
+```
+
+As before, calibration covers the generated seed states; `--selected-states`
+controls the local preview subset. Use `--r0-search-metrics=all` to explore
+three feature paths, `--r0-search-metrics=all,wis` for all four, or select just
+`wis`, `peak_height`, or `peak_timing`. The selected criterion must be included
+in the paths and is added automatically. Search plots use only requested paths.
 
 The orchestrator expects some private or external inputs:
 
@@ -215,6 +345,74 @@ runs and is also appended to the timestamped pipeline log.
 Before deleting large simulation CSVs, verify that each expected pair appears
 in `metadata_master.csv` and that its Parquet files exist.
 
+## Validation Figures
+
+When `0_run_full_pipeline_US.R` runs with `--run-web-preview=true` and
+`--make-validation-figs=true`, step `9b` writes Hubverse-style quantile score
+outputs to `<PIPELINE_OUTPUT_DIR>/validation_scores/`, pooling all available
+Parquet batches for each scenario hash. With `--make-diagnostic-figs=true`, step `9c` writes
+`simulation_completion_runtime_summary.csv` with attempted simulations,
+completed simulations, scheduled simulations still missing, completion fraction,
+mean runtime per simulation across available batches in each state/scenario/hash,
+and data-driven estimates of additional simulations needed for a 95% confidence
+interval by state/scenario. By default, the CI
+estimate targets a half-width of 5% of each compartment mean, with a minimum
+half-width of 1 person. Compartments `S`, `R`, and `D` use final-day totals;
+transient compartments use summed totals across the simulation trajectory. Both
+the runtime and CI estimates pool all available batches for each scenario hash,
+so rerunning a state/scenario with a new realization range contributes additional
+realizations to the validation figures instead of replacing the prior batch. It
+also writes
+`simulation_compartment_ci_sims_needed.csv` with one row per
+state/scenario/compartment and a `compartment_summary_type` column.
+
+The validation plot directory includes a single combined runtime plot and a
+compartment-level CI-needed heatmap, both ordered by county count with the
+largest states at the top:
+
+```text
+<PIPELINE_OUTPUT_DIR>/validation_scores/plots/run_time_by_state_scenario.png
+<PIPELINE_OUTPUT_DIR>/validation_scores/plots/sims_needed_for_95ci_by_state_scenario_compartment_heatmap.png
+```
+
+Step `9b` also reads `data/VACCINATION/all_US_weekly_vax_adult-ped.csv`, when
+available, and writes one vaccine coverage figure per validation state under:
+
+```text
+<PIPELINE_OUTPUT_DIR>/validation_scores/plots/vaccine_coverage_by_state/
+```
+
+Pre-simulation input plots now live in the 9-series plotting workflow as step
+`9a`. The orchestrator calls them with the validation figures by default:
+
+```bash
+Rscript 0_run_full_pipeline_US.R \
+  --output-dir=Example_TEST \
+  --run-web-preview=true \
+  --make-pre-sim-figs=true \
+  --make-validation-figs=true \
+  --make-diagnostic-figs=true
+```
+
+Because generating every selected state-quarter pre-simulation plot can be
+slow, pass `--make-pre-sim-figs=false` to skip only step `9a`. Use
+`--make-validation-figs=false` to skip only step `9b`, and
+`--make-diagnostic-figs=false` to skip only step `9c`.
+By default, steps `7a`, `9b`, and `9c` use only simulator metadata whose paths
+match `WEB_OUTPUTS`, which prevents R0 WIS search candidates from being scored
+as intervention scenarios. Pass `--validation-output-source-regex=<regex>` to
+`0_run_full_pipeline_US.R`, or `--output-source-regex=<regex>` directly to
+`9b`/`9c`, to score a different output source.
+
+To run only the pre-simulation input plots:
+
+```bash
+Rscript scripts/9a_pre_sim_input_plots.R \
+  --output-dir=Example_TEST \
+  --year=2025 \
+  --acs-year-range=2020-2024
+```
+
 ## Explore Outputs
 
 `7b_sim_dashboard_app.R` is a Shiny dashboard for filtering metadata, checking
@@ -226,14 +424,36 @@ open it in RStudio and select **Run App**.
 
 `8_prepare_shinyapps_bundle.R` copies the current
 `scripts/7b_sim_dashboard_app.R` to `deploy/shinyapps/PandemicSimExplorer/app.R`
-each time it runs, then writes a filtered `metadata_master.csv` and matching
-`sim_data/` subset for the latest complete local preview batch for each selected
-state and scenario. When called from `0_run_full_pipeline_US.R`, it uses
-`WEB_PREVIEW_STATES` from `SELECTED_RUN_STATES` and
-`SELECTED_RUN_SCENARIOS`; standalone runs can override those with
-`DASHBOARD_PREVIEW_STATES` and `DASHBOARD_PREVIEW_SCENARIOS`. It stops if any
-expected preview rows or Parquet directories are missing. This avoids publishing
-a stale dashboard while keeping the deploy bundle below the free upload limit.
+each time it runs, rewrites the deployed app to read from the bundle's local
+`data/` directory, then writes a filtered `metadata_master.csv`, copies
+`scenario_features.parquet`, and copies the matching `sim_data/` subset. For
+each selected state and scenario label, it keeps all matching scenario hashes and
+uses the newest complete local preview batch for each hash. This lets parameter
+comparison runs publish together without adding parameter-specific deploy code. It
+also recreates the small deployment-project scaffold files (`deploy.R`,
+`DESCRIPTION`, `README.md`, `renv.lock`) and creates or updates the Posit
+Publisher configuration at
+`deploy/shinyapps/PandemicSimExplorer/.posit/publish/PandemicSimExplorer-3R9A.toml`.
+After the deploy app and `DESCRIPTION` exist, script `8` runs `renv::snapshot()`
+against the deploy bundle itself so `renv.lock` reflects the Shiny app's current
+R package dependencies.
+
+Posit Publisher/Positron can also generate `.posit/publish/*.toml` files when
+you start a new deployment from the Publisher pane, such as **Deploy Project** or
+**New Deployment**. The files written by script `8` are included so the
+deployment bundle is reproducible on a new computer without depending on local
+Positron state. If a Publisher configuration already exists, script `8`
+preserves it and only makes the required maintenance edits, such as ensuring the
+literal `"$schema"` key is quoted and `/data/scenario_features.parquet` appears
+in the `files` list.
+
+When called from `0_run_full_pipeline_US.R`, script `8` uses
+`WEB_PREVIEW_STATES` from `SELECTED_RUN_STATES` and `SELECTED_RUN_SCENARIOS`;
+standalone runs can override those with `DASHBOARD_PREVIEW_STATES` and
+`DASHBOARD_PREVIEW_SCENARIOS`. It stops if any expected preview scenario label
+has no matching rows or if any selected Parquet directories are missing. This
+avoids publishing a stale dashboard while keeping the deploy bundle scoped to the
+selected preview states and scenarios.
 
 ## Deploy Preview To shinyapps.io
 
@@ -283,6 +503,14 @@ rsconnect::deployApp(
 )
 ```
 
+To deploy the same bundle with Positron instead, open
+`deploy/shinyapps/PandemicSimExplorer` as the project folder, refresh the
+Publisher pane if needed, and deploy using the generated configuration
+`PandemicSimExplorer-3R9A`. The configuration file's `files` list controls the
+Publisher **Project Files** checklist and includes the dashboard app, dependency
+files, metadata CSV, `scenario_features.parquet`, selected Parquet outputs, and
+validation fit data.
+
 ## Fit SEIHRD Hospitalizations With Epydemix
 
 `5b_epydemix_fit_seihrd_hospitalizations.py` reads an existing SEIHRD input JSON,
@@ -292,12 +520,14 @@ with `epydemix.calibration.ABCSampler`. By default, the fit starts at
 `metadata_tags.sim_day_0`, constrains `R0 > 1`, preserves the input JSON
 `initial_exposed` values from `5a_derive_initial_exposures.R`, and estimates only
 `R0`. Pass `--fit-initial-exposed-scale` only for an explicit sensitivity run.
-The default generated metric is `admissions`, which sums daily new `IS -> H`
-flows over complete Sun-Sat MMWR weeks to match Flu Hub weekly incident
-hospitalizations. If `sim_day_0` falls inside a reporting week, the partial
-first week is skipped and fitting starts at the first full MMWR week end. The
-default penalty emphasizes aggregate all-age shape and peak-week timing. The
-calibrated JSON uses the best-distance particle by default; pass
+The default fit target is `hosp_incident`, which sums daily new `IS -> H`
+admissions over complete Sun-Sat MMWR weeks to match Flu Hub weekly incident
+hospitalizations. For comparison with the older target, pass
+`--fit-target hosp_increase`; this sums positive daily increases in the H
+compartment over each observed week. If `sim_day_0` falls inside a reporting
+week, the partial first week is skipped and fitting starts at the first full
+MMWR week end. The default penalty emphasizes aggregate all-age shape and
+peak-week timing. The calibrated JSON uses the best-distance particle by default; pass
 `--calibrated-json-estimator median` if you prefer the posterior median. For one
 Delaware init-test file:
 
@@ -306,6 +536,7 @@ python3 scripts/5b_epydemix_fit_seihrd_hospitalizations.py \
   --input-json Example_TEST/SEED_INPUT_JSONS/2025-10-01/INPUT_SEIHRD-STOCH_Delaware_SEED_NONE.json \
   --output-dir Example_TEST/epydemix_fit/2025-10-01 \
   --hosp-file data/FLU_HUB/time-series_2026-07-13.csv \
+  --fit-target hosp_incident \
   --nsim 1000 \
   --top-fraction 0.05 \
   --write-calibrated-json
@@ -319,6 +550,7 @@ python3 scripts/5b_epydemix_fit_seihrd_hospitalizations.py \
   --input-json-dir Example_TEST/SEED_INPUT_JSONS/2025-10-01 \
   --output-dir Example_TEST/epydemix_fit/2025-10-01 \
   --hosp-file data/FLU_HUB/time-series_2026-07-13.csv \
+  --fit-target hosp_incident \
   --nsim 1000 \
   --top-fraction 0.05 \
   --write-calibrated-json
@@ -329,6 +561,21 @@ The script writes `posterior_samples.csv`, `best_parameters.json`,
 under `<PIPELINE_OUTPUT_DIR>/epydemix_fit/`. In `--all-states` mode, each input JSON
 gets its own subdirectory under the date-specific output directory, and a
 `batch_manifest.json` summarizes successes and failures.
+
+To compare the two hospitalization targets without losing current results, keep
+the current `hosp_incident` run in its existing output directory and run the
+older target into a sibling directory:
+
+```bash
+Rscript scripts/0_run_full_pipeline_US.R \
+  --sim-day-0=2025-10-04 \
+  --output-dir=STATE_WKLYFIT_H_INCREASE_COMPARE \
+  --epydemix-fit-target=hosp_increase
+```
+
+Each calibrated JSON records `metadata_tags.epydemix_fit.fit_target` and
+`generated_metric`, so downstream summaries can distinguish the calibration
+target used for a result set.
 
 The repository does not currently include a separate Read the Docs source tree;
 keep this file and `../data/README.md` in sync when script behavior, generated
