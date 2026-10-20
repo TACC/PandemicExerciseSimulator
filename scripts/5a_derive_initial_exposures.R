@@ -68,10 +68,16 @@ file_arg <- grep("^--file=", cmd_args, value = TRUE)
 script_path <- if (length(file_arg) > 0) sub("^--file=", "", file_arg[[1]]) else ""
 script_dir <- if (nzchar(script_path)) dirname(normalizePath(script_path, mustWork = FALSE)) else getwd()
 
-if (dir.exists(file.path(script_dir, "data"))) {
-  repo_root <- normalizePath(script_dir, mustWork = TRUE)
-} else if (dir.exists(file.path(script_dir, "..", "data"))) {
-  repo_root <- normalizePath(file.path(script_dir, ".."), mustWork = TRUE)
+repo_root_candidates <- unique(normalizePath(
+  c(script_dir, file.path(script_dir, ".."), getwd(), file.path(getwd(), "..")),
+  mustWork = FALSE
+))
+repo_root_matches <- repo_root_candidates[
+  dir.exists(file.path(repo_root_candidates, "data")) &
+    dir.exists(file.path(repo_root_candidates, "scripts"))
+]
+if (length(repo_root_matches) > 0) {
+  repo_root <- normalizePath(repo_root_matches[[1]], mustWork = TRUE)
 } else {
   stop("Could not find repository root from working directory or script location.")
 }
