@@ -7,6 +7,7 @@
 #' VC by state from:
 #'  6mon - 17yr: https://data.cdc.gov/Child-Vaccinations/Weekly-Cumulative-Influenza-Vaccination-Coverage-b/vncy-2ds7/about_data 
 #'  18yr - 65+ : https://data.cdc.gov/Flu-Vaccinations/Weekly-Influenza-Vaccination-Coverage-and-Intent-f/sw5n-wg2p/about_data   
+#'  Visualization: https://www.cdc.gov/fluvaxview/dashboard/adult-coverage.html
 #'  
 #' H2N3 VE estimates 
 #' Children from NVSN (inpatient) 
