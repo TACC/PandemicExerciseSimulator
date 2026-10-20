@@ -1255,6 +1255,13 @@ run_pipeline_fits <- function() {
           )
       ) %>%
       dplyr::arrange(.data$county_count, .data$state_dir)
+    # A calibrated JSON can be copied between machines without its simulator
+    # outputs or checkpoints. Queue every state for LS6 and let the fitting
+    # process verify/reuse completed results on the machine running the job.
+    if (R0_FIT_LAUNCH == "pylauncher") {
+      wis_missing_or_stale <- wis_fit_states %>%
+        dplyr::arrange(.data$county_count, .data$state_dir)
+    }
     if (nrow(wis_missing_or_stale) == 0 && R0_FIT_LAUNCH == "direct") {
       cat("Full-simulator calibrated JSONs already exist for all states at or below the county threshold.\n")
     } else {

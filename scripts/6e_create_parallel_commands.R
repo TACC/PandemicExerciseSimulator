@@ -11,6 +11,8 @@
 #'   STATE_INIT_TEST/TACC_FILES/state_commands.txt
 #'   STATE_INIT_TEST/TACC_FILES/state_pylauncher.sh
 #'   STATE_INIT_TEST/TACC_FILES/state_pylauncher.py
+#' With execution_target = "ls6", every scenario command uses the shared
+#' Apptainer wrapper, including the configured image override when present.
 #////////
 library(tidyverse)
 library(jsonlite)
@@ -151,4 +153,5 @@ if (!file.exists(launcher_py_file)) {
   message("TACC pylauncher Python launcher already exists, leaving unchanged: ", launcher_py_file)
 }
 
-message("Wrote ", nrow(all_commands_script), " simulator commands to ", commands_file)
+message("Wrote ", nrow(all_commands_script), " simulator commands to ", commands_file,
+  "\nExecution target: ", execution_target, "; command prefix: ", command_prefix)

@@ -54,6 +54,10 @@ and the shell job name is `fit_state_Rm`. Scenario launchers keep their original
 Per-state fitting logs are written under `<date>/logs/`.
 Fitting commands are ordered by county count, fewest first, with state name
 breaking ties. Script 0 prints the ordered states and counts when writing them.
+LS6 launchers include all states being fitted (51 commands for all states/DC),
+even when calibrated JSONs already exist. Each fitting job checks for reusable
+state checkpoints and completed simulation batches on the execution machine;
+a calibrated JSON alone does not remove a state from the command file.
 Parallel execution means jobs can finish in a different order.
 Selecting `execution_target = "ls6"` automatically generates container
 commands for fitting and scenarios, using `$WORK/pes_pipeline_r442_py312.sif`
@@ -75,7 +79,12 @@ Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/2_RU
 This requires matching fits for all states and dates, prepares the downstream
 inputs and launcher under `<output_dir>/TACC_FILES/`, then stops. Submit that
 directory's `state_pylauncher.sh`. The retained fitting scenario has no rerun
-commands. After the scenario jobs finish:
+commands. Every generated scenario command uses the same container wrapper as
+fitting, for example `bash '../../scripts/ls6_container_exec.sh' poetry run
+python3 ../../src/simulator.py ...`. This applies to NONE, VACCINE, ANTIVIRAL,
+NPI, and ALL_INTERVENTIONS when selected; reused winning-fit batches are omitted.
+The generator prints the execution target and command prefix for inspection.
+After the scenario jobs finish:
 
 ```bash
 Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/3_RUN_FIGURES.R

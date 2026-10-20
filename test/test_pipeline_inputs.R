@@ -170,6 +170,14 @@ for (state in states) {
       r0_selection_metric = inputs$R0_SELECTION_METRIC))))
   jsonlite::write_json(fit, file.path(directory, paste0(stem, "_EPYDEMIX_R0_ONLY.json")), auto_unbox = TRUE)
 }
+# Saved calibrated JSONs alone must not remove states from an LS6 job file.
+inputs$R0_FIT_LAUNCH <- "pylauncher"
+sources <- character()
+stopifnot(identical(inputs$run_pipeline_fits(), invisible(FALSE)))
+queued <- readLines(file.path(batch_dir, "fit_state_commands.txt"))
+stopifnot(length(queued) == 2L,
+  grepl("--selected-states=Delaware", queued[[1]], fixed = TRUE),
+  grepl("--selected-states=Nevada", queued[[2]], fixed = TRUE))
 inputs$R0_FIT_LAUNCH <- "direct"
 inputs$source <- function(...) stop("Matching fits must be reused")
 stopifnot(isTRUE(inputs$run_pipeline_fits()))
