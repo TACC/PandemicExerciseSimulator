@@ -38,6 +38,7 @@ SEARCH_ROOT  <- normalizePath(pipeline_search_root, mustWork = FALSE)
 MASTER_CSV   <- file.path(SEARCH_ROOT, "metadata_master.csv")
 PARQUET_ROOT <- file.path(SEARCH_ROOT, "sim_data")   # partitioned: <hash>/<batch>/
 FEATURES_PARQUET <- file.path(SEARCH_ROOT, "scenario_features.parquet")
+METADATA_SOURCE_REGEX <- get0("VALIDATION_OUTPUT_SOURCE_REGEX", ifnotfound = "WEB_OUTPUTS")
 
 # Set TRUE once a local MongoDB instance is running (install.packages("mongolite"))
 MONGO_ENABLED    <- FALSE
@@ -691,6 +692,26 @@ json_files <- list.files(
   full.names = TRUE
 )
 
+if (!is.na(METADATA_SOURCE_REGEX) && nzchar(METADATA_SOURCE_REGEX)) {
+  json_files <- json_files[stringr::str_detect(
+    json_files,
+    stringr::regex(METADATA_SOURCE_REGEX, ignore_case = TRUE)
+  )]
+  message(sprintf(
+    "Filtered metadata_batch JSON files by source regex '%s': %d file(s).",
+    METADATA_SOURCE_REGEX,
+    length(json_files)
+  ))
+}
+
+reused_fit_outputs <- get0("REUSED_FIT_OUTPUTS", ifnotfound = NULL)
+reuse_manifest <- file.path(SEARCH_ROOT, "reused_fit_outputs.csv")
+if (is.null(reused_fit_outputs) && file.exists(reuse_manifest)) {
+  reused_fit_outputs <- readr::read_csv(reuse_manifest, show_col_types = FALSE)
+}
+if (!is.null(reused_fit_outputs)) {
+  json_files <- unique(c(json_files, reused_fit_outputs$metadata_file))
+}
 message(sprintf("Found %d metadata_batch JSON file(s).", length(json_files)))
 
 parsed_rows <- json_files %>%
