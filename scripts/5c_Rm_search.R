@@ -1,4 +1,4 @@
-# Full-simulator R0 calibration. The historical 5c filename remains an entry point.
+# Full-simulator R_m calibration and adaptive search.
 # Default: minimize absolute total incident-hospitalization error over complete
 # MMWR weeks entirely within simulation days 1..200. The existing weekly
 # hospitalization series is retained. Post-window observations are excluded
@@ -15,9 +15,9 @@
 # --state-output-subdir=true isolates one state's tables/plots under <date>/<state>
 # while sharing the inputs and calibrated JSON output root prepared by script 0.
 #
-# Outputs: <output-dir>/Rm_sweep/<sim-day-0>/ (old WIS outputs are untouched).
+# Outputs: <output-dir>/Rm_search/<sim-day-0>/ (old WIS outputs are untouched).
 # Retains --run-sims=false, --recover-existing=true, and diagnostic refresh flags.
-# Example: Rscript scripts/5c_Rm_sweep_all_interventions.R \
+# Example: Rscript scripts/5c_Rm_search.R \
 #   --output-dir=MANUSCRIPT_EXAMPLE_TEST --selected-states=Delaware \
 #   --simulation-days=200 --r0-selection-metric=total --realization-range=0,9
 
@@ -81,7 +81,7 @@ if (basename(repo_root) == "scripts") {
 }
 setwd(repo_root)
 
-source(file.path(repo_root, "scripts", "Rm_search_helpers.R"))
+source(file.path(repo_root, "scripts", "5c_Rm_search_helpers.R"))
 
 pipeline_output_dir <- get_arg_value("--output-dir=", "MANUSCRIPT_EXAMPLE_TEST") # "STATE_H-INCREASE_ALL-ANTIVIAL_TEST"
 pipeline_root <- normalizePath(
@@ -170,7 +170,7 @@ all_interventions_template_file <- get_arg_value(
 )
 
 sweep_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
-sweep_root <- file.path(pipeline_root, "Rm_sweep", sim_day_0)
+sweep_root <- file.path(pipeline_root, "Rm_search", sim_day_0)
 if (state_output_subdir) sweep_root <- file.path(sweep_root, states[[1]])
 candidate_input_dir <- file.path(sweep_root, "candidate_inputs")
 sim_output_dir <- file.path(sweep_root, "sim_outputs")
@@ -1685,13 +1685,13 @@ write_r0_runtime_outputs <- function() {
           axis.text.y.right = element_text(size = 11, margin = margin(l = 12)),
           axis.ticks.y.right = element_blank(), axis.line.y.right = element_blank(),
           legend.position = "bottom")
-  summary_file <- sweep_table_path(file.path(sweep_root, "Rm_sweep_runtime_by_state_r0.csv"))
+  summary_file <- sweep_table_path(file.path(sweep_root, "Rm_search_runtime_by_state_r0.csv"))
   out_file <- file.path(plot_dir, "state_runtime_by_r0_heatmap.png")
   figure_file <- file.path(shared_figure_dir, "state_runtime_by_r0_heatmap.png")
   dir.create(dirname(figure_file), recursive = TRUE, showWarnings = FALSE)
   write_csv_preserving_existing(runtime_summary, summary_file)
   write_csv_preserving_existing(state_axis %>% select(-"y_index", -"state_label"),
-                   sweep_table_path(file.path(sweep_root, "Rm_sweep_runtime_totals_by_state.csv")))
+                   sweep_table_path(file.path(sweep_root, "Rm_search_runtime_totals_by_state.csv")))
   for (path in c(out_file, figure_file)) {
     p <- rm_plot_labels(p)
     ggsave(path, p, width = max(14, 0.26 * length(r0_levels) + 5),
@@ -1862,8 +1862,8 @@ write_r0_burden_outputs <- function(trace_tbl, use_complete_metadata = FALSE) {
     return(list(summary_file = NA_character_, heatmap_file = NA_character_))
   }
 
-  summary_file <- sweep_table_path(file.path(sweep_root, "Rm_sweep_state_burden_by_r0_per100k.csv"))
-  with_sweep_file_lock(file.path(sweep_root, "Rm_sweep_burden_plots"), {
+  summary_file <- sweep_table_path(file.path(sweep_root, "Rm_search_state_burden_by_r0_per100k.csv"))
+  with_sweep_file_lock(file.path(sweep_root, "Rm_search_burden_plots"), {
   write_csv_preserving_existing(burden_summary, summary_file)
   burden_summary <- read_sweep_table(summary_file, show_col_types = FALSE)
   wis_summary <- if (use_complete_metadata) {
@@ -1871,8 +1871,8 @@ write_r0_burden_outputs <- function(trace_tbl, use_complete_metadata = FALSE) {
   } else {
     tibble()
   }
-  wis_summary_file <- sweep_table_path(file.path(sweep_root, "Rm_sweep_summary_from_complete_metadata.csv"))
-  wis_best_file <- sweep_table_path(file.path(sweep_root, "Rm_sweep_best_by_state_from_complete_metadata.csv"))
+  wis_summary_file <- sweep_table_path(file.path(sweep_root, "Rm_search_summary_from_complete_metadata.csv"))
+  wis_best_file <- sweep_table_path(file.path(sweep_root, "Rm_search_best_by_state_from_complete_metadata.csv"))
   if (nrow(wis_summary) > 0) write_csv_preserving_existing(wis_summary, wis_summary_file)
   if (file.exists(wis_summary_file)) wis_summary <- read_sweep_table(wis_summary_file, show_col_types = FALSE)
   wis_best <- select_wis_minimizing_r0(wis_summary)
@@ -1902,7 +1902,7 @@ write_calibrated_json <- function(row) {
   if (is.null(config$metadata_tags)) config$metadata_tags <- list()
   config$metadata_tags$r0_search <- list(
     kind = "all_interventions_state_incident_hosp_feature_search",
-    selected_from = sweep_table_path(file.path(sweep_root, "Rm_sweep_best_by_state.csv")),
+    selected_from = sweep_table_path(file.path(sweep_root, "Rm_search_best_by_state.csv")),
     selected_metadata_file = complete_metadata_for_candidate(state, row$disease_R0),
     candidate_R0 = row$disease_R0,
     r0_selection_metric = row$r0_selection_metric %||% r0_selection_metric,
@@ -1965,7 +1965,7 @@ message("Final R0 selection metric: ", r0_selection_metric)
 message("Sweep output: ", sweep_root)
 check_base_inputs(states)
 
-best_by_state_file <- sweep_table_path(file.path(sweep_root, "Rm_sweep_best_by_state.csv"))
+best_by_state_file <- sweep_table_path(file.path(sweep_root, "Rm_search_best_by_state.csv"))
 existing_best_by_state <- tibble()
 reused_best_by_state <- tibble()
 states_to_search <- states
@@ -2018,7 +2018,7 @@ if (!run_sims && !recover_existing) {
     }
   }
   if (refresh_search_window_plots || refresh_diagnostic_plots || refresh_burden_heatmap) {
-    trace_file <- sweep_table_path(file.path(sweep_root, "Rm_sweep_search_trace.csv"))
+    trace_file <- sweep_table_path(file.path(sweep_root, "Rm_search_search_trace.csv"))
     if (!file.exists(trace_file)) {
       stop("Cannot refresh WIS outputs because trace file is missing: ", trace_file)
     }
@@ -2041,8 +2041,8 @@ if (!run_sims && !recover_existing) {
     } else {
       tibble()
     }
-    score_lookup <- if (refresh_diagnostic_plots && file.exists(sweep_table_path(file.path(sweep_root, "Rm_sweep_scores_by_week.csv")))) {
-      read_sweep_table(sweep_table_path(file.path(sweep_root, "Rm_sweep_scores_by_week.csv")), show_col_types = FALSE) %>%
+    score_lookup <- if (refresh_diagnostic_plots && file.exists(sweep_table_path(file.path(sweep_root, "Rm_search_scores_by_week.csv")))) {
+      read_sweep_table(sweep_table_path(file.path(sweep_root, "Rm_search_scores_by_week.csv")), show_col_types = FALSE) %>%
         mutate(geo_region = normalize_state_dir(.data$geo_region)) %>%
         filter(.data$geo_region %in% states, .data$scenario_label == scenario_label)
     } else {
@@ -2106,7 +2106,7 @@ if (!run_sims && !recover_existing) {
     disease_R0 = sort(unique(c(clip_r0(base_r0), clip_r0(base_r0 - initial_step), clip_r0(base_r0 + initial_step))))
   ) %>%
     mutate(input_file = purrr::map2_chr(.data$geo_region, .data$disease_R0, write_candidate_input))
-  write_csv_preserving_existing(dry_candidates, sweep_table_path(file.path(sweep_root, "Rm_sweep_candidate_runs.csv")))
+  write_csv_preserving_existing(dry_candidates, sweep_table_path(file.path(sweep_root, "Rm_search_candidate_runs.csv")))
   message("Dry run complete. Candidate inputs were written to: ", candidate_input_dir)
   quit(save = "no", status = 0)
 }
@@ -2118,9 +2118,9 @@ if (length(states_to_search) > 0) {
     state_results[[state]] <- state_result
     # Save each finished state before plotting or starting the next state.
     # A later error must not discard hours of completed calibration work.
-    write_csv_preserving_existing(state_result$trace, sweep_table_path(file.path(sweep_root, "Rm_sweep_search_trace.csv")))
-    write_csv_preserving_existing(state_result$scores, sweep_table_path(file.path(sweep_root, "Rm_sweep_scores_by_week.csv")))
-    write_csv_preserving_existing(state_result$predictions, sweep_table_path(file.path(sweep_root, "Rm_sweep_quantile_predictions.csv")))
+    write_csv_preserving_existing(state_result$trace, sweep_table_path(file.path(sweep_root, "Rm_search_search_trace.csv")))
+    write_csv_preserving_existing(state_result$scores, sweep_table_path(file.path(sweep_root, "Rm_search_scores_by_week.csv")))
+    write_csv_preserving_existing(state_result$predictions, sweep_table_path(file.path(sweep_root, "Rm_search_quantile_predictions.csv")))
     write_csv_preserving_existing(state_result$best, best_by_state_file,
       keys = c("geo_region", "scenario_label", "r0_selection_metric"))
     if (write_calibrated_jsons) write_calibrated_json(state_result$best)
@@ -2197,15 +2197,15 @@ best_by_state <- bind_rows(
   ungroup() %>%
   arrange(.data$geo_region)
 
-write_csv_preserving_existing(search_trace, sweep_table_path(file.path(sweep_root, "Rm_sweep_search_trace.csv")))
-write_csv_preserving_existing(quantile_predictions_out, sweep_table_path(file.path(sweep_root, "Rm_sweep_quantile_predictions.csv")))
-write_csv_preserving_existing(scores_by_week, sweep_table_path(file.path(sweep_root, "Rm_sweep_scores_by_week.csv")))
-write_csv_preserving_existing(summary_scores, sweep_table_path(file.path(sweep_root, "Rm_sweep_summary.csv")))
-write_csv_preserving_existing(best_by_state, sweep_table_path(file.path(sweep_root, "Rm_sweep_best_by_state.csv")),
+write_csv_preserving_existing(search_trace, sweep_table_path(file.path(sweep_root, "Rm_search_search_trace.csv")))
+write_csv_preserving_existing(quantile_predictions_out, sweep_table_path(file.path(sweep_root, "Rm_search_quantile_predictions.csv")))
+write_csv_preserving_existing(scores_by_week, sweep_table_path(file.path(sweep_root, "Rm_search_scores_by_week.csv")))
+write_csv_preserving_existing(summary_scores, sweep_table_path(file.path(sweep_root, "Rm_search_summary.csv")))
+write_csv_preserving_existing(best_by_state, sweep_table_path(file.path(sweep_root, "Rm_search_best_by_state.csv")),
   keys = c("geo_region", "scenario_label", "r0_selection_metric"))
-write_csv_preserving_existing(featured_candidate_summaries, sweep_table_path(file.path(sweep_root, "Rm_sweep_featured_candidate_comparison.csv")))
+write_csv_preserving_existing(featured_candidate_summaries, sweep_table_path(file.path(sweep_root, "Rm_search_featured_candidate_comparison.csv")))
 
-burden_trace_file <- sweep_table_path(file.path(sweep_root, "Rm_sweep_search_trace.csv"))
+burden_trace_file <- sweep_table_path(file.path(sweep_root, "Rm_search_search_trace.csv"))
 burden_trace <- if (file.exists(burden_trace_file)) {
   read_sweep_table(burden_trace_file, show_col_types = FALSE) %>%
     mutate(geo_region = normalize_state_dir(.data$geo_region)) %>%
@@ -2216,7 +2216,7 @@ burden_trace <- if (file.exists(burden_trace_file)) {
 if (defer_sweep_tables) {
   burden_summary <- summarise_r0_burden_from_trace(burden_trace)
   write_csv_preserving_existing(burden_summary,
-    sweep_table_path(file.path(sweep_root, "Rm_sweep_state_burden_by_r0_per100k.csv")))
+    sweep_table_path(file.path(sweep_root, "Rm_search_state_burden_by_r0_per100k.csv")))
 } else write_r0_burden_outputs(burden_trace)
 
 if (write_calibrated_jsons) {
@@ -2225,22 +2225,22 @@ if (write_calibrated_jsons) {
   })
   calibrated_manifest <- best_by_state %>%
     mutate(calibrated_json_file = calibrated_files)
-  write_csv_preserving_existing(calibrated_manifest, sweep_table_path(file.path(sweep_root, "Rm_sweep_calibrated_json_manifest.csv")),
+  write_csv_preserving_existing(calibrated_manifest, sweep_table_path(file.path(sweep_root, "Rm_search_calibrated_json_manifest.csv")),
     keys = c("geo_region", "scenario_label", "r0_selection_metric"))
-  message("Wrote calibrated JSON manifest: ", sweep_table_path(file.path(sweep_root, "Rm_sweep_calibrated_json_manifest.csv")))
+  message("Wrote calibrated JSON manifest: ", sweep_table_path(file.path(sweep_root, "Rm_search_calibrated_json_manifest.csv")))
 }
 
-message("Wrote search trace: ", sweep_table_path(file.path(sweep_root, "Rm_sweep_search_trace.csv")))
-message("Wrote WIS scores: ", sweep_table_path(file.path(sweep_root, "Rm_sweep_scores_by_week.csv")))
-message("Wrote best R0 by state: ", sweep_table_path(file.path(sweep_root, "Rm_sweep_best_by_state.csv")))
-message("Wrote featured candidate comparison: ", sweep_table_path(file.path(sweep_root, "Rm_sweep_featured_candidate_comparison.csv")))
+message("Wrote search trace: ", sweep_table_path(file.path(sweep_root, "Rm_search_search_trace.csv")))
+message("Wrote WIS scores: ", sweep_table_path(file.path(sweep_root, "Rm_search_scores_by_week.csv")))
+message("Wrote best R0 by state: ", sweep_table_path(file.path(sweep_root, "Rm_search_best_by_state.csv")))
+message("Wrote featured candidate comparison: ", sweep_table_path(file.path(sweep_root, "Rm_search_featured_candidate_comparison.csv")))
 message("Wrote final fit plots under: ", plot_dir)
 if (defer_sweep_tables) {
   settings <- list(sim_day_0 = sim_day_0, scenario = scenario_label,
     simulation_days = as.integer(simulation_days), realization_range = as.integer(realization_range),
     selection_metric = r0_selection_metric, search_metrics = r0_search_metrics,
     scoring_version = R0_SCORING_VERSION)
-  path <- file.path(sweep_root, "checkpoints", paste0(states[[1]], "_Rm_sweep_settings.rds"))
+  path <- file.path(sweep_root, "checkpoints", paste0(states[[1]], "_Rm_search_settings.rds"))
   temporary <- tempfile(tmpdir = dirname(path))
   saveRDS(settings, temporary)
   if (!file.rename(temporary, path)) stop("Could not publish completed fit settings: ", path)

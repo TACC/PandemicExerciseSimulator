@@ -153,7 +153,7 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
 
   if (PIPELINE_PHASE == "scenarios") {
     require_completed_pipeline_fits()
-    if (EXECUTION_TARGET == "ls6") aggregate_rm_sweep_checkpoints()
+    if (EXECUTION_TARGET == "ls6") aggregate_rm_search_checkpoints()
   }
 
   if (PIPELINE_PHASE != "results") {
