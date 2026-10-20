@@ -31,11 +31,11 @@ def rand_int(lower:int, upper:int) -> int:
     return (mtrand.randint(lower, upper+1))
 
 
-def rand_binomial(num:int, prob:float) -> int:
+def rand_binomial(num:int, prob:float, rng=None) -> int:
     """
     Given a number and a probability, return one sample from binomial distribution
     """
-    return (default_rng().binomial(num, prob))
+    return (rng if rng is not None else default_rng()).binomial(num, prob)
     
 
 def rand_rayleigh(sigma:float) -> float:

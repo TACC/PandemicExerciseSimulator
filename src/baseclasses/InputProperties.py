@@ -4,6 +4,7 @@ import logging
 import os
 from typing import List
 from uuid6 import uuid7
+from utils.Execution import parse_execution
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class InputProperties:
 
         # simulation control
         self.output_dir_path        = input['output_dir_path']
+        self.execution = parse_execution(input.get('execution'))
 
         batch_val = str(input["batch_num"]).strip()
         if batch_val.upper() == "GENERATE": # allow for any capitalization of "Generate"

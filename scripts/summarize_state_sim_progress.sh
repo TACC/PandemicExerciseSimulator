@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Summarize output from find_missing_state_sims.sh.
 # Run from STATE_WKLYFIT_TEST/TACC_FILES on TACC:
-#   bash ../../scripts/summarize_state_sim_progress.sh state_sim_progress.csv
+#   bash ../../scripts/summarize_state_sim_progress.sh new_state_sim_progress.csv
 
 STATUS_CSV="${1:-state_sim_progress.csv}"
 
@@ -146,11 +146,20 @@ NR == 1 {
    rt_sum = runtime_sum[row_num]
    rt_count = runtime_count[row_num]
 
-   status = "not_started"
-   if (missing == 0) {
-      status = "done"
-   } else if (finished > 0) {
-      status = "running"
+   if ("status" in col) {
+      status = unquote($col["status"])
+   } else {
+      status = "not_started"
+      if (missing == 0) {
+         status = "complete"
+      } else if (finished > 0) {
+         status = "partial"
+      }
+   }
+   if (status == "done") {
+      status = "complete"
+   } else if (status == "running") {
+      status = "partial"
    }
 
    command_count++
@@ -175,50 +184,62 @@ NR == 1 {
 
 END {
    printf "COMMANDS\n" > summary_file
-   printf "  done=%d running=%d not_started=%d total=%d\n\n", \
-      command_status["done"], command_status["running"], command_status["not_started"], command_count > summary_file
+   printf "  complete=%d partial=%d started_no_finish=%d not_started=%d total=%d\n\n", \
+      command_status["complete"], command_status["partial"], \
+      command_status["started_no_finish"], command_status["not_started"], \
+      command_count > summary_file
 
    for (state in state_seen) {
       rollup = "not_started"
-      if (state_status[state, "done"] == state_total[state]) {
-         rollup = "done"
-      } else if (state_status[state, "running"] > 0 || state_status[state, "done"] > 0) {
-         rollup = "running"
+      if (state_status[state, "complete"] == state_total[state]) {
+         rollup = "complete"
+      } else if (state_status[state, "partial"] > 0 || state_status[state, "complete"] > 0) {
+         rollup = "partial"
+      } else if (state_status[state, "started_no_finish"] > 0) {
+         rollup = "started_no_finish"
       }
 
       state_rollup[rollup]++
-      printf "  %-24s %-11s scenarios=%2d done=%2d running=%2d not_started=%2d sims_done=%4d sims_left=%4d mean_sec=%s\n", \
-         state, rollup, state_total[state], state_status[state, "done"], \
-         state_status[state, "running"], state_status[state, "not_started"], \
+      printf "  %-24s %-17s scenarios=%2d complete=%2d partial=%2d started_no_finish=%2d not_started=%2d sims_done=%4d sims_left=%4d mean_sec=%s\n", \
+         state, rollup, state_total[state], state_status[state, "complete"], \
+         state_status[state, "partial"], state_status[state, "started_no_finish"], \
+         state_status[state, "not_started"], \
          state_finished[state], state_missing[state], \
          mean_or_na(state_time_sum[state], state_time_count[state]) > state_file
    }
 
    printf "\nSTATE TOTALS\n" > state_totals_file
-   printf "  done=%d running=%d not_started=%d total=%d\n\n", \
-      state_rollup["done"], state_rollup["running"], state_rollup["not_started"], \
-      state_rollup["done"] + state_rollup["running"] + state_rollup["not_started"] > state_totals_file
+   printf "  complete=%d partial=%d started_no_finish=%d not_started=%d total=%d\n\n", \
+      state_rollup["complete"], state_rollup["partial"], \
+      state_rollup["started_no_finish"], state_rollup["not_started"], \
+      state_rollup["complete"] + state_rollup["partial"] + \
+      state_rollup["started_no_finish"] + state_rollup["not_started"] > state_totals_file
 
    for (scenario in scenario_seen) {
       rollup = "not_started"
-      if (scenario_status[scenario, "done"] == scenario_total[scenario]) {
-         rollup = "done"
-      } else if (scenario_status[scenario, "running"] > 0 || scenario_status[scenario, "done"] > 0) {
-         rollup = "running"
+      if (scenario_status[scenario, "complete"] == scenario_total[scenario]) {
+         rollup = "complete"
+      } else if (scenario_status[scenario, "partial"] > 0 || scenario_status[scenario, "complete"] > 0) {
+         rollup = "partial"
+      } else if (scenario_status[scenario, "started_no_finish"] > 0) {
+         rollup = "started_no_finish"
       }
 
       scenario_rollup[rollup]++
-      printf "  %-18s %-11s states=%2d done=%2d running=%2d not_started=%2d sims_done=%4d sims_left=%4d mean_sec=%s\n", \
-         scenario, rollup, scenario_total[scenario], scenario_status[scenario, "done"], \
-         scenario_status[scenario, "running"], scenario_status[scenario, "not_started"], \
+      printf "  %-18s %-17s states=%2d complete=%2d partial=%2d started_no_finish=%2d not_started=%2d sims_done=%4d sims_left=%4d mean_sec=%s\n", \
+         scenario, rollup, scenario_total[scenario], scenario_status[scenario, "complete"], \
+         scenario_status[scenario, "partial"], scenario_status[scenario, "started_no_finish"], \
+         scenario_status[scenario, "not_started"], \
          scenario_finished[scenario], scenario_missing[scenario], \
          mean_or_na(scenario_time_sum[scenario], scenario_time_count[scenario]) > scenario_file
    }
 
    printf "\nSCENARIO TOTALS\n" > scenario_totals_file
-   printf "  done=%d running=%d not_started=%d total=%d\n", \
-      scenario_rollup["done"], scenario_rollup["running"], scenario_rollup["not_started"], \
-      scenario_rollup["done"] + scenario_rollup["running"] + scenario_rollup["not_started"] > scenario_totals_file
+   printf "  complete=%d partial=%d started_no_finish=%d not_started=%d total=%d\n", \
+      scenario_rollup["complete"], scenario_rollup["partial"], \
+      scenario_rollup["started_no_finish"], scenario_rollup["not_started"], \
+      scenario_rollup["complete"] + scenario_rollup["partial"] + \
+      scenario_rollup["started_no_finish"] + scenario_rollup["not_started"] > scenario_totals_file
 }
 ' "$STATUS_ABS"
 
