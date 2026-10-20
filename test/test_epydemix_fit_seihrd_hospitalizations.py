@@ -69,3 +69,41 @@ def test_observed_hospitalizations_reject_non_saturday_dates(tmp_path):
             fit_start_date=None,
             fit_end_date=None,
         )
+
+
+def test_parse_args_defaults_to_incident_hospitalization_target(monkeypatch):
+    fit = load_fit_script()
+    monkeypatch.setattr(sys, "argv", ["fit.py"])
+
+    args = fit.parse_args()
+
+    assert args.fit_target == "hosp_incident"
+    assert args.generated_metric == "admissions"
+
+
+def test_parse_args_accepts_deprecated_generated_metric_alias(monkeypatch):
+    fit = load_fit_script()
+    monkeypatch.setattr(sys, "argv", ["fit.py", "--generated-metric", "h_positive_increase"])
+
+    args = fit.parse_args()
+
+    assert args.fit_target == "hosp_increase"
+    assert args.generated_metric == "h_positive_increase"
+
+
+def test_parse_args_rejects_conflicting_fit_target_and_generated_metric(monkeypatch):
+    fit = load_fit_script()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "fit.py",
+            "--fit-target",
+            "hosp_increase",
+            "--generated-metric",
+            "admissions",
+        ],
+    )
+
+    with pytest.raises(SystemExit):
+        fit.parse_args()
