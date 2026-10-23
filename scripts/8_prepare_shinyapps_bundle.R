@@ -10,7 +10,15 @@ library(dplyr)
 
 cmd_args <- commandArgs(trailingOnly = FALSE)
 file_arg <- grep("^--file=", cmd_args, value = TRUE)
-script_path <- if (length(file_arg) > 0) sub("^--file=", "", file_arg[[1]]) else ""
+source_files <- vapply(sys.frames(), function(frame) {
+  value <- get0("ofile", envir = frame, inherits = FALSE)
+  if (is.null(value)) "" else as.character(value)[[1]]
+}, character(1))
+# source() keeps the actual file path; --file still names script 0 and may
+# be relative to its original working directory, before it entered scripts/.
+script_path <- if (any(nzchar(source_files))) {
+  tail(source_files[nzchar(source_files)], 1)
+} else if (length(file_arg)) sub("^--file=", "", file_arg[[1]]) else ""
 script_dir <- if (nzchar(script_path)) dirname(normalizePath(script_path, mustWork = FALSE)) else getwd()
 
 if (dir.exists(file.path(script_dir, "scripts"))) {
@@ -232,7 +240,10 @@ metadata_tag_chr <- function(tags_json, tag) {
 
 dir.create(bundle_data, recursive = TRUE, showWarnings = FALSE)
 bundle_app <- file.path(bundle_dir, "app.R")
-invisible(file.copy(source_app, bundle_app, overwrite = TRUE))
+if (!file.exists(source_app)) stop("Dashboard source app not found: ", source_app)
+if (!file.copy(source_app, bundle_app, overwrite = TRUE)) {
+  stop("Could not copy dashboard app from ", source_app, " to ", bundle_app)
+}
 app_lines <- readLines(bundle_app, warn = FALSE)
 app_lines <- sub(
   '^DASHBOARD_DATA_DIR <- ".*"$',
