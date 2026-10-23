@@ -46,7 +46,7 @@ From: rocker/geospatial:4.4.2
 
     # Install orchestration and fitting R packages missing from the public base.
     export R_LIBS_USER=/opt/pes-r-library
-    Rscript --vanilla -e 'lib <- "/opt/pes-r-library"; .libPaths(c(lib, .libPaths())); pkgs <- c("pacman", "tidyverse", "tidycensus", "tigris", "sf", "reticulate", "srvyr", "ggpmisc", "jsonlite", "haven", "rsconnect", "dplyr", "ggplot2", "purrr", "readr", "stringr", "tibble", "tidyr"); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]; if (length(missing)) install.packages(missing, lib = lib, repos = "https://cloud.r-project.org"); stopifnot(all(vapply(pkgs, requireNamespace, logical(1), quietly = TRUE))); write.csv(installed.packages(), "/opt/pes-deps/r-packages.csv", row.names = FALSE)'
+    Rscript --vanilla -e 'lib <- "/opt/pes-r-library"; .libPaths(c(lib, .libPaths())); pkgs <- c("pacman", "tidyverse", "tidycensus", "tigris", "sf", "reticulate", "srvyr", "ggpmisc", "jsonlite", "haven", "rsconnect", "dplyr", "ggplot2", "ggrepel", "purrr", "readr", "stringr", "tibble", "tidyr"); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]; if (length(missing)) install.packages(missing, lib = lib, repos = "https://cloud.r-project.org"); stopifnot(all(vapply(pkgs, requireNamespace, logical(1), quietly = TRUE))); write.csv(installed.packages(), "/opt/pes-deps/r-packages.csv", row.names = FALSE)'
 
     chmod -R a+rX /opt/pes-python /opt/pes-poetry /opt/pes-r-library /opt/pes-deps
 
@@ -75,7 +75,7 @@ From: rocker/geospatial:4.4.2
     poetry --version
     poetry run python3 -c 'import sys, numpy, pandas, scipy, pyarrow, epydemix; assert sys.version_info >= (3, 11); print(sys.executable); print(sys.version)'
     # Confirm that the exact R -> Poetry -> Python boundary works.
-    Rscript -e 'library(dplyr); library(tidycensus); library(sf); print(R.version.string); print(.libPaths()); stopifnot(Sys.which("poetry") == "/opt/pes-poetry/bin/poetry", Sys.which("python3") == "/opt/pes-python/bin/python3"); status <- system2("poetry", c("run", "python3", "--version")); stopifnot(status == 0L)'
+    Rscript -e 'library(dplyr); library(ggrepel); library(tidycensus); library(sf); print(R.version.string); print(.libPaths()); stopifnot(Sys.which("poetry") == "/opt/pes-poetry/bin/poetry", Sys.which("python3") == "/opt/pes-python/bin/python3"); status <- system2("poetry", c("run", "python3", "--version")); stopifnot(status == 0L)'
 
 %labels
     Purpose R orchestration and Poetry-based pandemic simulator on LS6

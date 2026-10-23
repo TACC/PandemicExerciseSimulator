@@ -859,12 +859,22 @@ aggregate_rm_search_checkpoints <- function(states = gsub(" ", "-", c(state.name
       "summary", "featured_candidate_comparison", "calibrated_json_manifest")
     tables <- list()
     missing <- character()
+    problems <- character()
     for (state in states) {
       prefix <- paste0(state, "_Rm_search_")
       settings <- file.path(checkpoints, paste0(prefix, "settings.rds"))
       paths <- file.path(checkpoints, paste0(prefix, required, ".rds"))
-      if (!file.exists(settings) || !identical(readRDS(settings), expected) || !all(file.exists(paths))) {
+      absent <- basename(c(settings, paths)[!file.exists(c(settings, paths))])
+      mismatched <- if (file.exists(settings)) {
+        saved <- readRDS(settings)
+        names(expected)[!vapply(names(expected), function(name)
+          identical(saved[[name]], expected[[name]]), logical(1))]
+      } else character()
+      if (length(absent) || length(mismatched)) {
         missing <- c(missing, state)
+        reason <- c(if (length(absent)) paste0("missing ", paste(absent, collapse = ", ")),
+          if (length(mismatched)) paste0("settings differ: ", paste(mismatched, collapse = ", ")))
+        problems <- c(problems, paste0(state, ": ", paste(reason, collapse = "; ")))
         next
       }
       stem <- paste0("INPUT_SEIHRD-STOCH_", state, "_SEED_NONE")
@@ -875,6 +885,7 @@ aggregate_rm_search_checkpoints <- function(states = gsub(" ", "-", c(state.name
       if (nrow(best) != 1L || !isTRUE(all.equal(as.numeric(best$disease_R0),
           as.numeric(fit$disease_model$parameters$R0), tolerance = 1e-5))) {
         missing <- c(missing, state)
+        problems <- c(problems, paste0(state, ": best checkpoint R0 does not match calibrated JSON"))
         next
       }
       paths <- list.files(checkpoints, full.names = TRUE)
@@ -885,7 +896,11 @@ aggregate_rm_search_checkpoints <- function(states = gsub(" ", "-", c(state.name
       }
     }
     if (length(missing)) stop("Finish state fitting checkpoints before preparing scenarios for ", date,
-      ": ", paste(missing, collapse = ", "))
+      ": ", paste(missing, collapse = ", "), "\nCheckpoint directory: ", checkpoints,
+      "\n", paste(problems, collapse = "\n"),
+      "\nCore checkpoints can exist even when later plotting failed. Check the state fit logs; ",
+      "after fixing the error, use --recover-existing=true --run-sims=false on the original ",
+      "state fit commands to rebuild outputs without launching simulations.")
     for (name in names(tables)) {
       path <- file.path(root, name)
       temporary <- tempfile(pattern = ".sweep-table-", tmpdir = root)
@@ -974,7 +989,15 @@ require_completed_scenario_outputs <- function(states = if (length(SELECTED_RUN_
             nodes <- list.files(folder, pattern = "^node_.*\\.csv$")
             nodes <- nodes[endsWith(nodes, paste0("_batch-", m$batch_num, ".csv"))]
             expected_nodes <- if (is.null(m$geo$node_count)) 1L else as.integer(m$geo$node_count)
-            if (length(nodes) < expected_nodes) next
+            # Parallel runs combine every county into one file per realization.
+            # Serial runs retain one file per county; county count only applies there.
+            realization_nodes <- nodes[grepl("^node_realization-[0-9]+_batch-", nodes)]
+            if (length(realization_nodes)) {
+              node_ids <- as.integer(sub("^node_realization-([0-9]+)_batch-.*$", "\\1",
+                realization_nodes))
+              if (!identical(sort(unique(node_ids)),
+                  seq.int(SIM_REALIZATION_RANGE[1], SIM_REALIZATION_RANGE[2]))) next
+            } else if (length(nodes) < expected_nodes) next
             ids <- readr::read_csv(timing, show_col_types = FALSE)$sim_id
             complete <- identical(sort(unique(as.integer(ids))),
               seq.int(SIM_REALIZATION_RANGE[1], SIM_REALIZATION_RANGE[2]))

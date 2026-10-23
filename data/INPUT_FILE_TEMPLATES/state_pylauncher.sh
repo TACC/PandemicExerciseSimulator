@@ -31,6 +31,9 @@
 #    allocation to one node. Remove the total-task directive instead of relying on
 #    PyLauncher ignoring it; Slurm processes these directives before PyLauncher starts.
 
+# Personal R package library for anything added independent of container
+export APPTAINERENV_PES_R_LIBRARY="$WORK/pes-r-library"
+
 # Load apptainer to run the Python and R singularity container
 module load tacc-apptainer
 

@@ -7,4 +7,6 @@ Sys.setenv(
   POETRY_VIRTUALENVS_CREATE = "false",
   PYTHONNOUSERSITE = "1"
 )
-.libPaths(c("/opt/pes-r-library", .libPaths()))
+# A separate variable survives images that reset R_LIBS_USER during startup.
+# The directory must exist before R starts; retain the image's bundled packages.
+.libPaths(c(Sys.getenv("PES_R_LIBRARY"), "/opt/pes-r-library", .libPaths()))

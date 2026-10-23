@@ -86,3 +86,29 @@ bash scripts/ls6_container_exec.sh --image "$WORK/pes_pipeline_r442_py312.sif" \
 Inspect the generated command and allocation settings before submitting the
 existing launcher through your normal `sbatch` workflow. PyLauncher stays on
 the host; each fitting or scenario command runs inside the container.
+
+## Recover a fit interrupted by plotting
+
+If a fit log ends with a missing `ggrepel` error, rebuild the image with the
+updated recipe above. The four core state checkpoints are saved before plotting;
+their presence alone does not indicate completed postprocessing. The scenarios
+phase also requires summary, comparison, manifest, and settings checkpoints.
+
+To rebuild these and the plots from saved simulations, add
+`--recover-existing=true --run-sims=false` to the original fitting commands.
+Recovery refuses to launch simulations and fails if a required candidate is
+incomplete. Preserve all the original scientific settings, output paths, and
+`--defer-sweep-tables=true` flag. For the generated LS6 launcher, from the
+repository root, prepare the existing launcher to run recovery:
+
+```bash
+cd LS6_RmSweep_TEST/Rm_search/2025-10-04
+cp -p fit_state_commands.txt fit_state_commands.before-recovery.txt
+sed 's/ --reuse-existing=true / --reuse-existing=true --recover-existing=true --run-sims=false /' \
+  fit_state_commands.before-recovery.txt > fit_state_commands.txt
+sbatch fit_state_pylauncher.sh
+```
+
+After that job finishes successfully, run the scenarios phase again from the
+repository root. A plain rerun without recovery can reuse the saved best row
+without regenerating all the plots, so use the explicit recovery flags here.

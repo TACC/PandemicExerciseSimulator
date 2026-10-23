@@ -24,6 +24,8 @@
 suppressPackageStartupMessages({
   library(dplyr)
   library(ggplot2)
+  # Check plotting dependencies before spending hours on candidate simulations.
+  library(ggrepel)
   library(jsonlite)
   library(purrr)
   library(readr)

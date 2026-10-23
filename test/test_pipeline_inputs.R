@@ -257,6 +257,37 @@ for (i in seq_len(nrow(reuse$REUSED_FIT_OUTPUTS))) {
 }
 stopifnot(reuse$require_completed_scenario_outputs(states = states))
 
+# Parallel batches have one node file per realization, even for >100 counties.
+# Check both reused fitting outputs and ordinary TACC scenario outputs.
+for (metadata_path in reuse$REUSED_FIT_OUTPUTS$metadata_file) {
+  metadata <- jsonlite::read_json(metadata_path)
+  metadata$geo <- list(node_count = 159L)
+  jsonlite::write_json(metadata, metadata_path, auto_unbox = TRUE)
+  folder <- dirname(metadata_path)
+  unlink(file.path(folder, "node_001_batch-1.csv"))
+  invisible(file.create(file.path(folder, paste0("node_realization-", 0:99, "_batch-1.csv"))))
+}
+stopifnot(reuse$require_completed_scenario_outputs(states = states))
+parallel_node <- file.path(dirname(reuse$REUSED_FIT_OUTPUTS$metadata_file[[1]]),
+  "node_realization-99_batch-1.csv")
+unlink(parallel_node)
+expect_error(reuse$require_completed_scenario_outputs(states = states))
+invisible(file.create(parallel_node))
+ordinary <- setup(write_config(list(output_dir = reuse$pipeline_output_root,
+  pipeline_phase = "results", execution_target = "ls6",
+  reuse_best_fit_simulations = FALSE), "ordinary.R"))
+ordinary$pipeline_output_root <- reuse$pipeline_output_root
+ordinary$SELECTED_RUN_SCENARIOS <- "VACCINE"
+ordinary$REUSED_FIT_OUTPUTS <- reuse$REUSED_FIT_OUTPUTS[FALSE, ]
+for (metadata_path in reuse$REUSED_FIT_OUTPUTS$metadata_file) {
+  metadata <- jsonlite::read_json(metadata_path)
+  target <- file.path(reuse$pipeline_output_root, "TACC_FILES",
+    paste0(metadata$metadata_tags$state_dir, "_test-output"))
+  dir.create(target)
+  invisible(file.copy(list.files(dirname(metadata_path), full.names = TRUE), target))
+}
+stopifnot(ordinary$require_completed_scenario_outputs(states = states))
+
 # Combined sweep CSVs appear only after all state checkpoints are ready.
 checkpoint_dir <- file.path(reuse$pipeline_output_root, "Rm_search", "2025-10-04", "checkpoints")
 dir.create(checkpoint_dir, recursive = TRUE)
@@ -273,7 +304,11 @@ for (state in states) {
 }
 missing <- file.path(checkpoint_dir, "Nevada_Rm_search_settings.rds")
 file.rename(missing, paste0(missing, ".hold"))
-expect_error(reuse$aggregate_rm_search_checkpoints(states = states))
+checkpoint_error <- tryCatch(reuse$aggregate_rm_search_checkpoints(states = states), error = identity)
+stopifnot(inherits(checkpoint_error, "error"),
+  grepl("Nevada_Rm_search_settings.rds", conditionMessage(checkpoint_error), fixed = TRUE),
+  grepl(checkpoint_dir, conditionMessage(checkpoint_error), fixed = TRUE),
+  grepl("--recover-existing=true --run-sims=false", conditionMessage(checkpoint_error), fixed = TRUE))
 sweep_dir <- dirname(checkpoint_dir)
 stopifnot(length(list.files(sweep_dir, pattern = "^Rm_search_.*\\.csv$")) == 0L)
 file.rename(paste0(missing, ".hold"), missing)

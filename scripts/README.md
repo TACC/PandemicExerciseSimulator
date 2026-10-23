@@ -30,18 +30,24 @@ In RStudio, set `PIPELINE_CONFIG_FILE` to your input file and source `0`.
 
 ### LS6 phases
 
-`RUN_FULL_PIPELINE_INPUTS.R` is the local full-pipeline example. For LS6, copy
+`RUN_FULL_PIPELINE_INPUTS.R` is the local full-pipeline example. For LS6, edit
 `LS6_PIPELINE_INPUTS.R`, `1_RUN_FIT.R`, `2_RUN_SCENARIOS.R`, and `3_RUN_FIGURES.R`
-from `data/INPUT_FILE_TEMPLATES/` into one experiment directory. Edit scientific
-settings once in `LS6_PIPELINE_INPUTS.R`; all three phase files inherit them.
+in `data/INPUT_FILE_TEMPLATES/` directly, or copy all four files together into
+an experiment directory. Edit scientific settings once in
+`LS6_PIPELINE_INPUTS.R`; all three phase files inherit them from the shared file
+in the same directory. The commands below use the templates in their original
+location. If you copy them, replace each `--config=data/INPUT_FILE_TEMPLATES/...`
+path with the corresponding copied phase file's path, relative to the repository
+root or absolute.
 The LS6 example uses all states, 100 realizations, 32 workers per fitting
 candidate, all four search criteria, peak-height selection, and reuse of the
 winning All Interventions batch. Publication is disabled.
 
-Run from the repository root (replace config paths if you copied the files):
+Run all three phase commands from the repository root through the LS6 container
+wrapper:
 
 ```bash
-Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/1_RUN_FIT.R
+bash 'scripts/ls6_container_exec.sh' Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/1_RUN_FIT.R
 ```
 
 This prepares data and writes the fitting launcher under
@@ -73,7 +79,7 @@ fits finish, `2_RUN_SCENARIOS.R` publishes `Rm_search_*.csv` files directly unde
 After fitting finishes:
 
 ```bash
-Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/2_RUN_SCENARIOS.R
+bash 'scripts/ls6_container_exec.sh' Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/2_RUN_SCENARIOS.R
 ```
 
 This requires matching fits for all states and dates, prepares the downstream
@@ -87,7 +93,7 @@ The generator prints the execution target and command prefix for inspection.
 After the scenario jobs finish:
 
 ```bash
-Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/3_RUN_FIGURES.R
+bash 'scripts/ls6_container_exec.sh' Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/3_RUN_FIGURES.R
 ```
 
 This requires completed selected scenarios, then builds Parquet data, the
