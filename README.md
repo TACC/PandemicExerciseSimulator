@@ -24,6 +24,23 @@ $ poetry install --no-root
 The above will create a virtual environment. You can automatically access the virtual
 environment by prefacing your commands with `poetry run`.
 
+On LS6, run pipeline phases 1, 2, and 3 through
+`bash scripts/ls6_container_exec.sh Rscript ...` as shown in the
+[LS6 phase instructions](scripts/README.md#ls6-phases). The wrapper loads
+`tacc-apptainer` when needed and sets the container R library to
+`$WORK/pes-r-library`, preserving an explicit override. If running Apptainer
+directly, repeat `module load tacc-apptainer` and
+`export APPTAINERENV_PES_R_LIBRARY="$WORK/pes-r-library"` after every login,
+or add them to your shell startup.
+
+To rebuild the dashboard deployment from completed Parquet outputs, edit
+`selected_states` in
+[`4_PREPARE_DEPLOYMENT.R`](data/INPUT_FILE_TEMPLATES/4_PREPARE_DEPLOYMENT.R)
+and run it through pipeline `0`. A state vector packages that subset; `NULL`
+packages all available states. The deployment-only phase checks the 5 GB budget
+and replaces previously bundled data without rerunning simulations. See
+[Rebuild a deployment](scripts/README.md#rebuild-a-deployment).
+
 State input files use paths beginning with `../data/`, so run them from the
 `data/` directory. Delaware has only three counties and is a faster example
 than Texas:

@@ -145,8 +145,8 @@ initialize_pipeline_inputs <- function(config_file = NULL, args = character(), r
     if (nzchar(LS6_CONTAINER_IMAGE)) {
       LS6_CONTAINER_IMAGE <- pipeline_input_path(path.expand(LS6_CONTAINER_IMAGE), repo_root)
     }
-    if (!PIPELINE_PHASE %in% c("all", "fit", "scenarios", "results")) {
-      stop("pipeline_phase must be all, fit, scenarios, or results.")
+    if (!PIPELINE_PHASE %in% c("all", "fit", "scenarios", "results", "deploy")) {
+      stop("pipeline_phase must be all, fit, scenarios, results, or deploy.")
     }
     if (!EXECUTION_TARGET %in% c("local", "ls6")) {
       stop("execution_target must be local or ls6.")
@@ -192,6 +192,9 @@ initialize_pipeline_inputs <- function(config_file = NULL, args = character(), r
     MAKE_DIAGNOSTIC_FIGS = get_bool_arg("--make-diagnostic-figs=")
     VALIDATION_OUTPUT_SOURCE_REGEX = get_arg_value("--validation-output-source-regex=")
     DEPLOY_SHINYAPPS = get_bool_arg("--deploy-shinyapps=")
+    DASHBOARD_MAX_BUNDLE_BYTES <- as.numeric(get_arg_value("--dashboard-max-bundle-bytes="))
+    if (length(DASHBOARD_MAX_BUNDLE_BYTES) != 1L || !is.finite(DASHBOARD_MAX_BUNDLE_BYTES) ||
+        DASHBOARD_MAX_BUNDLE_BYTES <= 0) stop("dashboard_max_bundle_bytes must be positive and finite.")
     SHINYAPPS_ACCOUNT = get_arg_value("--shinyapps-account=")
     SHINYAPPS_APP_NAME = get_arg_value("--shinyapps-app-name=")
 
@@ -834,6 +837,9 @@ log_pipeline_settings <- function() {
   cat("  VALIDATION_OUTPUT_SOURCE_REGEX = ", VALIDATION_OUTPUT_SOURCE_REGEX, "\n", sep = "")
   cat("  SELECTED_RUN_STATES = ", paste(SELECTED_RUN_STATES, collapse = ", "), "\n", sep = "")
   cat("  SELECTED_RUN_SCENARIOS = ", paste(SELECTED_RUN_SCENARIOS, collapse = ", "), "\n", sep = "")
+  cat("  DASHBOARD_STATES = ", if (length(DASHBOARD_PREVIEW_STATES))
+    paste(DASHBOARD_PREVIEW_STATES, collapse = ", ") else "ALL available states", "\n", sep = "")
+  cat("  DASHBOARD_MAX_BUNDLE_BYTES = ", DASHBOARD_MAX_BUNDLE_BYTES, "\n", sep = "")
   cat("  DEPLOY_SHINYAPPS = ", DEPLOY_SHINYAPPS, "\n", sep = "")
   cat("  SHINYAPPS_ACCOUNT = ", ifelse(nzchar(SHINYAPPS_ACCOUNT), SHINYAPPS_ACCOUNT, "<not set>"), "\n", sep = "")
   cat("  SHINYAPPS_APP_NAME = ", SHINYAPPS_APP_NAME, "\n", sep = "")

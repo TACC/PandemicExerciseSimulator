@@ -65,7 +65,7 @@ stopifnot(identical(defaults$DASHBOARD_PREVIEW_STATES, defaults$SELECTED_RUN_STA
 bundle_code <- as.list(parse("scripts/8_prepare_shinyapps_bundle.R"))
 bundle_text <- vapply(bundle_code, function(expr) paste(deparse(expr), collapse = " "), character(1))
 selection_start <- which(startsWith(bundle_text, "metadata_preview <- metadata %>%"))
-selection_end <- which(startsWith(bundle_text, "readr::write_csv(metadata_preview")) - 1L
+selection_end <- which(startsWith(bundle_text, "map_source <-"))[[1]] - 1L
 select_bundle <- function(states) {
   env <- new.env(parent = globalenv())
   env$preview_states <- states

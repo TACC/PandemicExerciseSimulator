@@ -9,7 +9,7 @@
 
 pipeline_inputs <- list(
   # Shared LS6 experiment settings used by all three phase files.
-  pipeline_phase = "fit",            # "all", "fit", "scenarios", or "results".
+  pipeline_phase = "fit",            # "fit", "scenarios", "results", or "deploy".
   execution_target = "ls6",          # LS6 phases prepare launchers instead of running sims.
   # LS6 commands automatically use $WORK/pes_pipeline_r442_py312.sif.
   # Optional override for an image stored elsewhere; local execution stays native.
@@ -25,6 +25,7 @@ pipeline_inputs <- list(
   # Set selected_states = NULL (or character()) to skip local simulations and
   # bundle all available TACC_FILES states for the selected scenarios instead.
   selected_states = NULL,
+  # 4_PREPARE_DEPLOYMENT.R overrides this for its deployment-only subset.
   selected_scenarios = c("NONE", "VACCINE", "ANTIVIRAL", "NPI", "ALL_INTERVENTIONS"),
 
   # R_m fitting: simulator_county_threshold uses 5c up to the county threshold;
@@ -77,6 +78,7 @@ pipeline_inputs <- list(
   make_diagnostic_figs = TRUE,      # Section 9c: completion/runtime; needs saved outputs.
   validation_output_source_regex = "TACC_FILES", # Selected fitting outputs are added automatically.
   deploy_shinyapps = FALSE,         # TRUE publishes the bundle to shinyapps.io.
+  dashboard_max_bundle_bytes = 5e9, # Entire deployment folder, decimal 5 GB.
   shinyapps_account = "",           # Required only for deployment.
   shinyapps_app_name = "PandemicSimExplorer"
 )

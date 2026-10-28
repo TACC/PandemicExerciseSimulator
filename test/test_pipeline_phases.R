@@ -35,6 +35,14 @@ override <- setup(file.path(templates, "1_RUN_FIT.R"), c("--execution-target=loc
 stopifnot(override$R0_FIT_LAUNCH == "direct", override$R0_WORKERS == "2")
 expect_error(setup(file.path(templates, "1_RUN_FIT.R"), "--pipeline-phase=unknown"))
 expect_error(setup(file.path(templates, "1_RUN_FIT.R"), "--execution-target=unknown"))
+deployment <- setup(file.path(templates, "4_PREPARE_DEPLOYMENT.R"))
+stopifnot(deployment$PIPELINE_PHASE == "deploy", !deployment$DEPLOY_SHINYAPPS,
+  length(deployment$DASHBOARD_PREVIEW_STATES) == 6L,
+  "Texas" %in% deployment$DASHBOARD_PREVIEW_STATES, deployment$DASHBOARD_MAX_BUNDLE_BYTES == 5e9,
+  identical(deployment$DASHBOARD_PREVIEW_OUTPUT_SUBDIRS, "TACC_FILES"))
+all_states <- setup(file.path(templates, "4_PREPARE_DEPLOYMENT.R"), "--selected-states=")
+stopifnot(length(all_states$DASHBOARD_PREVIEW_STATES) == 0L)
+expect_error(setup(file.path(templates, "4_PREPARE_DEPLOYMENT.R"), "--dashboard-max-bundle-bytes=-1"))
 
 # Relative shared-file paths must work outside the repository and retain NULLs.
 for (name in c("LS6_PIPELINE_INPUTS.R", names(phases))) {
@@ -108,6 +116,10 @@ stopifnot(is.null(results$error),
   !any(c("fit", "seeds", "aggregate", "command:poetry", "6d_create_intervention_inputs.R",
     "6e_create_parallel_commands.R", "6f_run_selected_scenarios.R") %in% results$events))
 blocked <- run_phase("2_RUN_SCENARIOS.R", fail_fits = TRUE)
+for (target in c("local", "ls6")) {
+  deploy <- run_phase("4_PREPARE_DEPLOYMENT.R", target, fail_fits = TRUE, fail_outputs = TRUE)
+  stopifnot(is.null(deploy$error), identical(deploy$events, "8_prepare_shinyapps_bundle.R"))
+}
 stopifnot(inherits(blocked$error, "error"), !"6d_create_intervention_inputs.R" %in% blocked$events)
 blocked <- run_phase("3_RUN_FIGURES.R", fail_outputs = TRUE)
 stopifnot(inherits(blocked$error, "error"), !"7a_process_output_to_db.R" %in% blocked$events)

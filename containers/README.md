@@ -53,6 +53,18 @@ normally. Both fitting and scenario commands automatically run through
 is required. Their shell launchers automatically load `tacc-apptainer`,
 preserving allocation edits.
 
+For all three phase commands (`1_RUN_FIT.R`, `2_RUN_SCENARIOS.R`, and
+`3_RUN_FIGURES.R`), the wrapper also loads `tacc-apptainer` when needed and
+exports `APPTAINERENV_PES_R_LIBRARY="$WORK/pes-r-library"` unless a custom value
+is already set. This setup runs on every invocation, including after a fresh
+login. If running Apptainer directly without the wrapper, repeat the following
+after every login, or add it to your shell startup:
+
+```bash
+module load tacc-apptainer
+export APPTAINERENV_PES_R_LIBRARY="$WORK/pes-r-library"
+```
+
 At job execution, the wrapper selects `$WORK/pes_pipeline_r442_py312.sif`.
 This is the output location used by the build command above. `$WORK` is resolved
 on LS6, so script 0 can also generate commands from another machine.

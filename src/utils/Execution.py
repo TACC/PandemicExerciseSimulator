@@ -14,6 +14,11 @@ def parse_execution(value):
     workers = value.get('workers', 'auto')
     if mode not in ('serial', 'parallel'):
         raise ValueError('execution.mode must be serial or parallel')
+    if isinstance(workers, str) and workers != 'auto':
+        try:
+            workers = int(workers)
+        except ValueError as exc:
+            raise ValueError('execution.workers must be auto or a positive integer') from exc
     if workers != 'auto' and (type(workers) is not int or workers < 1):
         raise ValueError('execution.workers must be auto or a positive integer')
     return {'mode': mode, 'workers': workers}

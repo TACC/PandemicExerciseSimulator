@@ -23,8 +23,18 @@ if [[ ! -f "$image" ]]; then
   exit 2
 fi
 if ! command -v apptainer >/dev/null 2>&1; then
-  echo 'Apptainer is unavailable; load tacc-apptainer in the job launcher.' >&2
-  exit 2
+  if command -v module >/dev/null 2>&1; then
+    module load tacc-apptainer
+  fi
+  if ! command -v apptainer >/dev/null 2>&1; then
+    echo 'Apptainer is unavailable; run module load tacc-apptainer in a TACC login shell.' >&2
+    exit 2
+  fi
+fi
+# Apply this in every invocation, including fresh logins and batch tasks.
+# Explicit user overrides still take precedence over the conventional WORK path.
+if [[ -n ${WORK:-} ]]; then
+  export APPTAINERENV_PES_R_LIBRARY="${APPTAINERENV_PES_R_LIBRARY:-$WORK/pes-r-library}"
 fi
 scripts_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(dirname -- "$scripts_dir")

@@ -19,7 +19,7 @@ library(duckdb)
 library(bsicons)
 
 # ── Paths (relative to repo root) ────────────────────────────────────────────
-DASHBOARD_DATA_DIR <- "STATE_WKLYFIT_TEST"
+DASHBOARD_DATA_DIR <- "LS6_RmSweep_TEST"
 PROJECT_ROOT <- if (basename(getwd()) == "scripts") {
   normalizePath("..", mustWork = TRUE)
 } else {
@@ -29,6 +29,15 @@ DATA_ROOT    <- normalizePath(file.path(PROJECT_ROOT, DASHBOARD_DATA_DIR), mustW
 MASTER_CSV   <- file.path(DATA_ROOT, "metadata_master.csv")
 PARQUET_ROOT <- file.path(DATA_ROOT, "sim_data")
 FEATURES_PARQUET <- file.path(DATA_ROOT, "scenario_features.parquet")
+# Source previews reuse the prepared bundle; simulator data/ has no map dependency.
+MAP_ASSET_ROOT <- if (identical(DASHBOARD_DATA_DIR, "data")) {
+  file.path(DATA_ROOT, "dashboard_map_assets")
+} else {
+  file.path(PROJECT_ROOT, "deploy", "shinyapps", "PandemicSimExplorer", "data", "dashboard_map_assets")
+}
+if (dir.exists(file.path(MAP_ASSET_ROOT, "map_boundaries"))) {
+  shiny::addResourcePath("county-boundaries", file.path(MAP_ASSET_ROOT, "map_boundaries"))
+}
 message("Dashboard data root: ", DATA_ROOT)
 message("Dashboard master rows: ", if (file.exists(MASTER_CSV)) nrow(readr::read_csv(MASTER_CSV, show_col_types = FALSE)) else 0)
 AGE_LABELS   <- c("0-4", "5-17", "18-49", "50-64", "65+")
@@ -192,6 +201,19 @@ intervention_label <- function(vaccine_used, antiviral_used, npi_used) {
     npi_used                                 ~ "NPI",
     TRUE                                     ~ "None"
   )
+}
+
+scenario_selector_choices <- function(metadata, region) {
+  if (length(region) != 1L || is.na(region)) return(stats::setNames(character(), character()))
+  scenarios <- metadata %>%
+    dplyr::filter(.data$has_parquet, .data$geo_region == .env$region) %>%
+    dplyr::arrange(dplyr::desc(.data$created_at_utc)) %>%
+    dplyr::distinct(.data$scenario_hash, .keep_all = TRUE)
+  if (!nrow(scenarios)) return(stats::setNames(character(), character()))
+  labels <- paste(intervention_label(scenarios$vaccine_used, scenarios$antiviral_used, scenarios$npi_used),
+    paste0("R0=", round(scenarios$disease_R0, 2)), scenarios$disease_identity,
+    substr(scenarios$scenario_hash, nchar(scenarios$scenario_hash) - 3, nchar(scenarios$scenario_hash)), sep = " | ")
+  stats::setNames(scenarios$scenario_hash, labels)
 }
 
 INTERVENTION_LEVELS <- c(
@@ -646,6 +668,183 @@ scenario_compartment_timeseries <- function(scenario_hash, type = c("network", "
   DBI::dbGetQuery(con, query)
 }
 
+# County maps use the same boundaries, YlOrRd palette and log1p scale as
+# TACC/PandemicExerciseTool/frontend. Population comes from this project's
+# existing county-by-age CSV, never from the frontend's population assets.
+county_map_geometry <- function(region, geojson_url = NULL) {
+  path <- file.path(MAP_ASSET_ROOT, "map_boundaries", paste0(region, "_counties_2023.geojson"))
+  if (!file.exists(path)) stop("County boundaries were not included in this deployment for ", region,
+    ". Republish the app with data/dashboard_map_assets included in Project Files.")
+  geo <- jsonlite::fromJSON(path, simplifyVector = FALSE)
+  counties <- tibble::tibble(
+    fips = vapply(geo$features, function(f) f$properties$GEOID, character(1)),
+    county = vapply(geo$features, function(f) f$properties$NAMELSAD %||% f$properties$NAME, character(1))
+  )
+  # Center across the antimeridian for Alaska rather than over the Atlantic.
+  xy <- matrix(unlist(lapply(geo$features, function(f) f$geometry$coordinates)), ncol = 2, byrow = TRUE)
+  lon <- xy[, 1]
+  if (diff(range(lon)) > 180) lon[lon > 0] <- lon[lon > 0] - 360
+  center <- list(lon = mean(range(lon)), lat = mean(range(xy[, 2])))
+  span <- max(diff(range(lon)), diff(range(xy[, 2])) / cos(center$lat * pi / 180), 0.05)
+  list(geojson = if (is.null(geojson_url)) geo else geojson_url,
+       counties = counties, center = center, zoom = log2(360 / span) - 0.3,
+       bounds = list(c(min(lon), min(xy[, 2])), c(max(lon), max(xy[, 2]))))
+}
+
+county_map_population <- function(metadata_row, age_group) {
+  region <- metadata_row$geo_region[[1]]
+  recorded <- as.character(metadata_row$data_population[[1]])
+  if (is.na(recorded) || !nzchar(recorded)) stop("This scenario has no population input recorded.")
+  candidates <- c(
+    file.path(DATA_ROOT, recorded), file.path(PROJECT_ROOT, recorded), recorded,
+    file.path(DATA_ROOT, "map_population", basename(recorded)),
+    file.path(PROJECT_ROOT, "data", region, basename(recorded))
+  )
+  path <- candidates[file.exists(candidates)][1]
+  if (is.na(path)) stop("County population input is unavailable: ", basename(recorded))
+  pop <- readr::read_csv(path, col_types = readr::cols(.default = readr::col_double(), fips = readr::col_character()),
+                         show_col_types = FALSE)
+  age_columns <- if (identical(age_group, "all")) AGE_LABELS else age_group_label(age_group)
+  if (!all(c("fips", age_columns) %in% names(pop))) stop("Population input lacks the selected age group.")
+  tibble::tibble(fips = sprintf("%05d", as.integer(pop$fips)),
+                 population = rowSums(as.data.frame(pop[age_columns])))
+}
+
+county_map_runs <- function(scenario_hash) {
+  paths <- scenario_parquet_files(scenario_hash, "nodes")
+  if (!length(paths)) return(tibble::tibble(batch_num = character(), sim_id = character()))
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  DBI::dbGetQuery(con, paste0("SELECT DISTINCT batch_num, CAST(sim_id AS VARCHAR) AS sim_id FROM read_parquet(",
+    parquet_file_array_sql(con, paths), ") ORDER BY batch_num, CAST(sim_id AS BIGINT)"))
+}
+
+county_map_query <- function(path, sim_id, value_columns) {
+  if (!file.exists(path)) stop("County simulation file is unavailable.")
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+  DBI::dbExecute(con, "SET threads = 1")
+  DBI::dbExecute(con, "SET memory_limit = '128MB'")
+  expression <- paste0("COALESCE(", DBI::dbQuoteIdentifier(con, value_columns), ", 0)", collapse = " + ")
+  # Keep one realization in memory; day changes only slice this small result.
+  df <- DBI::dbGetQuery(con, paste0(
+    "SELECT CAST(fips_id AS VARCHAR) AS fips, day, SUM(", expression, ") AS count ",
+    "FROM read_parquet(", DBI::dbQuoteString(con, path), ") WHERE sim_id = CAST(",
+    DBI::dbQuoteString(con, as.character(sim_id)), " AS BIGINT) GROUP BY fips_id, day ORDER BY day, fips_id"))
+  df$fips <- sprintf("%05d", as.integer(df$fips))
+  df
+}
+environment(county_map_query) <- baseenv()
+
+county_map_timeseries <- function(scenario_hash, batch_num, sim_id, compartment, age_group) {
+  columns <- parquet_schema_names(scenario_hash, "nodes")
+  value_columns <- age_compartment_columns(columns, compartment, age_group)
+  if (!length(value_columns)) stop("No county data for this compartment and age group.")
+  county_map_query(file.path(PARQUET_ROOT, scenario_hash, batch_num, "nodes.parquet"), sim_id, value_columns)
+}
+
+# One separate R worker per app process, shared across visitors. I(1) prevents
+# future from falling back to synchronous execution on a single-core host.
+start_county_map_worker <- local({
+  started <- FALSE
+  function() {
+    if (!started) {
+      future::plan(future::multisession, workers = I(1))
+      started <<- TRUE
+    }
+  }
+})
+
+county_map_background_loader <- function(map_request, map_cache, query_fn = county_map_query) {
+  cache_key <- function(key) digest::digest(key, algo = "xxhash64")
+  map_request_debounced <- debounce(map_request, 200)
+  map_pending <- reactiveVal(NULL)
+  map_value <- reactiveVal(NULL)
+  map_invoked_key <- reactiveVal(NULL)
+  map_task <- ExtendedTask$new(function(request) {
+    start_county_map_worker()
+    promises::future_promise({
+      list(key = request$key, data = query(request$path, request$sim_id, request$columns))
+    }, globals = list(request = request, query = query_fn), packages = c("DBI", "duckdb"))
+  })
+  launch_pending_map <- function() {
+    request <- isolate(map_pending())
+    if (is.null(request)) return()
+    cached <- map_cache$get(cache_key(request$key))
+    if (!cachem::is.key_missing(cached)) {
+      map_value(list(key = request$key, data = cached, error = NULL))
+    } else if (!identical(isolate(map_task$status()), "running")) {
+      map_invoked_key(request$key)
+      map_task$invoke(request)
+    }
+  }
+  observeEvent(map_request_debounced(), {
+    map_pending(map_request_debounced())
+    launch_pending_map()
+  })
+  observeEvent(map_task$status(), {
+    status <- map_task$status()
+    if (status == "success") {
+      value <- map_task$result()
+      map_cache$set(cache_key(value$key), value$data)
+      launch_pending_map()
+    } else if (status == "error") {
+      error <- tryCatch(map_task$result(), error = identity)
+      pending <- isolate(map_pending())
+      if (!is.null(pending) && identical(pending$key, isolate(map_invoked_key()))) {
+        map_value(list(key = pending$key, error = conditionMessage(error)))
+      } else launch_pending_map()
+    }
+  })
+  list(value = map_value, task = map_task)
+}
+
+county_map_frame <- function(series, counties, population, day, measure, format_hover = TRUE) {
+  frame <- counties %>%
+    dplyr::left_join(dplyr::filter(series, .data$day == .env$day), by = "fips") %>%
+    dplyr::left_join(population, by = "fips") %>%
+    dplyr::mutate(percent = dplyr::if_else(.data$population > 0, 100 * .data$count / .data$population, NA_real_))
+  values <- if (identical(measure, "percent")) frame$percent else frame$count
+  frame$z <- log1p(pmax(values, 0))
+  if (!format_hover) return(frame)
+  number <- function(x) ifelse(is.finite(x), format(round(x, 1), big.mark = ",", trim = TRUE), "unavailable")
+  frame$text <- paste0("<b>", htmltools::htmlEscape(frame$county), "</b><br>FIPS: ", frame$fips,
+    "<br>Count: ", number(frame$count), "<br>Percent of selected population: ", number(frame$percent),
+    "%<br>Selected population: ", number(frame$population))
+  frame$text[is.na(frame$count)] <- paste0("<b>", htmltools::htmlEscape(frame$county[is.na(frame$count)]),
+                                         "</b><br>No simulation data")
+  frame
+}
+
+county_map_figure <- function(geometry, frame, population, measure, title, revision) {
+  raw_max <- if (identical(measure, "percent")) 100 else max(c(1, population$population), na.rm = TRUE)
+  ticks <- c(0, 10 ^ seq.int(0, floor(log10(raw_max))))
+  # Grey base distinguishes counties with missing simulation records from zeros.
+  plotly::plot_ly() %>%
+    plotly::add_trace(type = "choroplethmapbox", geojson = geometry$geojson,
+      locations = geometry$counties$fips, featureidkey = "properties.GEOID",
+      z = rep(0, nrow(geometry$counties)), colorscale = list(c(0, "#eeeeee"), c(1, "#eeeeee")),
+      showscale = FALSE, hoverinfo = "skip", marker = list(line = list(width = 0.5, color = "darkgray"))) %>%
+    plotly::add_trace(type = "choroplethmapbox", geojson = geometry$geojson,
+      locations = frame$fips, featureidkey = "properties.GEOID", z = frame$z,
+      zmin = 0, zmax = log1p(raw_max), autocolorscale = FALSE, reversescale = FALSE,
+      colorscale = list(c(0, "#ffffcc"), c(0.25, "#fed976"), c(0.5, "#fd8d3c"),
+                        c(0.75, "#e31a1c"), c(1, "#800026")),
+      customdata = as.matrix(frame[c("count", "percent", "population")]),
+      hovertemplate = paste0("<b>%{properties.NAMELSAD}</b><br>FIPS: %{location}",
+        "<br>Count: %{customdata[0]:,.1f}<br>Percent of selected population: %{customdata[1]:.2f}%",
+        "<br>Selected population: %{customdata[2]:,.0f}<extra></extra>"),
+      marker = list(opacity = 0.8, line = list(width = 0.5, color = "darkgray")),
+      colorbar = list(title = list(text = if (measure == "percent") "Percent of population" else "Count"),
+        tickvals = log1p(ticks), ticktext = format(ticks, big.mark = ",", trim = TRUE, scientific = FALSE), thickness = 15)) %>%
+    plotly::layout(title = list(text = title), showlegend = FALSE,
+      # The R Plotly binding calls fitBounds on map creation; supply valid bounds
+      # explicitly (4.10.x otherwise attempts to fit an undefined bounding box).
+      mapbox = list(style = "white-bg", center = geometry$center, zoom = geometry$zoom,
+        `_fitBounds` = list(bounds = geometry$bounds, options = list(padding = 35))),
+      uirevision = revision, margin = list(l = 0, r = 0, t = 55, b = 10), paper_bgcolor = "white")
+}
+
 export_batch <- function(batch_num, tmp_dir) {
   source(file.path(PROJECT_ROOT, "scripts", "7_process_output_to_db.R"),
          local = new.env())
@@ -660,10 +859,102 @@ export_batch <- function(batch_num, tmp_dir) {
 # ── UI ────────────────────────────────────────────────────────────────────────
 
 ui <- page_navbar(
+  id = "dashboard_tab",
   title = "Pandemic Sim Explorer",
   theme = bs_theme(version = 5, bootswatch = "flatly"),
   header = tags$head(
     tags$style(HTML("
+      .county-map-stage { position: relative; min-height: 550px; }
+      .county-map-loading {
+        position: absolute;
+        inset: 0;
+        z-index: 5;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 2rem;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.95);
+        color: #2c3e50;
+      }
+      .county-map-stage:has(#county_map:empty) .county-map-loading,
+      .county-map-stage:has(#county_map.recalculating) .county-map-loading,
+      .county-map-loading.map-async-loading { display: flex; }
+
+      .map-timeline {
+        padding: 0 2.75rem 0.5rem 0;
+      }
+
+      .map-timeline .shiny-input-container {
+        display: grid;
+        grid-template-columns: 7.5rem minmax(0, 1fr);
+        column-gap: 1rem;
+        width: 100%;
+        margin-bottom: 0;
+      }
+
+      .map-timeline .control-label {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      .map-timeline .irs {
+        grid-column: 2;
+        grid-row: 2;
+        min-width: 0;
+      }
+
+      .map-timeline .slider-animate-container {
+        grid-column: 1;
+        grid-row: 2;
+        align-self: center;
+        margin: 0;
+        text-align: left;
+      }
+
+      .map-timeline .slider-animate-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 7.5rem;
+        min-height: 3.25rem;
+        padding: 0.6rem 0.75rem;
+        border: 2px solid #0f5132;
+        border-radius: 0.5rem;
+        background: #146c43;
+        color: #ffffff;
+        opacity: 1;
+        font-size: 1rem;
+        font-weight: 800;
+        text-decoration: none;
+      }
+
+      .map-timeline .slider-animate-button:hover {
+        background: #0f5132;
+      }
+
+      .map-timeline .slider-animate-button.playing {
+        background: #e0a800;
+        border-color: #997300;
+        color: #202a35;
+      }
+
+      .map-timeline .slider-animate-button.playing:hover {
+        background: #c99700;
+      }
+
+      .map-timeline .slider-animate-button:focus-visible {
+        outline: 3px solid #202a35;
+        outline-offset: 3px;
+      }
+
+      .map-timeline .slider-animate-button svg {
+        margin-right: 0.35rem;
+        vertical-align: -0.1em;
+      }
+
       .scenario-table-card .card-body {
         padding-top: 0.5rem;
       }
@@ -837,6 +1128,8 @@ ui <- page_navbar(
     page_sidebar(
       sidebar = sidebar(
         width = 250,
+        selectInput("preview_region", "State", choices = NULL),
+        selectInput("preview_age_group", "Age group", choices = AGE_CHOICES, selected = "all"),
         selectizeInput(
           "preview_scenario",
           "Scenario",
@@ -846,9 +1139,6 @@ ui <- page_navbar(
         ),
         selectInput("preview_compartment", "Compartment",
                     choices = NULL),
-        selectInput("preview_age_group", "Age group",
-                    choices = AGE_CHOICES,
-                    selected = "all"),
         helpText("Shows network-level time series across all realizations.")
       ),
       card(
@@ -856,6 +1146,61 @@ ui <- page_navbar(
         card_header("Network time series"),
         plotly::plotlyOutput("network_plot", height = "450px")
         #plotOutput("network_plot", height = "450px")
+      )
+    )
+  ),
+
+  nav_panel(
+    "County map",
+    value = "county-map",
+    icon = bs_icon("map"),
+    page_sidebar(
+      sidebar = sidebar(
+        width = 250,
+        selectInput("map_region", "State", choices = NULL),
+        selectInput("map_age_group", "Age group", choices = AGE_CHOICES, selected = "all"),
+        selectizeInput("map_scenario", "Scenario", choices = NULL),
+        selectInput("map_compartment", "Compartment", choices = NULL),
+        selectInput("map_run", "Simulation", choices = NULL),
+        radioButtons("map_measure", "Display", choices = c("Count" = "count", "Percentage" = "percent"),
+                     selected = "count", inline = TRUE),
+        helpText("Percentages use the selected age group's county population. Each map shows one simulation."),
+        helpText("Colors use a logarithmic scale fixed across days. Gray counties have no simulation data.")
+      ),
+      card(
+        full_screen = TRUE,
+        card_header("County epidemic map"),
+        div(class = "county-map-stage",
+          uiOutput("map_load_status"),
+          div(id = "county_map_loading", class = "county-map-loading", role = "status", `aria-live` = "polite",
+            div(class = "spinner-border text-success", `aria-hidden` = "true"),
+            tags$strong("Loading county map"),
+            tags$p("County boundaries and simulation data may take time to load, especially for larger states.")
+          ),
+          plotly::plotlyOutput("county_map", height = "550px"),
+          textOutput("map_totals")
+        ),
+        helpText("County boundaries and simulation data may take time to load, especially for larger states."),
+        tags$script(HTML("Shiny.addCustomMessageHandler('prefetch-county-boundaries', function(message) {
+          var prefetch = function() {
+            var link = document.createElement('link');
+            link.rel = 'prefetch'; link.as = 'fetch'; link.href = message.url;
+            link.setAttribute('fetchpriority', 'low'); document.head.appendChild(link);
+          };
+          if (window.requestIdleCallback) requestIdleCallback(prefetch); else setTimeout(prefetch, 1500);
+        });
+        $(document).on('shiny:inputchanged.pauseCountyMap', function(event) {
+          if (event.name === 'dashboard_tab' && event.value !== 'county-map') {
+            var playing = document.querySelector('.map-timeline .slider-animate-button.playing');
+            if (playing) playing.click();
+          }
+        });")),
+        div(class = "map-timeline",
+          sliderInput("map_day", "Simulation day", min = 0, max = 1, value = 0, step = 1,
+            animate = animationOptions(interval = 600, loop = FALSE,
+              playButton = tagList(bs_icon("play-fill"), "PLAY"),
+              pauseButton = tagList(bs_icon("pause-fill"), "PAUSE")), width = "100%")
+        )
       )
     )
   ),
@@ -972,8 +1317,172 @@ server <- function(input, output, session) {
   meta <- reactiveVal(load_metadata())
   scenario_features <- reactiveVal(load_scenario_features())
   selected_diff_hash <- reactiveVal(NULL)
+  map_active <- reactive(identical(input$dashboard_tab, "county-map"))
+  map_revision <- reactiveVal(0L)
+  map_cache <- cachem::cache_mem(max_size = 32 * 1024^2, max_n = 12)
+  session$onFlushed(function() {
+    regions <- sort(unique(isolate(meta())$geo_region))
+    region <- if ("Texas" %in% regions) "Texas" else head(regions, 1)
+    if (length(region)) session$sendCustomMessage("prefetch-county-boundaries",
+      list(url = paste0("county-boundaries/", region, "_counties_2023.geojson")))
+  }, once = TRUE)
+
+  map_metadata <- reactive({
+    req(map_active())
+    filtered() %>% dplyr::filter(.data$has_parquet) %>%
+      dplyr::arrange(dplyr::desc(.data$created_at_utc))
+  })
+  observe({
+    regions <- sort(unique(map_metadata()$geo_region))
+    selected <- intersect(isolate(input$map_region), regions)
+    if (!length(selected)) selected <- if ("Texas" %in% regions) "Texas" else head(regions, 1)
+    updateSelectInput(session, "map_region", choices = regions, selected = selected)
+  })
+  observe({
+    req(input$map_region)
+    choices <- scenario_selector_choices(map_metadata(), input$map_region)
+    selected <- intersect(isolate(input$map_scenario), unname(choices))
+    if (!length(selected)) selected <- head(unname(choices), 1)
+    updateSelectizeInput(session, "map_scenario", choices = choices, selected = selected, server = TRUE)
+  })
+  map_runs <- reactive({
+    req(map_active())
+    req(input$map_scenario)
+    county_map_runs(input$map_scenario)
+  }) %>% bindCache({ req(map_active(), input$map_scenario); list(input$map_scenario, map_revision()) }, cache = map_cache)
+  observe({
+    runs <- map_runs()
+    keys <- paste(runs$batch_num, runs$sim_id, sep = "::")
+    labels <- paste0("Sim ", runs$sim_id, " | batch ", substr(runs$batch_num, nchar(runs$batch_num) - 3,
+                                                                            nchar(runs$batch_num)))
+    selected <- intersect(isolate(input$map_run), keys)
+    if (!length(selected)) selected <- head(keys, 1)
+    updateSelectInput(session, "map_run", choices = stats::setNames(keys, labels), selected = selected)
+  })
+  observe({
+    req(map_active(), input$map_scenario)
+    columns <- parquet_schema_names(input$map_scenario, "nodes")
+    choices <- compartment_choices_from_columns(columns)
+    selected <- intersect(isolate(input$map_compartment), choices)
+    if (!length(selected)) selected <- if ("IS" %in% choices) "IS" else head(choices, 1)
+    updateSelectInput(session, "map_compartment", choices = choices, selected = selected)
+  })
+  map_selection <- reactive({
+    req(map_active())
+    req(input$map_region, input$map_scenario, input$map_run)
+    runs <- map_runs()
+    run <- runs[paste(runs$batch_num, runs$sim_id, sep = "::") == input$map_run, , drop = FALSE]
+    req(nrow(run) == 1)
+    metadata <- map_metadata() %>% dplyr::filter(.data$scenario_hash == input$map_scenario,
+      .data$batch_num == run$batch_num[[1]], .data$geo_region == input$map_region)
+    req(nrow(metadata) > 0)
+    list(run = run, metadata = metadata[1, , drop = FALSE])
+  })
+  map_geometry <- reactive({
+    req(map_active(), input$map_region)
+    withProgress(message = "Loading county boundaries", detail = "Map data may take time to load.", {
+      tryCatch(county_map_geometry(input$map_region,
+        paste0("county-boundaries/", input$map_region, "_counties_2023.geojson")),
+        error = function(e) validate(need(FALSE, conditionMessage(e))))
+    })
+  }) %>% bindCache({ req(map_active(), input$map_region); list(input$map_region, MAP_ASSET_ROOT, map_revision()) }, cache = map_cache)
+  map_population <- reactive({
+    req(input$map_age_group)
+    tryCatch(county_map_population(map_selection()$metadata, input$map_age_group),
+             error = function(e) validate(need(FALSE, conditionMessage(e))))
+  })
+  map_request <- reactive({
+    req(map_active(), input$map_compartment, input$map_age_group)
+    selected <- map_selection()
+    columns <- age_compartment_columns(parquet_schema_names(input$map_scenario, "nodes"),
+                                       input$map_compartment, input$map_age_group)
+    validate(need(length(columns), "No county data for this compartment and age group."))
+    list(key = paste("series", input$map_scenario, input$map_run, input$map_compartment,
+                     input$map_age_group, map_revision(), sep = ":"),
+         path = file.path(PARQUET_ROOT, input$map_scenario, selected$run$batch_num[[1]], "nodes.parquet"),
+         sim_id = selected$run$sim_id[[1]], columns = columns)
+  })
+  map_loader <- county_map_background_loader(map_request, map_cache)
+  map_series <- reactive({
+    req(map_active())
+    request <- map_request()
+    value <- map_loader$value()
+    req(!is.null(value), identical(value$key, request$key))
+    validate(need(is.null(value$error), value$error))
+    value$data
+  })
+  output$map_load_status <- renderUI({
+    req(map_active())
+    request <- map_request()
+    value <- map_loader$value()
+    if (is.null(value) || !identical(value$key, request$key)) {
+      div(class = "county-map-loading map-async-loading", role = "status", `aria-live` = "polite",
+        div(class = "spinner-border text-success", `aria-hidden` = "true"),
+        tags$strong("Loading county data in the background"),
+        tags$p("You can use the other tabs while this loads."))
+    }
+  })
+  observeEvent(map_series(), {
+    days <- sort(unique(map_series()$day))
+    req(length(days) > 0)
+    selected <- isolate(input$map_day)
+    if (is.null(selected) || !selected %in% days) selected <- days[[1]]
+    updateSliderInput(session, "map_day", min = min(days), max = max(days), value = selected, step = 1)
+  })
+  map_frame <- reactive({
+    req(map_active(), input$map_day, input$map_measure)
+    county_map_frame(map_series(), map_geometry()$counties, map_population(), input$map_day,
+                     input$map_measure, format_hover = FALSE)
+  })
+  output$county_map <- plotly::renderPlotly({
+    req(map_active())
+    geometry <- map_geometry()
+    frame <- geometry$counties
+    frame$z <- 0
+    frame$count <- frame$percent <- frame$population <- 0
+    county_map_figure(geometry, frame, data.frame(population = 1), "count", input$map_region,
+      input$map_region) %>% plotly::config(displaylogo = FALSE) %>%
+      htmlwidgets::onRender("function(el, x) {
+        var region = x.layout.uirevision;
+        var ready = function() { Shiny.setInputValue('map_ready', region, {priority: 'event'}); };
+        Promise.all(el._promises || []).then(ready);
+      }")
+  })
+  # Keep a single map per state. Recreating Mapbox during a restyle races with
+  # its WebGL cleanup in older Plotly versions; every other control uses proxies.
+  observe({
+    req(map_active(), identical(input$map_ready, input$map_region))
+    frame <- map_frame()
+    population <- map_population()
+    raw_max <- if (input$map_measure == "percent") 100 else max(c(1, population$population), na.rm = TRUE)
+    ticks <- c(0, 10 ^ seq.int(0, floor(log10(raw_max))))
+    plotly::plotlyProxy("county_map", session) %>%
+      plotly::plotlyProxyInvoke("update", list(locations = list(frame$fips),
+        z = list(frame$z), customdata = list(as.matrix(frame[c("count", "percent", "population")])),
+        zmax = log1p(raw_max),
+        "colorbar.title.text" = if (input$map_measure == "percent") "Percent of population" else "Count",
+        "colorbar.tickvals" = list(log1p(ticks)),
+        "colorbar.ticktext" = list(format(ticks, big.mark = ",", trim = TRUE, scientific = FALSE))),
+        list("title.text" = paste(input$map_region,
+          if (input$map_age_group == "all") "All ages" else age_group_label(input$map_age_group),
+          input$map_compartment, sep = " | ")), 1L)
+  })
+  output$map_totals <- renderText({
+    frame <- map_frame()
+    present <- !is.na(frame$count)
+    validate(need(any(present), "No county records for this day."))
+    count <- sum(frame$count[present])
+    population <- frame$population[present]
+    percentage <- if (all(is.finite(population)) && sum(population) > 0) {
+      sprintf("%.2f%%", 100 * count / sum(population))
+    } else "percentage unavailable"
+    sprintf("Day %s | %s: %s | %s of selected population | %s counties with data",
+      input$map_day, input$map_compartment, format(round(count, 1), big.mark = ",", trim = TRUE),
+      percentage, sum(present))
+  })
 
   observeEvent(input$refresh_btn, {
+    map_revision(isolate(map_revision()) + 1L)
     meta(load_metadata())
     scenario_features(load_scenario_features())
     showNotification("Data refreshed.", type = "message", duration = 2)
@@ -1013,50 +1522,18 @@ server <- function(input, output, session) {
   })
   
   observe({
-    df <- filtered()
-    
-    preview_df <- df %>%
-      dplyr::filter(has_parquet) %>%
-      dplyr::arrange(dplyr::desc(created_at_utc)) %>%
-      dplyr::group_by(scenario_hash) %>%
-      dplyr::slice(1) %>%
-      dplyr::ungroup() %>%
-      dplyr::mutate(
-        scenario_label = paste(
-          geo_region,
-          disease_identity,
-          substr(scenario_hash, nchar(scenario_hash) - 3, nchar(scenario_hash)),
-          sep = " | "
-        )
-      )
-    
-    if (nrow(preview_df) == 0) {
-      updateSelectizeInput(
-        session,
-        "preview_scenario",
-        choices = character(0),
-        selected = character(0),
-        server = TRUE
-      )
-      return()
-    }
-    
-    choices <- stats::setNames(preview_df$scenario_hash, preview_df$scenario_label)
-    
-    selected_now <- intersect(isolate(input$preview_scenario), preview_df$scenario_hash)
-    if (length(selected_now) == 0) {
-      selected_now <- preview_df$scenario_hash[[1]]
-    } else {
-      selected_now <- selected_now[[1]]
-    }
-    
-    updateSelectizeInput(
-      session,
-      "preview_scenario",
-      choices = choices,
-      selected = selected_now,
-      server = TRUE
-    )
+    regions <- filtered() %>% dplyr::filter(.data$has_parquet) %>%
+      dplyr::pull(.data$geo_region) %>% unique() %>% sort()
+    selected <- intersect(isolate(input$preview_region), regions)
+    if (!length(selected)) selected <- if ("Texas" %in% regions) "Texas" else head(regions, 1)
+    updateSelectInput(session, "preview_region", choices = regions, selected = selected)
+  })
+  observe({
+    req(input$preview_region)
+    choices <- scenario_selector_choices(filtered(), input$preview_region)
+    selected <- intersect(isolate(input$preview_scenario), unname(choices))
+    if (!length(selected)) selected <- head(unname(choices), 1)
+    updateSelectizeInput(session, "preview_scenario", choices = choices, selected = selected, server = TRUE)
   })
 
   observe({
@@ -1300,12 +1777,11 @@ server <- function(input, output, session) {
     if (length(idx) != 1) return()
     
     selected_hash <- filtered()$scenario_hash[idx]
-    
-    updateSelectizeInput(
-      session,
-      "preview_scenario",
-      selected = selected_hash
-    )
+    selected_region <- filtered()$geo_region[idx]
+    updateSelectInput(session, "preview_region", selected = selected_region)
+    updateSelectizeInput(session, "preview_scenario",
+      choices = scenario_selector_choices(filtered(), selected_region),
+      selected = selected_hash, server = TRUE)
     updateSelectizeInput(
       session,
       "validation_region",
@@ -2100,4 +2576,4 @@ server <- function(input, output, session) {
   })
 }
 
-shinyApp(ui, server)
+shinyApp(ui, server, onStart = start_county_map_worker)

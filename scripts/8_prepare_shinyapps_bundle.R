@@ -50,7 +50,7 @@ preview_output_subdirs <- get0(
 )
 deploy_imports <- c(
   "shiny", "plotly", "bslib", "DT", "tidyverse", "duckdb", "arrow",
-  "bsicons", "jsonlite", "DBI", "readr", "dplyr", "tidyr"
+  "bsicons", "jsonlite", "DBI", "readr", "dplyr", "tidyr", "future", "promises", "cachem", "digest"
 )
 
 source_app <- file.path(repo_root, "scripts", "7b_sim_dashboard_app.R")
@@ -65,8 +65,29 @@ bundle_deploy <- file.path(bundle_dir, "deploy.R")
 bundle_description <- file.path(bundle_dir, "DESCRIPTION")
 bundle_readme <- file.path(bundle_dir, "README.md")
 bundle_lockfile <- file.path(bundle_dir, "renv.lock")
-publisher_config_name <- "PandemicSimExplorer-3R9A"
 publisher_config_dir <- file.path(bundle_dir, ".posit", "publish")
+existing_publisher_config <- function(directory) {
+  # A deployment record binds a config to an existing hosted app. Reuse that
+  # binding rather than creating a second publishing configuration on rebuild.
+  records <- list.files(file.path(directory, "deployments"), pattern = "\\.toml$", full.names = TRUE)
+  bound <- unique(unlist(lapply(records, function(path) {
+    lines <- readLines(path, warn = FALSE)
+    lines <- lines[grepl("^configuration_name\\s*=", lines)]
+    sub("^configuration_name\\s*=\\s*['\"]([^'\"]+)['\"].*$", "\\1", lines)
+  })))
+  if (length(bound) > 1L) stop("Multiple Publisher deployments found; choose the intended deployment configuration before rebuilding.")
+  if (length(bound)) {
+    if (!grepl("^[A-Za-z0-9_.-]+$", bound) || !file.exists(file.path(directory, paste0(bound, ".toml")))) {
+      stop("The existing Publisher deployment references a missing or invalid configuration: ", bound)
+    }
+    return(bound)
+  }
+  configs <- list.files(directory, pattern = "\\.toml$")
+  if (length(configs) == 1L) return(sub("\\.toml$", "", configs))
+  if (length(configs) > 1L) stop("Multiple unbound Publisher configurations found; select the existing deployment first.")
+  "PandemicSimExplorer-3R9A"
+}
+publisher_config_name <- existing_publisher_config(publisher_config_dir)
 publisher_config <- file.path(publisher_config_dir, paste0(publisher_config_name, ".toml"))
 
 write_deploy_scaffold <- function() {
@@ -134,6 +155,11 @@ write_deploy_scaffold <- function() {
       "- `<PIPELINE_OUTPUT_DIR>/scenario_features.parquet`",
       "- `<PIPELINE_OUTPUT_DIR>/sim_data/`",
       "- `<PIPELINE_OUTPUT_DIR>/validation_fit_data/`",
+      "- County boundaries downloaded for the selected states from TACC/PandemicExerciseTool",
+      "- Existing county-by-age population inputs, stored in `data/map_population/`",
+      "",
+      "Preparation checks the entire deployment directory against a 5 GB budget.",
+      "Each rebuild replaces the generated data directory with the selected states.",
       "",
       "## Deploying",
       "",
@@ -191,6 +217,13 @@ write_publisher_config <- function() {
         )
       }
     }
+    # Include the complete generated data directory. Narrow file lists from an
+    # older deployment can otherwise omit newly added boundaries/populations.
+    if (!any(grepl('^\\s*"/data/?",?\\s*$', config_lines))) {
+      config_lines <- append(config_lines,
+        '    "/data",',
+        after = grep('^files = \\[', config_lines)[1])
+    }
     writeLines(config_lines, publisher_config)
     message("Updated Posit Publisher config: ", publisher_config)
   } else {
@@ -207,6 +240,7 @@ write_publisher_config <- function() {
         'product_type = "connect_cloud"',
         "",
         "files = [",
+        '    "/data",',
         '    "/app.R",',
         '    "/DESCRIPTION",',
         '    "/README.md",',
@@ -216,7 +250,9 @@ write_publisher_config <- function() {
         '    "/data/scenario_features.parquet",',
         '    "/data/sim_data/**",',
         '    "/data/validation_fit_data/**",',
-        '    "/.posit/publish/PandemicSimExplorer-3R9A.toml",',
+        '    "/data/dashboard_map_assets/**",',
+        '    "/data/map_population/**",',
+        paste0('    "/.posit/publish/', publisher_config_name, '.toml",'),
         '    "/.posit/publish/deployments/*.toml"',
         "]",
         "",
@@ -238,22 +274,6 @@ metadata_tag_chr <- function(tags_json, tag) {
   if (is.null(value) || length(value) == 0) NA_character_ else as.character(value[[1]])
 }
 
-dir.create(bundle_data, recursive = TRUE, showWarnings = FALSE)
-bundle_app <- file.path(bundle_dir, "app.R")
-if (!file.exists(source_app)) stop("Dashboard source app not found: ", source_app)
-if (!file.copy(source_app, bundle_app, overwrite = TRUE)) {
-  stop("Could not copy dashboard app from ", source_app, " to ", bundle_app)
-}
-app_lines <- readLines(bundle_app, warn = FALSE)
-app_lines <- sub(
-  '^DASHBOARD_DATA_DIR <- ".*"$',
-  'DASHBOARD_DATA_DIR <- "data"',
-  app_lines
-)
-writeLines(app_lines, bundle_app)
-write_deploy_scaffold()
-write_renv_lockfile()
-write_publisher_config()
 
 if (!file.exists(source_master)) {
   stop("No metadata master found at ", source_master, ". Run 7a first.")
@@ -357,8 +377,139 @@ if (nrow(missing_preview_rows) > 0) {
   stop("Missing one or more preview dashboard rows. Run the TACC or local web preview simulator commands and 7a first.")
 }
 
+# Check source files and planned size before replacing the previous bundle data.
+download_county_map_assets <- function(states, download = utils::download.file) {
+  # Stage deployment-only assets outside simulator inputs. Pin the revision so
+  # rebuilding a bundle does not silently change its county geometry.
+  revision <- "12242450febc494f30616a191f743ca6f1638cd6"
+  base_url <- paste0("https://raw.githubusercontent.com/TACC/PandemicExerciseTool/", revision, "/")
+  staging <- tempfile("dashboard-map-assets-")
+  dir.create(file.path(staging, "map_boundaries"), recursive = TRUE)
+  completed <- FALSE
+  on.exit(if (!completed) unlink(staging, recursive = TRUE), add = TRUE)
+  fetch <- function(remote, local) {
+    message("Downloading deployment map asset: ", basename(local))
+    status <- tryCatch(download(paste0(base_url, remote), local, mode = "wb", quiet = TRUE),
+      error = function(e) stop("Could not download deployment map asset ", remote, ": ", conditionMessage(e)))
+    if (!identical(as.integer(status), 0L) || !file.exists(local) || file.info(local)$size == 0) {
+      stop("Could not download deployment map asset: ", remote)
+    }
+  }
+  for (state in unique(states)) {
+    name <- paste0(state, "_counties_2023.geojson")
+    destination <- file.path(staging, "map_boundaries", name)
+    fetch(paste0("frontend/assets/map_boundaries/", utils::URLencode(name, reserved = TRUE)), destination)
+    geometry <- jsonlite::fromJSON(destination, simplifyVector = FALSE)
+    if (!identical(geometry$type, "FeatureCollection") || !length(geometry$features)) {
+      stop("Invalid county boundary asset for ", state)
+    }
+  }
+  fetch("LICENSE", file.path(staging, "LICENSE"))
+  writeLines(c("# County map boundaries", "",
+    paste0("Source: https://github.com/TACC/PandemicExerciseTool/tree/", revision,
+           "/frontend/assets/map_boundaries"),
+    paste0("Pinned revision: ", revision),
+    "Downloaded only for selected deployment states. Source license is in LICENSE.",
+    "Population inputs come from the simulator's existing county-by-age CSVs."),
+    file.path(staging, "README.md"))
+  completed <- TRUE
+  staging
+}
+map_source <- download_county_map_assets(unique(metadata_preview$geo_region))
+source_batches <- unique(file.path(source_data, "sim_data", metadata_preview$scenario_hash,
+                                  metadata_preview$batch_num))
+missing_batches <- source_batches[!dir.exists(source_batches)]
+if (length(missing_batches)) stop("Missing preview Parquet directories: ", paste(missing_batches, collapse = ", "))
+source_boundaries <- file.path(map_source, "map_boundaries",
+  paste0(unique(metadata_preview$geo_region), "_counties_2023.geojson"))
+if (any(!file.exists(source_boundaries))) stop("Missing county boundary asset(s): ",
+  paste(source_boundaries[!file.exists(source_boundaries)], collapse = ", "))
+source_populations <- vapply(seq_len(nrow(metadata_preview)), function(i) {
+  recorded <- metadata_preview$data_population[[i]]
+  if (is.na(recorded) || !nzchar(recorded)) stop("No population input for ", metadata_preview$geo_region[[i]])
+  candidates <- c(recorded, file.path(repo_root, recorded),
+    file.path(repo_root, "data", metadata_preview$geo_region[[i]], basename(recorded)))
+  source <- candidates[file.exists(candidates)][1]
+  if (is.na(source)) stop("Missing existing population input: ", recorded)
+  source
+}, character(1))
+planned_data_files <- unique(c(source_master, source_features, source_boundaries, source_populations,
+  file.path(map_source, c("README.md", "LICENSE")),
+  unlist(lapply(source_batches, list.files, recursive = TRUE, full.names = TRUE, all.files = TRUE)),
+  list.files(file.path(source_data, "validation_fit_data"), recursive = TRUE, full.names = TRUE, all.files = TRUE)))
+# Prevent a source path inside the generated data tree from being moved away.
+if (any(startsWith(normalizePath(planned_data_files, mustWork = TRUE),
+                   paste0(normalizePath(bundle_data, mustWork = FALSE), "/")))) {
+  stop("Pipeline source data must be outside the generated deployment data directory.")
+}
+bundle_limit <- get0("DASHBOARD_MAX_BUNDLE_BYTES", ifnotfound = 5e9)
+if (length(bundle_limit) != 1L || !is.finite(bundle_limit) || bundle_limit <= 0) {
+  stop("DASHBOARD_MAX_BUNDLE_BYTES must be positive and finite.")
+}
+existing_files <- list.files(bundle_dir, recursive = TRUE, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+existing_files <- existing_files[!startsWith(existing_files, paste0(bundle_data, "/"))]
+# Counting the complete source metadata CSV is a conservative upper estimate.
+planned_bytes <- sum(file.info(unique(c(planned_data_files, existing_files, source_app)))$size, na.rm = TRUE)
+message("Deployment states: ", paste(sort(unique(metadata_preview$geo_region)), collapse = ", "))
+message(sprintf("Estimated deployment directory: %.3f GB / %.3f GB", planned_bytes / 1e9, bundle_limit / 1e9))
+if (planned_bytes > bundle_limit) {
+  stop(sprintf(paste0("Selected deployment data exceeds the budget: %.3f GB > %.3f GB. ",
+    "Choose fewer selected_states in the pipeline input file (or DASHBOARD_PREVIEW_STATES standalone). ",
+    "Previous deployment data has not been moved."), planned_bytes / 1e9, bundle_limit / 1e9))
+}
+
+dir.create(bundle_dir, recursive = TRUE, showWarnings = FALSE)
+bundle_app <- file.path(bundle_dir, "app.R")
+if (!file.exists(source_app)) stop("Dashboard source app not found: ", source_app)
+if (!file.copy(source_app, bundle_app, overwrite = TRUE)) {
+  stop("Could not copy dashboard app from ", source_app, " to ", bundle_app)
+}
+app_lines <- readLines(bundle_app, warn = FALSE)
+app_lines <- sub(
+  '^DASHBOARD_DATA_DIR <- ".*"$',
+  'DASHBOARD_DATA_DIR <- "data"',
+  app_lines
+)
+writeLines(app_lines, bundle_app)
+write_deploy_scaffold()
+write_renv_lockfile()
+write_publisher_config()
+
+
+# Always replace generated data in this same deployment folder. Source pipeline
+# outputs and existing .posit publishing settings stay outside this data tree.
+if (dir.exists(bundle_data)) {
+  unlink(bundle_data, recursive = TRUE)
+  if (dir.exists(bundle_data)) stop("Could not replace generated deployment data: ", bundle_data)
+}
+dir.create(bundle_data, recursive = TRUE, showWarnings = FALSE)
+
+# Bundle only selected states' downloaded boundaries and existing population inputs.
+# The recorded paths can refer to TACC; use their matching local data/ files.
+map_dest <- file.path(bundle_data, "dashboard_map_assets")
+dir.create(file.path(map_dest, "map_boundaries"), recursive = TRUE, showWarnings = FALSE)
+dir.create(file.path(bundle_data, "map_population"), recursive = TRUE, showWarnings = FALSE)
+for (state in unique(metadata_preview$geo_region)) {
+  name <- paste0(state, "_counties_2023.geojson")
+  source <- file.path(map_source, "map_boundaries", name)
+  if (!file.exists(source)) stop("Missing county boundary asset: ", source)
+  if (!file.copy(source, file.path(map_dest, "map_boundaries", name), overwrite = TRUE)) {
+    stop("Could not copy county boundary asset: ", source)
+  }
+}
+file.copy(file.path(map_source, c("README.md", "LICENSE")), map_dest, overwrite = TRUE)
+for (i in seq_len(nrow(metadata_preview))) {
+  recorded <- metadata_preview$data_population[[i]]
+  source <- source_populations[[i]]
+  destination <- file.path("map_population", basename(recorded))
+  if (!file.copy(source, file.path(bundle_data, destination), overwrite = TRUE)) {
+    stop("Could not copy population input: ", source)
+  }
+  metadata_preview$data_population[[i]] <- destination
+}
+
 readr::write_csv(metadata_preview, bundle_master)
-invisible(file.copy(source_features, bundle_features, overwrite = TRUE))
+if (!file.copy(source_features, bundle_features, overwrite = TRUE)) stop("Could not copy scenario features.")
 message("Copied scenario feature parquet: ", bundle_features)
 
 dir.create(file.path(bundle_data, "sim_data"), recursive = TRUE, showWarnings = FALSE)
@@ -382,28 +533,32 @@ for (i in seq_len(nrow(metadata_preview))) {
     metadata_preview$scenario_hash[[i]]
   )
   dir.create(bundle_hash_dir, recursive = TRUE, showWarnings = FALSE)
-  bundle_batch_dir <- file.path(bundle_hash_dir, metadata_preview$batch_num[[i]])
-  if (!dir.exists(bundle_batch_dir)) {
-    file.copy(source_batch_dir, bundle_hash_dir, recursive = TRUE)
-  } else {
-    file.copy(
-      list.files(source_batch_dir, full.names = TRUE),
-      bundle_batch_dir,
-      recursive = TRUE,
-      overwrite = TRUE
-    )
+  if (!file.copy(source_batch_dir, bundle_hash_dir, recursive = TRUE)) {
+    stop("Could not copy selected simulation data: ", source_batch_dir)
   }
 }
 if (length(missing_parquet) > 0) {
   stop("Missing preview Parquet directories: ", paste(missing_parquet, collapse = ", "))
 }
-file.copy(
+validation_copied <- file.copy(
   list.files(file.path(source_data, "validation_fit_data"), full.names = TRUE),
   file.path(bundle_data, "validation_fit_data"),
   recursive = TRUE,
   overwrite = TRUE
 )
+if (!all(validation_copied)) stop("Could not copy validation data.")
 
+# Verify the entire finished directory, including hidden files and deployment configuration.
+# Use a conservative decimal 5 GB budget; this also fits a 5 GiB upload limit.
+bundle_bytes <- sum(file.info(list.files(bundle_dir, recursive = TRUE, full.names = TRUE,
+                                         all.files = TRUE, no.. = TRUE))$size, na.rm = TRUE)
+if (bundle_bytes > bundle_limit) {
+  stop(sprintf(paste0("Deployment directory is %.3f GB; budget is %.3f GB. ",
+    "Choose fewer selected_states (or DASHBOARD_PREVIEW_STATES standalone) before deploying. ",
+    "Original pipeline outputs do not need to be removed."), bundle_bytes / 1e9, bundle_limit / 1e9))
+}
+unlink(map_source, recursive = TRUE)
+message(sprintf("Entire deployment directory: %.3f GB", bundle_bytes / 1e9))
 message(
   "Refreshed shinyapps.io bundle for ",
   paste(preview_states, collapse = ", "),

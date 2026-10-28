@@ -46,6 +46,17 @@ winning All Interventions batch. Publication is disabled.
 Run all three phase commands from the repository root through the LS6 container
 wrapper:
 
+The wrapper loads `tacc-apptainer` when needed and defaults
+`APPTAINERENV_PES_R_LIBRARY` to `$WORK/pes-r-library` for all three phases.
+An explicitly set library path is preserved. Use these wrapper commands after
+each login; no repeated manual setup is needed. When invoking Apptainer directly,
+run the following again after each login (or add them to your shell startup):
+
+```bash
+module load tacc-apptainer
+export APPTAINERENV_PES_R_LIBRARY="$WORK/pes-r-library"
+```
+
 ```bash
 bash 'scripts/ls6_container_exec.sh' Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/1_RUN_FIT.R
 ```
@@ -101,10 +112,15 @@ deployment bundle, and figures. It never generates inputs or simulation
 commands. Keep `deploy_shinyapps = FALSE` to publish separately after review.
 Use `--check-config` with any phase file to check merged settings without work.
 
-The explicit `pipeline_phase` values are `fit`, `scenarios`, and `results`.
+The explicit `pipeline_phase` values are `fit`, `scenarios`, `results`, and `deploy`.
 With `execution_target = "local"`, the fit and scenarios phases execute locally
 instead of preparing LS6 jobs. The default local `pipeline_phase = "all"`
 preserves the complete 0–9 workflow. Results processing never starts simulations.
+
+To rebuild only the deployment from existing Parquet outputs, use
+`4_PREPARE_DEPLOYMENT.R` (see [Rebuild a deployment](#rebuild-a-deployment)).
+This phase skips fitting, simulation input generation, simulations, ingestion,
+and figures, even if their switches are enabled in the shared experiment file.
 
 `r0_fit_scenario` chooses the scenario fitted to observed hospitalizations
 (for example, `"ALL_INTERVENTIONS"` or `"VACCINE"`). `r0_selection_metric`
@@ -443,6 +459,43 @@ Rscript scripts/9a_pre_sim_input_plots.R \
 batch completion, comparing scenarios, plotting trajectories, and exporting
 Parquet data to CSV.
 
+The **County map** tab has state, age, scenario, compartment, and simulation
+selectors, a Count/Percentage toggle, and an animated day slider below the map.
+**Network preview** uses the same State → Age group → Scenario selection order.
+Both tabs share scenario labels with intervention names, R0, model, and the short
+hash, and list only scenarios for the selected state. Selecting a metadata table
+row also switches Network preview to that row's state and scenario.
+While the map is being computed, a loading indicator explains that boundaries
+and simulation data may take time to load. The deployment includes the entire
+generated `data/` folder, including boundaries and county population inputs.
+Each frame shows one realization. Percentages divide the selected compartment
+count by that county's population in the selected age group (all five groups
+for All ages), using the scenario's existing `data_population` CSV. Counties
+without records are gray. The yellow-to-red logarithmic color scale stays fixed
+across days, matching the Python frontend; hovers show the untransformed count
+and percentage. Boundary files are served once as static assets and can be
+prefetched during browser idle time. The figure sends boundary URLs rather
+than embedding the same geometry in both map layers. Daily updates send compact
+numeric values; hover labels are formatted in the browser.
+
+Map data queries run through Shiny `ExtendedTask` on one separate R worker,
+so another tab in the same session can still update while a map loads. The
+worker uses one DuckDB thread and a 128 MB query memory limit. Each session
+caches recent results within 32 MB. Rapid selection changes keep only the latest
+pending request, and obsolete completed results can still be reused from cache.
+Playback pauses when leaving the map tab. The app prepares the worker at startup;
+the first map query may still need to read its Parquet columns from disk.
+
+Phase 4 downloads only selected states' county boundaries and the license directly
+from `TACC/PandemicExerciseTool`, pinned to commit
+`12242450febc494f30616a191f743ca6f1638cd6`. Downloads are staged in a temporary
+directory, validated, counted against the bundle budget, and copied into the
+bundle's `data/dashboard_map_assets/`. Internet access is required when preparing
+a deployment; the published app serves its bundled files without GitHub requests.
+The simulator's own `data/` directory needs no map assets. Source dashboard
+previews reuse the most recently prepared deployment's boundary files.
+No additional R packages, external map tiles, or API keys are required.
+
 Set `REPO_ROOT`, `MASTER_CSV`, and `PARQUET_ROOT` at the top of the file. Then
 open it in RStudio and select **Run App**.
 
@@ -456,8 +509,12 @@ uses the newest complete local preview batch for each hash. This lets parameter
 comparison runs publish together without adding parameter-specific deploy code. It
 also recreates the small deployment-project scaffold files (`deploy.R`,
 `DESCRIPTION`, `README.md`, `renv.lock`) and creates or updates the Posit
-Publisher configuration at
-`deploy/shinyapps/PandemicSimExplorer/.posit/publish/PandemicSimExplorer-3R9A.toml`.
+Publisher configuration under
+`deploy/shinyapps/PandemicSimExplorer/.posit/publish/`. It reuses the configuration
+named by the saved `deployments/*.toml` record, preserving the existing hosted
+app's deployment ID. If several deployments are present, preparation stops
+instead of guessing a target. A new project without deployment records reuses
+its sole config, or creates a starter config when none exists.
 After the deploy app and `DESCRIPTION` exist, script `8` runs `renv::snapshot()`
 against the deploy bundle itself so `renv.lock` reflects the Shiny app's current
 R package dependencies.
@@ -478,6 +535,52 @@ standalone runs can override those with `DASHBOARD_PREVIEW_STATES` and
 has no matching rows or if any selected Parquet directories are missing. This
 avoids publishing a stale dashboard while keeping the deploy bundle scoped to the
 selected preview states and scenarios.
+
+Script `8` also copies the selected states' county boundaries and their existing
+county-by-age population CSVs, rewriting `data_population` to a portable bundled
+path. It estimates the selected payload before copying, then checks the **entire
+finished deployment directory**, including hidden files, against a decimal
+**5 GB** budget (`dashboard_max_bundle_bytes` in pipeline inputs, default `5e9`).
+An oversized selection fails before previous deployment data is replaced. Each
+rebuild overwrites this same folder's generated `data/` tree, so deselected states
+cannot linger in the payload. The original pipeline outputs and the existing
+`.posit` publishing settings are preserved. The complete `/data` folder is
+included in Publisher's file list, covering county boundaries and populations
+as well as the simulation Parquet files.
+
+## Rebuild a deployment
+
+Edit `data/INPUT_FILE_TEMPLATES/4_PREPARE_DEPLOYMENT.R`, which inherits the
+experiment's `output_dir` and scientific settings from `LS6_PIPELINE_INPUTS.R`.
+Its `selected_states` vector defaults to Texas, Oklahoma, New Mexico, Louisiana,
+Arkansas, and California. Set `selected_states = NULL` or `character()` for all
+available states. These are the existing pipeline state-selection conventions;
+in the `deploy` phase they affect only packaging. `selected_scenarios` controls
+which intervention scenarios are included. All county/age detail, simulation
+replicates, validation inputs, map controls, and CSV exports are retained.
+
+From the repository root on your local computer:
+
+```bash
+Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/4_PREPARE_DEPLOYMENT.R
+```
+
+On LS6, prefix that command with `bash scripts/ls6_container_exec.sh`.
+You can override the input file's subset without editing it:
+
+```bash
+Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/4_PREPARE_DEPLOYMENT.R --selected-states=Texas,Oklahoma,Louisiana
+```
+
+Use `--selected-states=` for all available states; the size budget still applies.
+Add `--check-config` to inspect settings without rebuilding anything. Successful
+preparation prints the folder's exact size in decimal GB. With
+`deploy_shinyapps = FALSE`, no upload occurs: publish the prepared
+`deploy/shinyapps/PandemicSimExplorer` folder using Posit Publisher / Connect
+Cloud. The separate `deploy_shinyapps` switch is specifically for shinyapps.io.
+Choose the existing saved deployment in Publisher to update the hosted app;
+creating a New Deployment creates a separate hosted app. A localhost preview
+opened for testing is a separate browser view and does not publish anything.
 
 ## Deploy Preview To shinyapps.io
 

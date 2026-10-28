@@ -22,6 +22,9 @@
 #'
 #' LS6 phase inputs are 1_RUN_FIT.R, 2_RUN_SCENARIOS.R, and 3_RUN_FIGURES.R.
 #' Fit and scenarios write launchers and stop; results never runs simulations.
+#' Use 4_PREPARE_DEPLOYMENT.R (phase="deploy") to rebuild only the dashboard
+#' from existing Parquet outputs. selected_states=NULL includes all states;
+#' a vector or --selected-states=Texas,Oklahoma includes only that subset.
 #' RUN_FULL_PIPELINE_INPUTS.R remains the complete local example.
 #' The #### section headers below define the RStudio outline independently
 #' of the section_banner() calls that print progress to the console.
@@ -60,7 +63,7 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
   # ////////
 #### Section 0a Package Setup ####
   # ////////
-  load_pipeline_packages()
+  if (PIPELINE_PHASE != "deploy") load_pipeline_packages()
   initialize_pipeline_runtime()
   on.exit({
     while (sink.number() > 0) sink()
@@ -156,7 +159,7 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
     if (EXECUTION_TARGET == "ls6") aggregate_rm_search_checkpoints()
   }
 
-  if (PIPELINE_PHASE != "results") {
+  if (PIPELINE_PHASE %in% c("all", "fit", "scenarios")) {
     for (SIM_DAY_0 in SIM_DAY_0_VALUES) {
       SIM_DAY_0 <- as.Date(SIM_DAY_0)
       SIM_DAY_0_LABEL <- as.character(SIM_DAY_0)
@@ -231,19 +234,21 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
     }
   }
 
-  if (PIPELINE_PHASE == "results" ||
+  if (PIPELINE_PHASE %in% c("results", "deploy") ||
     (PIPELINE_PHASE == "all" && R0_FIT_LAUNCH != "pylauncher")) {
     if (PIPELINE_PHASE == "results") {
       require_completed_pipeline_fits()
       prepare_reused_fit_outputs()
       require_completed_scenario_outputs()
     }
-    if (RUN_WEB_PREVIEW || PIPELINE_PHASE == "results") {
+    if (RUN_WEB_PREVIEW || PIPELINE_PHASE %in% c("results", "deploy")) {
       # ////////
 #### Section 7 Output Ingestion ####
       # ////////
-      section_banner("7. Output ingestion")
-      source("7a_process_output_to_db.R")
+      if (PIPELINE_PHASE != "deploy") {
+        section_banner("7. Output ingestion")
+        source("7a_process_output_to_db.R")
+      }
 
       # ////////
 #### Section 8 Dashboard Bundle ####
@@ -277,12 +282,9 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
           account = SHINYAPPS_ACCOUNT
         )
       } else {
-        message("Prepared shinyapps.io bundle but did not deploy.")
-        message("To deploy later, run:")
-        message(
-          "  rsconnect::deployApp(appDir = 'deploy/shinyapps/PandemicSimExplorer', ",
-          "appName = '", SHINYAPPS_APP_NAME, "', account = '<your-shinyapps-account>')"
-        )
+        message("Prepared deployment bundle; no upload requested.")
+        message("Publish deploy/shinyapps/PandemicSimExplorer with Posit Publisher / Connect Cloud.")
+        message("For shinyapps.io, set deploy_shinyapps=TRUE and shinyapps_account in the input file.")
       }
     }
 
@@ -292,7 +294,7 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
     # ////////
 #### Section 9a Pre Simulation Input Plots ####
     # ////////
-    if (MAKE_PRE_SIM_FIGS) {
+    if (PIPELINE_PHASE != "deploy" && MAKE_PRE_SIM_FIGS) {
       section_banner("Section 9a Running Pre-Simulation Input Plots")
       pre_sim_fig_args <- c(
         file.path(repo_root, "scripts", "9a_pre_sim_input_plots.R"),
@@ -310,7 +312,7 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
     # ////////
 #### Section 9b Post Simulation Validation Scoring Plots ####
     # ////////
-    if (MAKE_VALIDATION_FIGS) {
+    if (PIPELINE_PHASE != "deploy" && MAKE_VALIDATION_FIGS) {
       section_banner("Section 9b Running Hubverse-Style Validation Scoring")
       score_args <- c(
         file.path(repo_root, "scripts", "9b_score_validation_hubverse_style.R"),
@@ -326,7 +328,7 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
     # ////////
 #### Section 9c Completion And Runtime Diagnostics ####
     # ////////
-    if (MAKE_DIAGNOSTIC_FIGS) {
+    if (PIPELINE_PHASE != "deploy" && MAKE_DIAGNOSTIC_FIGS) {
       section_banner("Section 9c Running Completion And Runtime Diagnostics")
       run_diagnostic_args <- c(
         file.path(repo_root, "scripts", "9c_score_validation_run_diagnostics.R"),

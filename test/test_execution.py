@@ -31,8 +31,18 @@ def test_worker_budget_is_per_command(cpu_environment, monkeypatch):
     assert choose_workers(parse_execution({}), 1000) == 1
 
 
+@pytest.mark.parametrize('workers', [2, '2', ' 2 '])
+def test_integer_workers_normalized(workers, cpu_environment):
+    execution = parse_execution({'mode': 'parallel', 'workers': workers})
+    assert execution == {'mode': 'parallel', 'workers': 2}
+    assert type(execution['workers']) is int
+    assert choose_workers(execution, 1000) == 2
+
+
 @pytest.mark.parametrize('value', [True, {'mode': 'threaded'}, {'workers': 0},
-                                       {'workers': True}, {'workers': 1.5}, {'worker': 2}])
+                                       {'workers': True}, {'workers': 1.5}, {'worker': 2},
+                                       {'workers': '0'}, {'workers': '-2'}, {'workers': '1.5'},
+                                       {'workers': 'invalid'}, {'workers': ''}, {'workers': None}])
 def test_invalid_execution_rejected(value):
     with pytest.raises(ValueError):
         parse_execution(value)
@@ -79,7 +89,7 @@ def test_spawned_realizations_match_serial_and_keep_hash(tmp_path):
     env = {**os.environ, 'PYTHONPATH': str(root / 'src'), 'SIMULATOR_CPUS_PER_TASK': '2',
            'MPLCONFIGDIR': str(tmp_path / 'matplotlib')}
     outputs = []
-    for label, execution in [('serial', {}), ('parallel', {'mode': 'parallel', 'workers': 2}),
+    for label, execution in [('serial', {}), ('parallel', {'mode': 'parallel', 'workers': '2'}),
                              ('parallel_one', {'mode': 'parallel', 'workers': 1})]:
         output = tmp_path / label
         output.mkdir()
@@ -100,7 +110,7 @@ def test_spawned_realizations_match_serial_and_keep_hash(tmp_path):
             scenario_hash = metadata['scenario_hash']
         else:
             assert metadata['scenario_hash'] == scenario_hash
-            assert metadata['execution']['resolved_workers'] == execution['workers']
+            assert metadata['execution']['resolved_workers'] == int(execution['workers'])
 
     for pattern in ('node_*.csv', 'network_batch-*.csv'):
         reference = _rows(outputs[0].glob(pattern))

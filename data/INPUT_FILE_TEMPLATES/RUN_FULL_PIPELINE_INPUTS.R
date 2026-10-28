@@ -10,7 +10,7 @@
 
 pipeline_inputs <- list(
   # Local example: run the complete pipeline, including selected preview states.
-  pipeline_phase = "all",            # "all", "fit", "scenarios", or "results".
+  pipeline_phase = "all",            # "all", "fit", "scenarios", "results", or "deploy".
   execution_target = "local",        # "local" runs sims; "ls6" writes launchers.
   ls6_container_image = NULL,         # Optional LS6 image override; default is $WORK/pes_pipeline_r442_py312.sif.
   # Experiment: outputs are created under this directory, relative to the repo.
@@ -24,6 +24,8 @@ pipeline_inputs <- list(
   # Set selected_states = NULL (or character()) to skip local simulations and
   # bundle all available TACC_FILES states for the selected scenarios instead.
   selected_states = c("District-of-Columbia", "Connecticut"),
+  # In the deploy phase this same setting selects only the deployment states;
+  # NULL includes all available states, without starting simulations.
   selected_scenarios = c("NONE", "VACCINE", "ANTIVIRAL", "NPI", "ALL_INTERVENTIONS"),
 
   # R_m fitting: simulator_county_threshold uses 5c up to the county threshold;
@@ -78,6 +80,7 @@ pipeline_inputs <- list(
   make_diagnostic_figs = TRUE,      # Section 9c: completion/runtime; needs saved outputs.
   validation_output_source_regex = "WEB_OUTPUTS", # Match output directories to score.
   deploy_shinyapps = FALSE,         # TRUE publishes the bundle to shinyapps.io.
+  dashboard_max_bundle_bytes = 5e9, # Entire deployment folder, decimal 5 GB.
   shinyapps_account = "",           # Required only for deployment.
   shinyapps_app_name = "PandemicSimExplorer"
 )
