@@ -87,9 +87,9 @@ def make_seirs_params(compartments, antiviral_parameters=None):
         disease_parameters={
             "compartments": compartments,
             "R0": "1.0",
-            "latent_period_days": "2.0",
-            "infectious_period_days": "4.0",
-            "immune_period_days": "0",
+            "E_to_I_days": "2.0",
+            "I_to_R_days": "4.0",
+            "R_to_S_days": "0",
             "T_to_R_days": "2.0",
             "rel_inf_T_to_I": "0.25",
         },

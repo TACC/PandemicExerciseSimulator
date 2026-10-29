@@ -26,11 +26,12 @@ class Schedule:
 
     def __init__(self, disease_model:type[DiseaseModel], now:float, group:Type[Group]):
         """
-        TAU      # Latency period in days (exposed to asymptomatic)
-        KAPPA    # Asymptomatic infectious period in days (asymptomatic to infectious)
-        CHI      # Retained for parameter compatibility; T no longer progresses to I
-        GAMMA    # Infectious/treated recovery rate
-        NU       # Infectious/treated mortality rate
+        E_to_A_rate # Exposed to asymptomatic rate
+        A_to_I_rate # Asymptomatic to infectious rate
+        I_to_R_rate # Infectious recovery rate
+        T_to_R_rate # Treated recovery rate
+        I_to_D_rate # Infectious mortality rate
+        T_to_D_rate # Treated mortality rate
 
         self._Ta         # Time from exposed to asymptomatic
         self._Ti         # Time from asymptomatic to infectious
@@ -40,11 +41,11 @@ class Schedule:
         self._Trd_ati    # Time from A/I/T to R/D
         """
 
-        self._Ta    = rand_exp_min1(disease_model.tau) + now
-        self._Ti    = rand_exp_min1(disease_model.kappa) + self._Ta
+        self._Ta    = rand_exp_min1(disease_model.E_to_A_rate) + now
+        self._Ti    = rand_exp_min1(disease_model.A_to_I_rate) + self._Ta
         self._Tt    = self._Ti
-        self._Td_ti = _draw_exit_time(disease_model.nu_values[group.age][group.risk], self._Ti)
-        self._Tr_ti = _draw_exit_time(disease_model.gamma, self._Ti)
+        self._Td_ti = _draw_exit_time(disease_model.I_to_D_rates_by_risk[group.age][group.risk], self._Ti)
+        self._Tr_ti = _draw_exit_time(disease_model.I_to_R_rate, self._Ti)
 
         self.exit_asymptomatic_time = float('inf')
         self.exit_infectious_time = min(self._Td_ti, self._Tr_ti)
@@ -60,16 +61,18 @@ class Schedule:
         S=0, E=1, A=2, I=3, T=4, R=5, D=6
         """
         assert int(compartment_num) > 0 and int(compartment_num) < 5
-        self._Ta    = (rand_exp_min1(disease_model.tau) + now) if compartment_num < 2 else now
-        self._Ti    = (rand_exp_min1(disease_model.kappa) + self._Ta) if compartment_num < 3 else now
+        self._Ta    = (rand_exp_min1(disease_model.E_to_A_rate) + now) if compartment_num < 2 else now
+        self._Ti    = (rand_exp_min1(disease_model.A_to_I_rate) + self._Ta) if compartment_num < 3 else now
         self._Tt    = now if compartment_num == Compartments.T.value else self._Ti
         is_treated = compartment_num == Compartments.T.value
         exit_start  = self._Tt if is_treated else self._Ti
-        death_rate = disease_model.nu_values[group.age][group.risk]
+        recovery_rate = disease_model.I_to_R_rate
+        death_rate = disease_model.I_to_D_rates_by_risk[group.age][group.risk]
         if is_treated:
-            death_rate *= (1.0 - disease_model.antiviral_effectiveness_death[group.age])
+            recovery_rate = disease_model.T_to_R_rate
+            death_rate = disease_model.T_to_D_rates_by_risk[group.age][group.risk]
         self._Td_ti = _draw_exit_time(death_rate, exit_start)
-        self._Tr_ti = _draw_exit_time(disease_model.gamma, exit_start)
+        self._Tr_ti = _draw_exit_time(recovery_rate, exit_start)
         
         self.exit_asymptomatic_time = float('inf')
         self.exit_infectious_time = min(self._Td_ti, self._Tr_ti)
@@ -99,28 +102,48 @@ class StochasticSEAITRD(DiseaseModel):
         self.beta_scale     = float(self.parameters.disease_parameters['beta_scale'] )   # "R0CorrectionFactor"
         self.beta           = self.R0 / self.beta_scale
 
-        # the following four parameters are provided by users as periods (units = days),
+        # the following parameters are provided by users as periods (units = days),
         # but then stored here as rates (units = 1/days)
-        self.tau            = 1/float(self.parameters.disease_parameters['tau'])
-        self.kappa          = 1/float(self.parameters.disease_parameters['kappa'])
-        self.gamma          = 1/float(self.parameters.disease_parameters['gamma'])
-        self.chi            = 1/float(self.parameters.disease_parameters['chi'])
+        self.E_to_A_rate    = 1/float(self.parameters.disease_parameters['E_to_A_days'])
+        self.A_to_I_rate    = 1/float(self.parameters.disease_parameters['A_to_I_days'])
+        self.I_to_R_rate    = 1/float(self.parameters.disease_parameters['I_to_R_days'])
 
         # Mobility reduction parameter
         #self.rho            = float(simulation_properties.rho)
         #self.rho = 0.39 # this should be in travel model
 
 
-        # the user enters one nu value for each age group, assumed to be low risk
-        # population. use multiplier 9x to derive values for high risk population
-        self.nu_values      = [[],[]]
-        self.nu_values[0]   = [float(x)   for x in self.parameters.disease_parameters['nu']]
-        self.nu_values[1]   = [float(x)*9 for x in self.parameters.disease_parameters['nu']]
+        compartment_labels = [
+            str(label).upper()
+            for label in self.parameters.disease_parameters.get('compartments', [])
+        ]
+        if "T" not in compartment_labels:
+            raise ValueError("SEAITRD requires the T compartment.")
+        if 'T_to_R_days' in self.parameters.disease_parameters:
+            self.T_to_R_rate = 1 / float(self.parameters.disease_parameters['T_to_R_days'])
+        else:
+            if self.parameters.antiviral_parameters:
+                raise ValueError("T_to_R_days is required when antiviral treatment can create T.")
+            logger.warning(
+                "T compartment specified without T_to_R_days; defaulting T_to_R_days to I_to_R_days."
+            )
+            self.T_to_R_rate = self.I_to_R_rate
 
-        # transpose nu_values so that we can access values in the order we are used to
-        #   e.g.:    nu_values[age][risk]
-        self.nu_values = np.array(self.nu_values).transpose().tolist()
+        # the user enters one I_to_D rate value for each age group, assumed to be low risk
+        # population. highrisk_death_multiplier derives high-risk death rates.
+        highrisk_death_multiplier = float(self.parameters.disease_parameters['highrisk_death_multiplier'])
+        self.I_to_D_rates_by_risk      = [[],[]]
+        self.I_to_D_rates_by_risk[0]   = [float(x)   for x in self.parameters.disease_parameters['I_to_D_invdays']]
+        self.I_to_D_rates_by_risk[1]   = [
+            float(x) * highrisk_death_multiplier
+            for x in self.parameters.disease_parameters['I_to_D_invdays']
+        ]
 
+        # Transpose rates so that we can access values as rates[age][risk].
+        self.I_to_D_rates_by_risk = np.array(self.I_to_D_rates_by_risk).transpose().tolist()
+
+        if self.parameters.antiviral_parameters and 'antiviral_effectiveness_death' not in self.parameters.antiviral_parameters:
+            raise ValueError("antiviral_effectiveness_death is required when antiviral treatment can create T.")
         self.antiviral_effectiveness_death = DiseaseModel.age_values(
             self.parameters.antiviral_parameters.get('antiviral_effectiveness_death', 0.0),
             self.parameters.number_of_age_groups,
@@ -129,9 +152,17 @@ class StochasticSEAITRD(DiseaseModel):
             raise ValueError(
                 f"Found invalid antiviral_effectiveness_death values: {self.antiviral_effectiveness_death}"
             )
+        self.T_to_D_rates_by_risk = [
+            [
+                I_to_D_rate * (1.0 - self.antiviral_effectiveness_death[age])
+                for I_to_D_rate in age_rates
+            ]
+            for age, age_rates in enumerate(self.I_to_D_rates_by_risk)
+        ]
 
-        self.relative_susceptibility = []
-        self.relative_susceptibility = [float(x) for x in self.parameters.disease_parameters['sigma']]
+        self.relative_susceptibility = [
+            float(x) for x in self.parameters.disease_parameters['relative_susceptibility']
+        ]
 
         self.npis_schedule = disease_model.npis_schedule
 
@@ -157,6 +188,7 @@ class StochasticSEAITRD(DiseaseModel):
         logger.debug(f'node={node}, time={time}')
 
         self.now = time
+        node.clear_incident_compartment_entries()
         t_max = self.now + 1
         self._reconcile_antiviral_transitions(node)
         #group_cache = np.zeros((self.parameters.number_of_age_groups, len(RiskGroup), len(VaccineGroup)))
@@ -186,7 +218,7 @@ class StochasticSEAITRD(DiseaseModel):
 
     def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int, vaccine_model:Type[Vaccination]):
         """
-        Initial infected are moved from 'Susceptible' into 'Exposed' compartment and drawn their schedule of events
+        Initial exposures are moved from 'Susceptible' into 'Exposed' compartment and drawn their schedule of events
         Args:
             node (Node): The node where people will be exposed
             group (Group): Compartment descriptor including age group, risk group, vaccine status
@@ -236,6 +268,7 @@ class StochasticSEAITRD(DiseaseModel):
 
         node.compartments.decrement(group, old_compartment)
         node.compartments.increment(group, new_compartment)
+        node.record_compartment_entry(group, new_compartment, 1.0)
         return
 
 
@@ -326,7 +359,7 @@ class StochasticSEAITRD(DiseaseModel):
         beta = self._calculate_beta_w_npi(node.node_index, node.node_id)
 
         for ag in range(self.parameters.number_of_age_groups):
-            sigma = float(self.relative_susceptibility[ag])
+            relative_susceptibility = float(self.relative_susceptibility[ag])
 
             for rg in range(len(RiskGroup)):
                 for vg in range(len(VaccineGroup)):
@@ -346,7 +379,7 @@ class StochasticSEAITRD(DiseaseModel):
                         vaccine_effectiveness = 0
                     # group_cache is weighting the force of infection
                     transmission_rate = (1.0 - vaccine_effectiveness) * beta[ag] * contact_rate \
-                                        * sigma * group_cache[ag][rg][vg]
+                                        * relative_susceptibility * group_cache[ag][rg][vg]
                     # if the rate is zero (VE=1 or other reasons), do not schedule contacts
                     if transmission_rate <= 0.0:
                         continue

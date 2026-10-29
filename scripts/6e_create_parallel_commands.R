@@ -1,0 +1,157 @@
+#////////
+#### Script Overview ####
+#////////
+#' Create parallel simulator commands for manuscript input JSONs.
+#'
+#' Input JSONs are generated upstream into dated directories under:
+#'   STATE_INIT_TEST/TACC_FILES
+#'
+#' This script does not write simulator input JSONs. It writes launcher files
+#' next to those dated input directories:
+#'   STATE_INIT_TEST/TACC_FILES/state_commands.txt
+#'   STATE_INIT_TEST/TACC_FILES/state_pylauncher.sh
+#'   STATE_INIT_TEST/TACC_FILES/state_pylauncher.py
+#' With execution_target = "ls6", every scenario command uses the shared
+#' Apptainer wrapper, including the configured image override when present.
+#////////
+library(tidyverse)
+library(jsonlite)
+if (!exists("ls6_command_prefix", mode = "function")) {
+  source("0_pipeline_helpers.R", local = TRUE)
+}
+
+simulation_days <- as.integer(get0("SIMULATION_DAYS", ifnotfound = 300L))
+pipeline_output_dir <- get0("PIPELINE_OUTPUT_DIR", ifnotfound = "STATE_WKLYFIT_TEST")
+intervention_template_files <- get0("INTERVENTION_TEMPLATE_FILES", ifnotfound = character())
+selected_run_scenarios <- get0(
+  "SELECTED_RUN_SCENARIOS",
+  ifnotfound = c("NONE", names(intervention_template_files))
+)
+sim_day_0_values <- as.character(get0("SIM_DAY_0_VALUES", ifnotfound = character()))
+input_dir <- file.path("..", pipeline_output_dir, "TACC_FILES")
+commands_file <- file.path(input_dir, "state_commands.txt")
+launcher_sh_file <- file.path(input_dir, "state_pylauncher.sh")
+launcher_py_file <- file.path(input_dir, "state_pylauncher.py")
+launcher_sh_template_file <- file.path("..", "data", "INPUT_FILE_TEMPLATES", "state_pylauncher.sh")
+launcher_py_template_file <- file.path("..", "data", "INPUT_FILE_TEMPLATES", "state_pylauncher.py")
+simulator_file_rel <- file.path("..", "..", "src", "simulator.py")
+container_image <- get0("LS6_CONTAINER_IMAGE", ifnotfound = "")
+execution_target <- get0("EXECUTION_TARGET", ifnotfound = "local")
+
+dir.create(input_dir, showWarnings = FALSE, recursive = TRUE)
+command_prefix <- ls6_command_prefix("poetry run python3", input_dir,
+  container_image, normalizePath(".."), execution_target)
+
+input_files <- list.files(
+  input_dir,
+  pattern = "^INPUT_.*\\.json$",
+  full.names = TRUE,
+  recursive = TRUE
+)
+
+if (length(input_files) == 0) {
+  stop("No TACC JSONs found in ", input_dir, ". Run 6d first.")
+}
+
+input_metadata <- tibble(INPUT_FILE = input_files) %>%
+  mutate(
+    config = purrr::map(.data$INPUT_FILE, jsonlite::fromJSON, simplifyVector = FALSE),
+    sim_day_0 = purrr::map_chr(
+      .data$config,
+      ~ {
+        value <- tryCatch(.x$metadata_tags$sim_day_0, error = function(e) NA_character_)
+        if (is.null(value)) NA_character_ else as.character(value)
+      }
+    ),
+    state = purrr::map_chr(
+      .data$config,
+      ~ {
+        value <- tryCatch(.x$metadata_tags$state_dir, error = function(e) NA_character_)
+        if (is.null(value)) NA_character_ else as.character(value)
+      }
+    ),
+    scenario = purrr::map_chr(
+      .data$config,
+      ~ {
+        value <- tryCatch(.x$metadata_tags$scenario_label, error = function(e) NA_character_)
+        if (is.null(value)) NA_character_ else as.character(value)
+      }
+    )
+  )
+
+# TACC commands intentionally cover all generated state/DC inputs. Only
+# sim_day_0 and scenario labels are filtered here; SELECTED_RUN_STATES is for
+# local/web preview runs in 6f.
+if (length(sim_day_0_values) > 0) {
+  input_metadata <- input_metadata %>%
+    dplyr::filter(.data$sim_day_0 %in% sim_day_0_values)
+}
+input_metadata <- input_metadata %>%
+  dplyr::filter(.data$scenario %in% selected_run_scenarios)
+if (nrow(input_metadata) == 0) {
+  stop(
+    "No TACC JSONs matched selected scenario label(s): ",
+    paste(selected_run_scenarios, collapse = ", ")
+  )
+}
+
+reused_fit_outputs <- get0("REUSED_FIT_OUTPUTS", ifnotfound = NULL)
+if (!is.null(reused_fit_outputs) && nrow(reused_fit_outputs)) {
+  input_metadata <- dplyr::anti_join(input_metadata, reused_fit_outputs,
+    by = c("state", "sim_day_0", "scenario"))
+}
+
+all_commands_script <- input_metadata %>%
+  mutate(
+    date_order = match(.data$sim_day_0, sim_day_0_values),
+    date_order = if_else(is.na(.data$date_order), row_number(), .data$date_order),
+    scenario_order = match(.data$scenario, selected_run_scenarios),
+    scenario_order = if_else(is.na(.data$scenario_order), row_number(), .data$scenario_order)
+  ) %>%
+  arrange(.data$state, .data$date_order, .data$scenario_order) %>%
+  mutate(
+    final_poetry_command = paste(
+      command_prefix,
+      simulator_file_rel,
+      "-l WARNING -d",
+      simulation_days,
+      "-i",
+      shQuote(file.path(.data$sim_day_0, basename(.data$INPUT_FILE)))
+    )
+  ) %>%
+  dplyr::select(final_poetry_command)
+
+write.table(
+  all_commands_script,
+  commands_file,
+  sep = "",
+  col.names = FALSE,
+  row.names = FALSE,
+  quote = FALSE
+)
+
+if (!file.exists(launcher_sh_file)) {
+  if (!file.exists(launcher_sh_template_file)) {
+    stop("No TACC pylauncher shell template found at ", launcher_sh_template_file)
+  }
+  file.copy(launcher_sh_template_file, launcher_sh_file, overwrite = FALSE)
+  Sys.chmod(launcher_sh_file, mode = "0755")
+  message("Copied TACC pylauncher shell template to ", launcher_sh_file)
+} else {
+  message("TACC pylauncher shell launcher already exists, leaving unchanged: ", launcher_sh_file)
+}
+
+ensure_ls6_apptainer_module(launcher_sh_file, execution_target)
+
+if (!file.exists(launcher_py_file)) {
+  if (!file.exists(launcher_py_template_file)) {
+    stop("No TACC pylauncher Python template found at ", launcher_py_template_file)
+  }
+  file.copy(launcher_py_template_file, launcher_py_file, overwrite = FALSE)
+  message("Copied TACC pylauncher Python template to ", launcher_py_file)
+} else {
+  message("TACC pylauncher Python launcher already exists, leaving unchanged: ", launcher_py_file)
+}
+
+message("Wrote ", nrow(all_commands_script), " simulator commands to ", commands_file,
+  "\nExecution target: ", execution_target, "; command prefix: ", command_prefix)

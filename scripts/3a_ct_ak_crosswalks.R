@@ -1,14 +1,19 @@
-#/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#////////
+#### Script Overview ####
+#////////
 #' Both Connecticut and Alaska had changes on county FIPS in/after 2019 
 #' The county travel networks need to be converted to match modern jurisdictions
 #' https://www.census.gov/programs-surveys/geography/technical-documentation/county-changes.January_2020.html
 #' The January 2020 tab can be cited for the Connecticut change and 2010 for Alaska
 #' 
 #' Crosswalk from GeoCorr 2022: https://mcdc.missouri.edu/applications/geocorr2022.html
+#'  - Choose Connecticut as the state
+#'  - Source: Other geographies Connecticut counties (pre-2023)
+#'  - Target: 2020 county/county equivalent 
+#'  - Weight by population (2020 census)
 #' 
 #' Parent dir: MOBILITY
-#/////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+#////////
 final_crosswalk = "../data/MOBILITY/ak_ct_crosswalk.csv"
 if(!file.exists(final_crosswalk)){
   #//////////////////////////////

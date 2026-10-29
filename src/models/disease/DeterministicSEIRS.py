@@ -10,7 +10,7 @@ from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
-def SEIRS_model(y, transmission_prob, sigma, gamma, omega):
+def SEIRS_model(y, transmission_prob, sigma, gamma, omega, return_flows=False):
     """
     SEIRS compartmental model ODE function.
     Parameters:
@@ -37,10 +37,20 @@ def SEIRS_model(y, transmission_prob, sigma, gamma, omega):
     dI_dt = e_to_i - i_to_r
     dR_dt = i_to_r - r_to_s
 
-    return np.array([dS_dt, dE_dt, dI_dt, dR_dt])
+    daily_change = np.array([dS_dt, dE_dt, dI_dt, dR_dt])
+    if not return_flows:
+        return daily_change
+
+    flows = {
+        "S": r_to_s,
+        "E": max_new_infections,
+        "I": e_to_i,
+        "R": i_to_r,
+    }
+    return daily_change, flows
 
 
-def SEITRS_model(y, transmission_prob, sigma, gamma, T_to_R_rate, omega):
+def SEITRS_model(y, transmission_prob, sigma, gamma, T_to_R_rate, omega, return_flows=False):
     """
     Deterministic SEITRS compartmental model.
 
@@ -61,7 +71,17 @@ def SEITRS_model(y, transmission_prob, sigma, gamma, T_to_R_rate, omega):
     dT_dt = -t_to_r
     dR_dt = i_to_r + t_to_r - r_to_s
 
-    return np.array([dS_dt, dE_dt, dI_dt, dT_dt, dR_dt])
+    daily_change = np.array([dS_dt, dE_dt, dI_dt, dT_dt, dR_dt])
+    if not return_flows:
+        return daily_change
+
+    flows = {
+        "S": r_to_s,
+        "E": max_new_infections,
+        "I": e_to_i,
+        "R": i_to_r + t_to_r,
+    }
+    return daily_change, flows
 
 class DeterministicSEIRS(DiseaseModel):
 
@@ -70,14 +90,14 @@ class DeterministicSEIRS(DiseaseModel):
         self.parameters = disease_model.parameters
 
         self.R0    = float(self.parameters.disease_parameters['R0'])
-        self.sigma = 1 / float(self.parameters.disease_parameters['latent_period_days'])
-        self.gamma = 1 / float(self.parameters.disease_parameters['infectious_period_days'])
+        self.sigma = 1 / float(self.parameters.disease_parameters['E_to_I_days'])
+        self.gamma = 1 / float(self.parameters.disease_parameters['I_to_R_days'])
         compartment_labels = [
             str(label).upper()
             for label in self.parameters.disease_parameters.get('compartments', [])
         ]
         self.has_treated_compartment = "T" in compartment_labels
-        immune_period = float(self.parameters.disease_parameters.get('immune_period_days', 0))
+        immune_period = float(self.parameters.disease_parameters.get('R_to_S_days', 0))
         if immune_period == 0 or not immune_period:
             self.omega = 0
         else:
@@ -85,15 +105,15 @@ class DeterministicSEIRS(DiseaseModel):
 
         num_age_grps = self.parameters.number_of_age_groups
         if self.has_treated_compartment:
-            t_to_r_days = self.parameters.disease_parameters.get('T_to_R_days', None)
-            if t_to_r_days is None:
+            if 'T_to_R_days' in self.parameters.disease_parameters:
+                self.T_to_R_rate = 1 / float(self.parameters.disease_parameters['T_to_R_days'])
+            else:
                 if self.parameters.antiviral_parameters:
                     raise ValueError("T_to_R_days is required when antiviral treatment can create T.")
                 logger.warning(
-                    "T compartment specified without T_to_R_days; defaulting T_to_R_days to infectious_period_days."
+                    "T compartment specified without T_to_R_days; defaulting T_to_R_days to I_to_R_days."
                 )
-                t_to_r_days = self.parameters.disease_parameters['infectious_period_days']
-            self.T_to_R_rate = 1 / float(t_to_r_days)
+                self.T_to_R_rate = self.gamma
             raw_rel_inf_T_to_I = self.parameters.disease_parameters.get(
                 'rel_inf_T_to_I',
                 1.0,
@@ -140,6 +160,7 @@ class DeterministicSEIRS(DiseaseModel):
 
         # Need to update the node sense of time to get NPIs to take effect
         self.now = time
+        node.clear_incident_compartment_entries()
 
         # Snapshot: all compartments at start of the day so we don't call the updated subgroups
         compartments_today = {
@@ -206,7 +227,11 @@ class DeterministicSEIRS(DiseaseModel):
                     self.T_to_R_rate,      # T => R
                     self.omega             # R => S
                 )
-                daily_change = SEITRS_model(focal_group_compartments_today, *model_parameters)
+                daily_change, flows = SEITRS_model(
+                    focal_group_compartments_today,
+                    *model_parameters,
+                    return_flows=True,
+                )
             else:
                 model_parameters = (
                     transmission_prob,     # S => E
@@ -214,10 +239,16 @@ class DeterministicSEIRS(DiseaseModel):
                     self.gamma,            # I => R
                     self.omega             # R => S
                 )
-                daily_change = SEIRS_model(focal_group_compartments_today, *model_parameters)
+                daily_change, flows = SEIRS_model(
+                    focal_group_compartments_today,
+                    *model_parameters,
+                    return_flows=True,
+                )
 
             # Euler's Method solve of the system, can't do integer people
             compartments_tomorrow = focal_group_compartments_today + daily_change
             node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
+            for label, amount in flows.items():
+                node.record_compartment_entry(focal_group, label, amount)
 
         return

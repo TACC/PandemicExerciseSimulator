@@ -30,8 +30,8 @@ def make_network_with_population(pop=1000, compartment_labels=None):
     net._add_node(node)
     return net
 
-def make_params(*, num_age=1, R0=2.0, latent_period_days=3.0, infectious_period_days=4.0,
-                immune_period_days=0, compartments=None, antiviral_parameters=None):
+def make_params(*, num_age=1, R0=2.0, E_to_I_days=3.0, I_to_R_days=4.0,
+                R_to_S_days=0, compartments=None, antiviral_parameters=None):
     if compartments is None:
         compartments = ["S", "E", "I", "R"]
     return SimpleNamespace(
@@ -40,9 +40,9 @@ def make_params(*, num_age=1, R0=2.0, latent_period_days=3.0, infectious_period_
         disease_parameters={
             "compartments": compartments,
             "R0": R0,
-            "latent_period_days": latent_period_days,
-            "infectious_period_days": infectious_period_days,
-            "immune_period_days": immune_period_days,
+            "E_to_I_days": E_to_I_days,
+            "I_to_R_days": I_to_R_days,
+            "R_to_S_days": R_to_S_days,
             "T_to_R_days": "5",
             "rel_inf_T_to_I": "0.5",
             "relative_susceptibility": [1.0]*num_age,
@@ -68,11 +68,11 @@ def get_group(*, age=0, risk=RiskGroup.L.value, vax=VaccineGroup.U.value):
 #### Tests: SEIRS waning behavior ####
 
 def test_init_omega_from_immune_period_zero_and_365():
-    """omega should be 0 for immune_period_days=0; 1/365 for 365."""
-    m0 = make_seirs_model(make_params(immune_period_days=0))
+    """omega should be 0 for R_to_S_days=0; 1/365 for 365."""
+    m0 = make_seirs_model(make_params(R_to_S_days=0))
     assert m0.omega == 0.0
 
-    m365 = make_seirs_model(make_params(immune_period_days=365))
+    m365 = make_seirs_model(make_params(R_to_S_days=365))
     assert np.isclose(m365.omega, 1/365)
 
 def test_seirs_step_no_transmission_omega_zero_equals_seir_local_math():
@@ -138,7 +138,7 @@ def test_seitrs_step_keeps_t_zero_when_no_antivirals_created_it():
     assert (y + dy)[3] == 0.0
 
 def test_simulate_waning_zero_no_R_to_S_flow():
-    """Full simulate(): with immune_period_days=0 and no infectious, R must not move back to S."""
+    """Full simulate(): with R_to_S_days=0 and no infectious, R must not move back to S."""
     net = make_network_with_population()
     node = net.nodes[0]
     g = get_group(age=0, vax=VaccineGroup.U.value)
@@ -147,7 +147,7 @@ def test_simulate_waning_zero_no_R_to_S_flow():
     v = np.array([900.0, 0.0, 0.0, 100.0])
     node.compartments.set_compartment_vector_for(g, v)
 
-    params = make_params(num_age=1, immune_period_days=0)
+    params = make_params(num_age=1, R_to_S_days=0)
     model = make_seirs_model(params)
     vax = DummyVax([0.0])
 
@@ -158,7 +158,7 @@ def test_simulate_waning_zero_no_R_to_S_flow():
                                [900.0, 0.0, 0.0, 100.0], atol=1e-12)
 
 def test_simulate_waning_365_moves_R_to_S_by_expected_amount():
-    """Full simulate(): with immune_period_days=365 and no infectious, S+=R/365 and R-=R/365."""
+    """Full simulate(): with R_to_S_days=365 and no infectious, S+=R/365 and R-=R/365."""
     net = make_network_with_population()
     node = net.nodes[0]
     g = get_group(age=0, vax=VaccineGroup.U.value)
@@ -166,7 +166,7 @@ def test_simulate_waning_365_moves_R_to_S_by_expected_amount():
     v = np.array([900.0, 0.0, 0.0, 100.0])
     node.compartments.set_compartment_vector_for(g, v)
 
-    params = make_params(num_age=1, immune_period_days=365)
+    params = make_params(num_age=1, R_to_S_days=365)
     model = make_seirs_model(params)
     vax = DummyVax([0.0])
 
@@ -194,8 +194,8 @@ def test_simulate_waning_and_transmission_both_apply_in_S_equation():
     node.compartments.set_compartment_vector_for(g, v)
 
     # Identity contact matrix → focal contacts itself; R0 large enough for noticeable transmission
-    params = make_params(num_age=1, R0=3.0, latent_period_days=3.0,
-                         infectious_period_days=4.0, immune_period_days=365)
+    params = make_params(num_age=1, R0=3.0, E_to_I_days=3.0,
+                         I_to_R_days=4.0, R_to_S_days=365)
     model = make_seirs_model(params)
     vax = DummyVax([0.0])
 

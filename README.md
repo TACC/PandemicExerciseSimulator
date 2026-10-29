@@ -3,6 +3,13 @@
 This is a stand-alone Python command line implementation of an outbreak
 simulator using your choice of stochastic or deterministic compartmental model with a binomial travel model.
 
+The hosted documentation is published from the repository's documentation
+branch and is available at:
+
+```text
+https://pandemicexercisesimulator-test.readthedocs.io/en/latest/
+```
+
 ### Install Using Poetry:
 
 Depends on [Poetry](https://python-poetry.org/docs/#installation) for native installation.
@@ -16,6 +23,23 @@ $ poetry install --no-root
 
 The above will create a virtual environment. You can automatically access the virtual
 environment by prefacing your commands with `poetry run`.
+
+On LS6, run pipeline phases 1, 2, and 3 through
+`bash scripts/ls6_container_exec.sh Rscript ...` as shown in the
+[LS6 phase instructions](scripts/README.md#ls6-phases). The wrapper loads
+`tacc-apptainer` when needed and sets the container R library to
+`$WORK/pes-r-library`, preserving an explicit override. If running Apptainer
+directly, repeat `module load tacc-apptainer` and
+`export APPTAINERENV_PES_R_LIBRARY="$WORK/pes-r-library"` after every login,
+or add them to your shell startup.
+
+To rebuild the dashboard deployment from completed Parquet outputs, edit
+`selected_states` in
+[`4_PREPARE_DEPLOYMENT.R`](data/INPUT_FILE_TEMPLATES/4_PREPARE_DEPLOYMENT.R)
+and run it through pipeline `0`. A state vector packages that subset; `NULL`
+packages all available states. The deployment-only phase checks the 5 GB budget
+and replaces previously bundled data without rerunning simulations. See
+[Rebuild a deployment](scripts/README.md#rebuild-a-deployment).
 
 State input files use paths beginning with `../data/`, so run them from the
 `data/` directory. Delaware has only three counties and is a faster example
@@ -79,19 +103,24 @@ The simulator requires the data from the following folder:
 * **State_Q\*-2019_mobility-matrix.csv:** County x County mobility matrix of the fraction of the population that visits the other counties per day. 
   * Must be ordered to match fips order of population file, i.e. sequential FIPS codes of counties.
 * **State_quarterly-2019_mobility.csv** Non-matrix form of mobility data with column labels, file the matrices are derived from.
-* **State_quarterly-2019_county-connection-ranking.csv:** Ranking of connectivity of counties by quarter to help you decide on where to initialize infections.
+* **State_quarterly-2019_county-connection-ranking.csv:** Ranking of connectivity of counties by quarter to help you decide on where to initialize exposures.
 
 
 ### Parameters Required:
 
 Examples of required parameter inputs per model are available in `data/INPUT_FILE_TEMPLATES`
 
-There also must be at least one county with one initial infected person. Provide the
-county FIPS (as listed in the population file), number of initial infected, and the age
-group index of the infected. All people will be initialized in the low severity risk group of Exposed compartment. 
-If you initialize more than the people available the model will only infect susceptibles available after vaccinations are distributed.
+Disease transition inputs are named for the movement they control. Values ending
+in `_days`, such as `E_to_I_days` or `T_to_R_days`, are durations that the model
+converts internally to rates. Values ending in `_invdays`, such as
+`I_to_D_invdays`, are already rates per day.
+
+There also must be at least one county with one initial exposed person. Provide the
+county FIPS (as listed in the population file), number of initial exposures, and the age
+group index. All people will be initialized in the low severity risk group of the Exposed compartment.
+If you initialize more than the people available the model will only expose susceptibles available after vaccinations are distributed.
 ```
-"initial_infected": [
+"initial_exposed": [
     {
       "county": "1",
       "infected": "100",
@@ -99,6 +128,22 @@ If you initialize more than the people available the model will only infect susc
     }
 ]
 ```
+
+### Disease Model Family Differences
+
+`T` is the treated infectious compartment. In the SEAITRD family
+(`seaitrd-deterministic` and `seaitrd-stochastic`), `T` is part of the model
+definition and is required in `disease_model.parameters.compartments`. SEAITRD
+inputs should provide separate recovery durations for untreated and treated
+infectious people with `I_to_R_days` and `T_to_R_days`. Baseline mortality is
+provided as `I_to_D_invdays`; when SEAITRD is run with an antiviral model,
+`antiviral_effectiveness_death` is also required and the treated death rate is
+derived from `I_to_D_invdays * (1 - antiviral_effectiveness_death)`.
+
+Other model families keep `T` optional. For SEIRS, SEITRS, and SEIHRD inputs,
+omit `T` when the scenario does not model treatment. Include `T` only when an
+antiviral process can move people into the treated compartment, and provide the
+corresponding treated-transition inputs such as `T_to_R_days`.
 
 ### Optional Parameters
 
@@ -162,6 +207,33 @@ To shift a long time series you can simply alter the `vaccine_eff_lag_days`.
       ]
     }
 ```
+
+**Antivirals:** Antiviral stockpile models can move people from configured
+eligible disease compartments into `T`. In SEAITRD-family inputs, symptomatic
+infectious and treated recovery are configured separately with `I_to_R_days`
+and `T_to_R_days`, while baseline mortality is supplied as `I_to_D_invdays`.
+When an antiviral model is configured for SEAITRD, provide
+`antiviral_effectiveness_death`; the treated mortality rate is derived as
+`I_to_D_invdays * (1 - antiviral_effectiveness_death)`.
+
+`age_risk_priority_groups` uses the same convention as vaccination: `0` means
+no one in the age group is eligible, `0.5` means only high-risk people are
+eligible, and `1` means everyone is eligible. `compartment_priority` lists the
+disease compartments that can be moved into `T`.
+
+`antiviral_stockpile` is the total course inventory released by day. If
+`antiviral_adherence` is omitted, antivirals can be used for the current
+prevalent population in `compartment_priority`, constrained only by stockpile
+and `antiviral_capacity_proportion`. If `antiviral_adherence` is provided as a
+scalar or age-stratified list, treatment is limited to that fraction of people
+who newly entered the configured `compartment_priority` compartments during the
+current disease step. This lets a day-0 stockpile act as a maximum inventory
+while values such as `["0.54", "0.54", "0.54", "0.54", "0.54"]` represent
+age-specific outpatient antiviral uptake among newly eligible cases.
+
+`antiviral_capacity_proportion` remains an operational throughput cap: the
+maximum number of antiviral courses dispensable per node per day as a fraction
+of node population.
 
 
 

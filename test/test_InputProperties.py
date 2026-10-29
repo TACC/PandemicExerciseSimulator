@@ -44,7 +44,7 @@ def valid_config(tmp_path):
       },
       "disease_model": {"identity": "SEIR", "parameters": {}},
       "travel_model": {"identity": "binomial", "parameters": {}},
-      "initial_infected": 10
+      "initial_exposed": 10
    }
 
    config_path = tmp_path / "config.json"
@@ -78,7 +78,7 @@ def test_batch_num_preserved(tmp_path):
       },
       "disease_model": {"identity": "SEIR", "parameters": {}},
       "travel_model": {"identity": "binomial", "parameters": {}},
-      "initial_infected": 1
+      "initial_exposed": 1
    }
 
    path = tmp_path / "config.json"
@@ -107,7 +107,7 @@ def test_realization_range(tmp_path):
       },
       "disease_model": {"identity": "SEIR", "parameters": {}},
       "travel_model": {"identity": "binomial", "parameters": {}},
-      "initial_infected": 1
+      "initial_exposed": 1
    }
 
    path = tmp_path / "config.json"
@@ -130,7 +130,7 @@ def test_invalid_realization_range(tmp_path):
       },
       "disease_model": {"identity": "SEIR", "parameters": {}},
       "travel_model": {"identity": "binomial", "parameters": {}},
-      "initial_infected": 1
+      "initial_exposed": 1
    }
 
    path = tmp_path / "config.json"
@@ -151,7 +151,7 @@ def test_missing_realization_fields(tmp_path):
       },
       "disease_model": {"identity": "SEIR", "parameters": {}},
       "travel_model": {"identity": "binomial", "parameters": {}},
-      "initial_infected": 1
+      "initial_exposed": 1
    }
 
    path = tmp_path / "config.json"
@@ -173,7 +173,7 @@ def test_invalid_output_dir(tmp_path):
       },
       "disease_model": {"identity": "SEIR", "parameters": {}},
       "travel_model": {"identity": "binomial", "parameters": {}},
-      "initial_infected": 1
+      "initial_exposed": 1
    }
 
    path = tmp_path / "config.json"

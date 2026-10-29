@@ -1,4 +1,6 @@
-#///////////////////////////////////////////////////////////////////////
+#////////
+#### Script Overview ####
+#////////
 #' Create within state only county mobility flow patterns
 #'  accounting for Alaska and Connecticut county changes after pandemic
 #' Using proportion of the population flowing out of county
@@ -7,13 +9,28 @@
 #' Mobility data from: https://github.com/GeoDS/COVID19USFlows
 #' 
 #' Parent dir: MOBILITY
-#///////////////////////////////////////////////////////////////////////
-
+#////////
 library(tidyverse)
+
+state_dirs_2019 = tigris::fips_codes %>%
+  distinct(state_code, state_name) %>%
+  dplyr::filter(as.integer(state_code) < 60) %>%
+  transmute(state_dir = stringr::str_replace_all(state_name, " ", "-")) %>%
+  pull(state_dir)
+
+expected_2019_mobility_matrices = unlist(lapply(state_dirs_2019, function(state_dir) {
+  file.path("../data", state_dir, paste0(state_dir, "_Q", 1:4, "-2019_mobility-matrix.csv"))
+}), use.names = FALSE)
+
+if (all(file.exists(expected_2019_mobility_matrices))) {
+  message("2019 quarterly mobility matrices already exist for all states; skipping 3b mobility generation.")
+} else {
+
 source("../data/private_input_data/api_keys.R")
 
-#////////////////////
+#////////
 #### CENSUS DATA ####
+#////////
 # Alaska and Connecticut crosswalk made by "3a_ct_ak_crosswalks.r"
 ak_ct_crosswalk = read_csv("../data/MOBILITY/ak_ct_crosswalk.csv") %>%
   dplyr::select(OLD_FIPS, NEW_FIPS, afact)
@@ -33,7 +50,9 @@ files_2019 = list.files(
   full.names = TRUE
 ) # 365 files as expected
 
+#////////
 #### Create output dirs ####
+#////////
 mob_output_dir = "../data/MOBILITY/" # comes with data dir
 dir.create(paste0(mob_output_dir, "within-state_county-mobility"))
 state_out_dir = paste0(mob_output_dir, "state_2019_timeseries")
@@ -41,8 +60,9 @@ dir.create(state_out_dir, showWarnings = FALSE, recursive = TRUE)
 dir.create(paste0(mob_output_dir,"max-norm_within-state_county-mobility"))
 fig_dir = "../figures/"; dir.create(fig_dir)
 
-#//////////////////////////////////////////
+#////////
 #### TRANSLATE DAILY FILES TO 2023 ACS ####
+#////////
 us_flow_file = paste0(mob_output_dir, "US_flow_diff_timeseries.csv")
 if(file.exists(us_flow_file)){
   # Difference in daily mobility flow patterns from 2019 (pre-pandemic)
@@ -147,9 +167,9 @@ if(file.exists(us_flow_file)){
   print("Finished translating 2019 mobility to 2023+ geometries")
 } # end if files already exist
 
-#//////////////////////
+#////////
 #### NORM STATE TS ####
-#//////////////////////
+#////////
 date_set = seq(as.Date("2019-01-01"), as.Date("2019-12-31"))
 if(!file.exists(paste0(mob_output_dir, "county_max_pop_flow_2019.csv"))){
   fips_specific_ts = data.frame()
@@ -179,9 +199,9 @@ if(!file.exists(paste0(mob_output_dir, "county_max_pop_flow_2019.csv"))){
   print("County maximum pop flow already exists")
 }
 
-#/////////////////////////
+#////////
 #### STATE TIMESERIES ####
-#/////////////////////////
+#////////
 # state look-up table for group split in loop
 state_lookup = tigris::fips_codes %>%
   distinct(state_code, state_name, state) %>%  # state is USPS abbrev
@@ -224,9 +244,9 @@ if(!file.exists(file.path(state_out_dir, "Texas_2019_timeseries.csv"))){
   print("State specific timeseries already exist")
 } # end if files haven't been created yet
 
-#///////////////////////////
+#////////
 #### QUARTERLY STATE TS ####
-#///////////////////////////
+#////////
 state_ts_files = list.files(
   path = state_out_dir,
   pattern = "_timeseries.csv$",
@@ -338,8 +358,9 @@ if(!file.exists("../data/Wyoming/Wyoming_Q4-2019_mobility-matrix.csv")){
   print("Quarterly matrices exist in state dirs")
 }
 
-#////////////////////////////////
+#////////
 #### VIZ NATIONAL TIMESERIES ####
+#////////
 # Visualize the national time series
 flow_diff_df =  read_csv(paste0(mob_output_dir, "US_flow_diff_timeseries.csv"))
 daily_ts = ggplot(flow_diff_df)+
@@ -358,7 +379,7 @@ ggsave(paste0(fig_dir, "US_daily_mobility_ts_2019.png"),
 # interactive option
 # plotly::ggplotly(daily_ts)
 
-
+} # end top-level existing-output guard
 
 
 

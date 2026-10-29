@@ -166,8 +166,8 @@ def canonicalize_for_hash(value, float_places: int = HASH_FLOAT_PLACES):
    return value
 
 
-def canonicalize_initial_infected_for_hash(initial_infected):
-   rows = normalize_for_json(initial_infected or [])
+def canonicalize_initial_exposed_for_hash(initial_exposed):
+   rows = normalize_for_json(initial_exposed or [])
 
    out = []
    for row in rows:
@@ -242,7 +242,7 @@ def build_hash_payload(simulation_properties,
             exclude=EXPORT_EXCLUDE
          )
       },
-      "initial_infected": canonicalize_initial_infected_for_hash(
+      "initial_exposed": canonicalize_initial_exposed_for_hash(
          simulation_properties.initial
       ),
       "non_pharma_interventions": canonicalize_npis_for_hash(
@@ -333,7 +333,7 @@ def build_executed_config(simulation_properties,
             exclude=EXPORT_EXCLUDE
          )
       },
-      "initial_infected": canonicalize_initial_infected_for_hash(simulation_properties.initial),
+      "initial_exposed": canonicalize_initial_exposed_for_hash(simulation_properties.initial),
       "non_pharma_interventions": {
          "parameters": normalize_for_json(simulation_properties.non_pharma_interventions),
          "runtime_attributes": (
