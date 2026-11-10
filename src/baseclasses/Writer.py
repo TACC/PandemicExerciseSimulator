@@ -120,10 +120,42 @@ class Writer:
 
             # Stable insertion order: base → comp totals → subgroup columns
             node_row = {**base, **comp_vals, **sub_vals}
-            _write_dict_row(os.path.join(self.output_dir, f"node_{fips}_batch-{self.batch_num}.csv"), node_row)
+            self._write_row(os.path.join(self.output_dir, f"node_{fips}_batch-{self.batch_num}.csv"), node_row)
 
         # ---- write single network row ----
         network_row = {"sim_id": self.sim_id, "day": day, **totals}
-        _write_dict_row(os.path.join(self.output_dir, f"network_batch-{self.batch_num}.csv"), network_row)
+        self._write_row(os.path.join(self.output_dir, f"network_batch-{self.batch_num}.csv"), network_row)
         return
 
+    def _write_row(self, path, row):
+        _write_dict_row(path, row)
+
+
+class RealizationWriter(Writer):
+    """Two exclusively owned, buffered files; no daily opens or shared appends.
+
+    Files live in a staging directory until the parent accepts the result.
+    """
+    def __init__(self, output_dir_path, realization_index, total_sims, batch_num):
+        from pathlib import Path
+
+        self.sim_id = realization_index
+        self.total_sims = total_sims
+        self.batch_num = batch_num
+        self.output_dir = str(Path(output_dir_path) / f'.realizations_batch-{batch_num}' / f'sim-{realization_index}')
+        Path(self.output_dir).mkdir(parents=True, exist_ok=False)
+        self._handles = {}
+        self._writers = {}
+
+    def _write_row(self, path, row):
+        name = 'nodes.csv' if os.path.basename(path).startswith('node_') else 'network.csv'
+        if name not in self._handles:
+            handle = open(os.path.join(self.output_dir, name), 'x', newline='', buffering=1024 * 1024)
+            self._handles[name] = handle
+            self._writers[name] = csv.DictWriter(handle, fieldnames=list(row))
+            self._writers[name].writeheader()
+        self._writers[name].writerow(row)
+
+    def close(self):
+        for handle in self._handles.values():
+            handle.close()

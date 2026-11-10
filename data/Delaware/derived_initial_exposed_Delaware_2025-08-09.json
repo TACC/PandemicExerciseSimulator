@@ -1,0 +1,32 @@
+[
+  {
+    "county": "10001",
+    "infected": "41",
+    "age_group": "0"
+  },
+  {
+    "county": "10003",
+    "infected": "119",
+    "age_group": "0"
+  },
+  {
+    "county": "10005",
+    "infected": "42",
+    "age_group": "0"
+  },
+  {
+    "county": "10001",
+    "infected": "6",
+    "age_group": "4"
+  },
+  {
+    "county": "10003",
+    "infected": "18",
+    "age_group": "4"
+  },
+  {
+    "county": "10005",
+    "infected": "12",
+    "age_group": "4"
+  }
+]

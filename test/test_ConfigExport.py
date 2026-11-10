@@ -234,7 +234,7 @@ def test_build_executed_config(tmp_path, monkeypatch):
       tags={},
    )
 
-   disease_params = TrackingDict({"R0": "3", "tau": "7"})
+   disease_params = TrackingDict({"R0": "3", "E_to_A_days": "7"})
    _ = disease_params["R0"]   # mark used
 
    travel_params = TrackingDict({"rho": "1"})

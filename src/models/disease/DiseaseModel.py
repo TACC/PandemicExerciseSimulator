@@ -65,11 +65,11 @@ class DiseaseModel:
 
     def set_initial_conditions(self, initial: list, network: Type[Network], vaccine_model:Type[Vaccination]):
         """
-        This method is invoked from the main simulator block. Read in the list of initial infected
-        per location per age group, and expose
+        This method is invoked from the main simulator block. Read in the list of initial exposed
+        people per location per age group, and expose
 
         Args:
-            initial (list): list of initial infected per age group per county from INPUT
+            initial (list): list of initial exposures per age group per county from INPUT
             network (Network): network object with list of nodes
         """
         # Get proportion of the population each subgroup is in for each node = group cache & doesn't change over time
@@ -79,7 +79,7 @@ class DiseaseModel:
             # TODO the word "county" is hardcoded here but should be made dynamic in case
             # people want to do zip codes instead. Maybe 'location_id'
             this_node_id   = int(item['county'])
-            this_infected  = int(item['infected'])
+            this_exposed   = int(item['infected'])
             this_age_group = int(item['age_group'])
 
             # The initial conditions currently only take in initial E by age and county, not risk/vax
@@ -87,7 +87,7 @@ class DiseaseModel:
 
             for node in network.nodes:
                 if node.node_id == this_node_id:
-                    self.expose_number_of_people(node, group, this_infected, vaccine_model)
+                    self.expose_number_of_people(node, group, this_exposed, vaccine_model)
         
         return
 

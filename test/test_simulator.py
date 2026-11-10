@@ -168,6 +168,7 @@ def test_main_initializes_models_and_records_realization_time(tmp_path, monkeypa
     calls = []
 
     simulation_properties = SimpleNamespace(
+        execution={"mode": "serial", "workers": "auto"},
         realization_indices=[7],
         batch_num="42",
         population_data_file="population.csv",

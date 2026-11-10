@@ -1,0 +1,83 @@
+Bootstrap: docker
+From: rocker/geospatial:4.4.2
+
+# Build from the repository root on LS6. This image is for x86_64 LS6 nodes.
+# Public base image; no personal SIF or home-directory R library is required.
+%files
+    pyproject.toml /opt/pes-deps/pyproject.toml
+    poetry.lock /opt/pes-deps/poetry.lock
+    README.md /opt/pes-deps/README.md
+    containers/ls6-runtime.Rprofile /opt/pes-Rprofile
+
+%post
+    set -eu
+    unset PYTHONHOME PYTHONPATH VIRTUAL_ENV
+    export PYTHONNOUSERSITE=1
+    export MAMBA_ROOT_PREFIX=/opt/pes-mamba
+    export POETRY_CONFIG_DIR=/opt/pes-poetry-config
+    export POETRY_CACHE_DIR=/tmp/pes-poetry-cache
+    export POETRY_NO_INTERACTION=1
+    mkdir -p /opt/pes-r-library
+
+    # A container-native Python avoids TACC's Intel-linked host Python.
+    command -v curl
+    command -v tar
+    mkdir -p /tmp/pes-micromamba
+    curl -fLsS https://micro.mamba.pm/api/micromamba/linux-64/latest \
+        -o /tmp/pes-micromamba/micromamba.tar.bz2
+    tar -xjf /tmp/pes-micromamba/micromamba.tar.bz2 \
+        -C /tmp/pes-micromamba bin/micromamba
+    /tmp/pes-micromamba/bin/micromamba create -y \
+        --override-channels -c conda-forge -p /opt/pes-python python=3.12 pip
+
+    # Keep Poetry's dependencies separate from the simulator's dependencies.
+    /opt/pes-python/bin/python -m venv /opt/pes-poetry
+    /opt/pes-poetry/bin/python -m pip install --no-cache-dir poetry==2.1.3
+    export VIRTUAL_ENV=/opt/pes-python
+    export PATH=/opt/pes-python/bin:/opt/pes-poetry/bin:$PATH
+    export POETRY_VIRTUALENVS_CREATE=false
+    cd /opt/pes-deps
+    poetry check --lock
+    poetry install --only main --no-root --no-interaction
+    # Record the resolved environment, including the Python build.
+    /tmp/pes-micromamba/bin/micromamba list -p /opt/pes-python --explicit \
+        > /opt/pes-deps/python-conda-explicit.txt
+    python -m pip freeze > /opt/pes-deps/python-pip-freeze.txt
+
+    # Install orchestration and fitting R packages missing from the public base.
+    export R_LIBS_USER=/opt/pes-r-library
+    Rscript --vanilla -e 'lib <- "/opt/pes-r-library"; .libPaths(c(lib, .libPaths())); pkgs <- c("pacman", "tidyverse", "tidycensus", "tigris", "sf", "reticulate", "srvyr", "ggpmisc", "jsonlite", "haven", "rsconnect", "dplyr", "ggplot2", "ggrepel", "purrr", "readr", "stringr", "tibble", "tidyr"); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]; if (length(missing)) install.packages(missing, lib = lib, repos = "https://cloud.r-project.org"); stopifnot(all(vapply(pkgs, requireNamespace, logical(1), quietly = TRUE))); write.csv(installed.packages(), "/opt/pes-deps/r-packages.csv", row.names = FALSE)'
+
+    chmod -R a+rX /opt/pes-python /opt/pes-poetry /opt/pes-r-library /opt/pes-deps
+
+%environment
+    export PATH=/opt/pes-python/bin:/opt/pes-poetry/bin:$PATH
+    export VIRTUAL_ENV=/opt/pes-python
+    export POETRY_VIRTUALENVS_CREATE=false
+    export POETRY_NO_INTERACTION=1
+    export PYTHONNOUSERSITE=1
+    export R_LIBS_USER=/opt/pes-r-library
+    # Ignore home/project R startup overrides without requiring --vanilla.
+    export R_ENVIRON_USER=/dev/null
+    export R_PROFILE_USER=/opt/pes-Rprofile
+
+%test
+    set -eu
+    unset PYTHONHOME PYTHONPATH
+    export PYTHONNOUSERSITE=1
+    export VIRTUAL_ENV=/opt/pes-python
+    export PATH=/opt/pes-python/bin:/opt/pes-poetry/bin:$PATH
+    export POETRY_VIRTUALENVS_CREATE=false
+    export R_LIBS_USER=/opt/pes-r-library
+    export R_ENVIRON_USER=/dev/null
+    export R_PROFILE_USER=/opt/pes-Rprofile
+    cd /opt/pes-deps
+    poetry --version
+    poetry run python3 -c 'import sys, numpy, pandas, scipy, pyarrow, epydemix; assert sys.version_info >= (3, 11); print(sys.executable); print(sys.version)'
+    # Confirm that the exact R -> Poetry -> Python boundary works.
+    Rscript -e 'library(dplyr); library(ggrepel); library(tidycensus); library(sf); print(R.version.string); print(.libPaths()); stopifnot(Sys.which("poetry") == "/opt/pes-poetry/bin/poetry", Sys.which("python3") == "/opt/pes-python/bin/python3"); status <- system2("poetry", c("run", "python3", "--version")); stopifnot(status == 0L)'
+
+%labels
+    Purpose R orchestration and Poetry-based pandemic simulator on LS6
+    PoetryVersion 2.1.3
+    PythonSeries 3.12

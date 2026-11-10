@@ -57,6 +57,16 @@ class BinomialTravel(TravelModel):
         logging.debug('entered the travel function')
         logging.debug(f'network.nodes len = {len(network.nodes)} first_val = {network.nodes[0].node_id}')
 
+        # Keep the original calculation in DEBUG mode, including all pair/age
+        # diagnostics. Otherwise each source's pressure is reusable across sinks.
+        contact_pressures = None
+        if not logging.getLogger().isEnabledFor(logging.DEBUG):
+            contact_pressures = [
+                self._source_contact_pressure(parameters, node, disease_model)
+                for node in network.nodes
+            ]
+        exposure_changes_weights = bool({'S', 'E'} & (self.travel_dict.keys() | self.transmit_dict.keys()))
+
         for node_sink_id, node_sink in enumerate(network.nodes):
             probabilities = [0.0] * parameters.number_of_age_groups
 
@@ -64,16 +74,49 @@ class BinomialTravel(TravelModel):
                 if node_sink_id != node_source_id:
                     self._calculate_flow_probability(parameters, network, node_sink, node_sink_id,
                                                      node_source, node_source_id, probabilities,
-                                                     disease_model)
+                                                     disease_model,
+                                                     None if contact_pressures is None else contact_pressures[node_source_id])
                     logging.debug(f'probabilities = {probabilities}')
 
             self._expose_from_travel(parameters, node_sink, probabilities, disease_model, vaccine_model)
+            # Travel updates S/E immediately. Refresh only the changed source if
+            # a configuration includes either compartment in its travel weights.
+            if contact_pressures is not None and exposure_changes_weights:
+                contact_pressures[node_sink_id] = self._source_contact_pressure(parameters, node_sink, disease_model)
         return
+
+
+    def _source_contact_pressure(self, parameters, node_source, disease_model):
+        """Cache county/age populations and contact pressure for this travel step.
+
+        Preserve the original multiplication and summation order rather than
+        changing floating-point results through a matrix-product reassociation.
+        Nothing is stored on the model or reused across days/realizations.
+        """
+        ages = parameters.number_of_age_groups
+        traveling = [node_source.compartments.traveling_population_by_age(age, self.travel_dict)
+                     for age in range(ages)]
+        transmitting = [node_source.compartments.transmitting_population_by_age(age, self.transmit_dict)
+                        for age in range(ages)]
+        sink_to_source = []
+        source_to_sink = []
+        for ag1 in range(ages):
+            sigma = float(disease_model.relative_susceptibility[ag1])
+            beta = disease_model.beta
+            incoming = 0
+            outgoing = 0
+            for ag2 in range(ages):
+                contact = parameters.np_contact_matrix[ag1][ag2]
+                incoming += transmitting[ag2] * beta * self.rho * contact * sigma / self.flow_reduction[ag1]
+                outgoing += traveling[ag2] * beta * self.rho * contact * sigma / self.flow_reduction[ag2]
+            sink_to_source.append(incoming)
+            source_to_sink.append(outgoing)
+        return sink_to_source, source_to_sink
 
 
     def _calculate_flow_probability(self, parameters:Type[ModelParameters], network:Type[Network], node_sink:Type[Node],
                                     node_sink_id:int, node_source:Type[Node], node_source_id:int, probabilities:list,
-                                    disease_model:Type[DiseaseModel]):
+                                    disease_model:Type[DiseaseModel], contact_pressure=None):
         """
         Given a pair of nodes, (1) identify whether travel happens between the nodes (based on
         travel flow data), (2) if so, iterate over all pairs of age groups, (3) calculate number
@@ -93,6 +136,13 @@ class BinomialTravel(TravelModel):
         flow_source_to_sink = network.travel_flow_data[node_source_id][node_sink_id]
 
         if flow_sink_to_source > 0 or flow_source_to_sink > 0:
+
+            if contact_pressure is not None:
+                sink_to_source, source_to_sink = contact_pressure
+                for ag1 in range(parameters.number_of_age_groups):
+                    probabilities[ag1] += flow_sink_to_source * sink_to_source[ag1] / node_source.total_population()
+                    probabilities[ag1] += flow_source_to_sink * source_to_sink[ag1] / node_sink.total_population()
+                return
 
             logging.debug(f'flow happening; sink id = {node_sink_id}, source id = {node_source_id}')
             logging.debug(f'flow sink value = {flow_sink_to_source}, flow source value = {flow_source_to_sink}')
@@ -154,7 +204,7 @@ class BinomialTravel(TravelModel):
                     # TODO what is this continuity correction (+ 0.5)?
                     sink_S = int( node_sink.compartments.compartment_data[ag][rg][vg][Compartments.S.value] + 0.5 )
                     prob=max(min(prob,1.0), 0.0)
-                    number_of_exposures = rand_binomial(sink_S, prob)
+                    number_of_exposures = rand_binomial(sink_S, prob, disease_model.rng)
                     if number_of_exposures > 1:
                         logging.debug(f'susceptible people in sink = {sink_S}, probability = {prob}, '
                                       f'number_of_exposures = {number_of_exposures}')
@@ -162,5 +212,3 @@ class BinomialTravel(TravelModel):
                     group = Group(ag, rg, vg)
                     disease_model.expose_number_of_people(node_sink, group, number_of_exposures, vaccine_model)
         return
-
-    

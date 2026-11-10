@@ -1,4 +1,6 @@
-#///////////////////////////////////////////////////////////////////////////////
+#////////
+#### Script Overview ####
+#////////
 # Post-job ETL: finds all metadata_batch-*.json files under SEARCH_ROOT and
 # ingests them into:
 #   1. metadata_master.csv  — flat metadata table, deduplication key
@@ -17,16 +19,26 @@
 #     columns of zeros cost almost nothing in file size.
 #   - For very large sweeps (250+ nodes × 250+ realizations) the node ingest
 #     reads all county files in one pass via arrow — no full in-memory load.
-#///////////////////////////////////////////////////////////////////////////////
-
+#////////
 library(jsonlite)
 library(tidyverse)
 library(arrow)
 
 #### Configuration #############################################################
-SEARCH_ROOT  <- normalizePath(file.path(here::here(), ".."))
+pipeline_search_root <- get0("pipeline_output_root", ifnotfound = NA_character_)
+if (is.na(pipeline_search_root) || !nzchar(pipeline_search_root)) {
+  pipeline_output_dir <- get0("PIPELINE_OUTPUT_DIR", ifnotfound = "STATE_WKLYFIT_TEST")
+  pipeline_search_root <- if (grepl("^/", pipeline_output_dir)) {
+    pipeline_output_dir
+  } else {
+    file.path(here::here(), "..", pipeline_output_dir)
+  }
+}
+SEARCH_ROOT  <- normalizePath(pipeline_search_root, mustWork = FALSE)
 MASTER_CSV   <- file.path(SEARCH_ROOT, "metadata_master.csv")
 PARQUET_ROOT <- file.path(SEARCH_ROOT, "sim_data")   # partitioned: <hash>/<batch>/
+FEATURES_PARQUET <- file.path(SEARCH_ROOT, "scenario_features.parquet")
+METADATA_SOURCE_REGEX <- get0("VALIDATION_OUTPUT_SOURCE_REGEX", ifnotfound = "WEB_OUTPUTS")
 
 # Set TRUE once a local MongoDB instance is running (install.packages("mongolite"))
 MONGO_ENABLED    <- FALSE
@@ -56,6 +68,163 @@ to_json_str <- function(x) {
 
 safe_get <- function(x, ...) {
   tryCatch(purrr::pluck(x, ...), error = function(e) NULL)
+}
+
+resolve_search_root_path <- function(path) {
+  if (is.null(path) || length(path) == 0 || is.na(path) || !nzchar(path)) {
+    return(NA_character_)
+  }
+  if (grepl("^/", path)) {
+    return(normalizePath(path, mustWork = FALSE))
+  }
+  normalizePath(file.path(SEARCH_ROOT, path), mustWork = FALSE)
+}
+
+feature_value_type <- function(x) {
+  if (is.null(x)) return("null")
+  if (is.logical(x)) return("logical")
+  if (is.numeric(x)) return("numeric")
+  if (inherits(x, "Date") || inherits(x, "POSIXt")) return("date")
+  if (is.character(x)) return("character")
+  if (is.list(x)) return("object")
+  typeof(x)
+}
+
+canonicalize_json_value <- function(x) {
+  if (is.data.frame(x)) {
+    return(as.data.frame(lapply(x, canonicalize_json_value), stringsAsFactors = FALSE))
+  }
+
+  if (is.list(x)) {
+    names_x <- names(x)
+    if (!is.null(names_x) && any(nzchar(names_x))) {
+      x <- x[sort(names_x)]
+    }
+    return(lapply(x, canonicalize_json_value))
+  }
+
+  x
+}
+
+feature_value_display <- function(x) {
+  if (is.null(x)) return("null")
+  if (length(x) == 0) return("[]")
+  if (is.atomic(x) && length(x) == 1) return(as.character(x))
+  unclass(jsonlite::toJSON(canonicalize_json_value(x), auto_unbox = TRUE, null = "null"))
+}
+
+flatten_feature_list <- function(x, prefix = character(0)) {
+  if (is.null(x)) {
+    return(tibble(
+      feature_path = paste(prefix, collapse = "."),
+      feature_value = "null",
+      feature_type = "null"
+    ))
+  }
+
+  if (is.list(x) && !is.data.frame(x)) {
+    names_x <- names(x)
+
+    if (length(x) == 0) {
+      return(tibble(
+        feature_path = paste(prefix, collapse = "."),
+        feature_value = "[]",
+        feature_type = "array"
+      ))
+    }
+
+    if (is.null(names_x) || all(!nzchar(names_x))) {
+      return(tibble(
+        feature_path = paste(prefix, collapse = "."),
+        feature_value = feature_value_display(x),
+        feature_type = "array"
+      ))
+    }
+
+    return(purrr::imap_dfr(
+      x,
+      function(value, name) flatten_feature_list(value, c(prefix, name))
+    ))
+  }
+
+  tibble(
+    feature_path = paste(prefix, collapse = "."),
+    feature_value = feature_value_display(x),
+    feature_type = if (length(x) > 1) "array" else feature_value_type(x)
+  )
+}
+
+write_scenario_features <- function(master_df) {
+  if (is.null(master_df) || nrow(master_df) == 0) {
+    arrow::write_parquet(
+      tibble(
+        scenario_hash = character(),
+        geo_region = character(),
+        feature_path = character(),
+        feature_group = character(),
+        feature_value = character(),
+        feature_type = character()
+      ),
+      FEATURES_PARQUET,
+      compression = "zstd"
+    )
+    return(invisible(NULL))
+  }
+
+  excluded_roots <- c(
+    "batch_num",
+    "created_at_utc",
+    "file_path",
+    "git_info",
+    "output_dir_path",
+    "realization_indices",
+    "scenario_hash"
+  )
+
+  scenario_sources <- master_df %>%
+    dplyr::filter(!is.na(.data$scenario_hash), nzchar(.data$scenario_hash), file.exists(.data$file_path)) %>%
+    dplyr::arrange(dplyr::desc(.data$created_at_utc)) %>%
+    dplyr::group_by(.data$scenario_hash) %>%
+    dplyr::slice(1) %>%
+    dplyr::ungroup() %>%
+    dplyr::select("scenario_hash", "geo_region", "file_path")
+
+  features <- purrr::pmap_dfr(
+    scenario_sources,
+    function(scenario_hash, geo_region, file_path) {
+      tryCatch(
+        {
+          jsonlite::read_json(file_path) %>%
+            flatten_feature_list() %>%
+            dplyr::filter(
+              nzchar(.data$feature_path),
+              !stringr::word(.data$feature_path, 1, sep = stringr::fixed(".")) %in% excluded_roots
+            ) %>%
+            dplyr::mutate(
+              scenario_hash = scenario_hash,
+              geo_region = geo_region,
+              feature_group = stringr::word(.data$feature_path, 1, sep = stringr::fixed("."))
+            ) %>%
+            dplyr::select(
+              "scenario_hash",
+              "geo_region",
+              "feature_path",
+              "feature_group",
+              "feature_value",
+              "feature_type"
+            )
+        },
+        error = function(e) {
+          warning(sprintf("Failed to flatten scenario features for %s: %s", file_path, e$message))
+          tibble()
+        }
+      )
+    }
+  )
+
+  arrow::write_parquet(features, FEATURES_PARQUET, compression = "zstd")
+  message(sprintf("Scenario feature parquet: %s  (%d row(s))", FEATURES_PARQUET, nrow(features)))
+  invisible(features)
 }
 
 get_batch_file_sizes <- function(scenario_hash, batch_num) {
@@ -145,6 +314,9 @@ parse_metadata <- function(path) {
     metadata_sim_day_0         = tags$sim_day_0 %||% NA_character_,
     metadata_notes             = vec_to_str(tags$notes),
     metadata_tags_json         = to_json_str(tags),
+    validation_used            = !is.null(tags$validation),
+    validation_json            = to_json_str(tags$validation),
+    validation_fit_data_file   = resolve_search_root_path(safe_get(tags, "validation", "fit_data_file")),
 
     realization_min            = safe_get(m, "realization_indices", "min")   %||% NA_integer_,
     realization_max            = safe_get(m, "realization_indices", "max")   %||% NA_integer_,
@@ -187,7 +359,7 @@ parse_metadata <- function(path) {
     npi_identities             = npi_ids,
     npi_params_json            = to_json_str(npi_list),
 
-    initial_infected_json      = to_json_str(m$initial_infected),
+    initial_exposed_json      = to_json_str(m$initial_exposed),
     sim_days                   = safe_get(m, "cli_args", "days")     %||% NA_integer_,
     sim_loglevel               = safe_get(m, "cli_args", "loglevel") %||% NA_character_,
 
@@ -395,6 +567,9 @@ MASTER_COL_TYPES <- cols(
   metadata_sim_day_0         = col_character(),
   metadata_notes             = col_character(),
   metadata_tags_json         = col_character(),
+  validation_used            = col_logical(),
+  validation_json            = col_character(),
+  validation_fit_data_file   = col_character(),
 
   realization_min            = col_integer(),
   realization_max            = col_integer(),
@@ -436,7 +611,7 @@ MASTER_COL_TYPES <- cols(
   npi_identities             = col_character(),
   npi_params_json            = col_character(),
 
-  initial_infected_json      = col_character(),
+  initial_exposed_json      = col_character(),
   sim_days                   = col_integer(),
   sim_loglevel               = col_character(),
 
@@ -457,18 +632,21 @@ MASTER_COL_TYPES <- cols(
 
 #### Load existing master ######################################################
 if (file.exists(MASTER_CSV)) {
-  master <- read_csv(MASTER_CSV, show_col_types = FALSE)
+  master <- read_csv(MASTER_CSV, col_types = MASTER_COL_TYPES, show_col_types = FALSE)
 
   optional_metadata_columns <- c(
     "metadata_creator",
     "metadata_disease",
     "metadata_sim_day_0",
     "metadata_notes",
-    "metadata_tags_json"
+    "metadata_tags_json",
+    "validation_json",
+    "validation_fit_data_file"
   )
   for (column in optional_metadata_columns) {
     if (!column %in% names(master)) master[[column]] <- NA_character_
   }
+  if (!"validation_used" %in% names(master)) master[["validation_used"]] <- FALSE
   master <- master %>%
     dplyr::select(-dplyr::any_of(c(
       "scenario_name",
@@ -487,6 +665,13 @@ if (file.exists(MASTER_CSV)) {
     dplyr::mutate(
       scenario_hash = as.character(scenario_hash),
       batch_num = as.character(batch_num),
+      metadata_creator = as.character(metadata_creator),
+      metadata_disease = as.character(metadata_disease),
+      metadata_sim_day_0 = as.character(metadata_sim_day_0),
+      metadata_notes = as.character(metadata_notes),
+      metadata_tags_json = as.character(metadata_tags_json),
+      validation_json = as.character(validation_json),
+      validation_fit_data_file = as.character(validation_fit_data_file),
       random_base_seed = as.character(random_base_seed),
       created_at_utc = as.POSIXct(created_at_utc, tz = "UTC")
     )
@@ -507,6 +692,26 @@ json_files <- list.files(
   full.names = TRUE
 )
 
+if (!is.na(METADATA_SOURCE_REGEX) && nzchar(METADATA_SOURCE_REGEX)) {
+  json_files <- json_files[stringr::str_detect(
+    json_files,
+    stringr::regex(METADATA_SOURCE_REGEX, ignore_case = TRUE)
+  )]
+  message(sprintf(
+    "Filtered metadata_batch JSON files by source regex '%s': %d file(s).",
+    METADATA_SOURCE_REGEX,
+    length(json_files)
+  ))
+}
+
+reused_fit_outputs <- get0("REUSED_FIT_OUTPUTS", ifnotfound = NULL)
+reuse_manifest <- file.path(SEARCH_ROOT, "reused_fit_outputs.csv")
+if (is.null(reused_fit_outputs) && file.exists(reuse_manifest)) {
+  reused_fit_outputs <- readr::read_csv(reuse_manifest, show_col_types = FALSE)
+}
+if (!is.null(reused_fit_outputs)) {
+  json_files <- unique(c(json_files, reused_fit_outputs$metadata_file))
+}
 message(sprintf("Found %d metadata_batch JSON file(s).", length(json_files)))
 
 parsed_rows <- json_files %>%
@@ -619,3 +824,6 @@ if (nrow(new_rows) > 0) {
 } else {
   message("Nothing new to ingest.")
 }
+
+current_master <- if (exists("updated_master")) updated_master else master
+write_scenario_features(current_master)

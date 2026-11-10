@@ -85,7 +85,8 @@ def SEIHRD_model(y,
                  H_to_D_rate,       # H => D,
                  H_to_R_rate,       # H => R,
                  IA_to_R_rate,      # IA => R,
-                 rng):
+                 rng,
+                 return_flows=False):
     """
     SEIHRD compartmental model ODE function.
     Parameters:
@@ -148,7 +149,20 @@ def SEIHRD_model(y,
     dD_dt  = h_to_d
     dR_dt  = is_to_r + h_to_r + ia_to_r
 
-    return np.array([dS_dt, dE_dt, dIA_dt, dIP_dt, dIS_dt, dH_dt, dR_dt, dD_dt])
+    daily_change = np.array([dS_dt, dE_dt, dIA_dt, dIP_dt, dIS_dt, dH_dt, dR_dt, dD_dt])
+    if not return_flows:
+        return daily_change
+
+    flows = {
+        "E": max_new_infections,
+        "IA": e_to_ia,
+        "IP": e_to_ip,
+        "IS": ip_to_is,
+        "H": is_to_h,
+        "R": is_to_r + h_to_r + ia_to_r,
+        "D": h_to_d,
+    }
+    return daily_change, flows
 
 
 def SEITHRD_model(y,
@@ -163,7 +177,8 @@ def SEITHRD_model(y,
                   IA_to_R_rate,      # IA => R,
                   T_to_H_rate,       # T => H,
                   T_to_R_rate,       # T => R,
-                  rng):
+                  rng,
+                  return_flows=False):
     """
     SEIHRD model with a treated T compartment.
 
@@ -213,7 +228,20 @@ def SEITHRD_model(y,
     dR_dt  = is_to_r + h_to_r + ia_to_r + t_to_r
     dD_dt  = h_to_d
 
-    return np.array([dS_dt, dE_dt, dIA_dt, dIP_dt, dIS_dt, dH_dt, dT_dt, dR_dt, dD_dt])
+    daily_change = np.array([dS_dt, dE_dt, dIA_dt, dIP_dt, dIS_dt, dH_dt, dT_dt, dR_dt, dD_dt])
+    if not return_flows:
+        return daily_change
+
+    flows = {
+        "E": max_new_infections,
+        "IA": e_to_ia,
+        "IP": e_to_ip,
+        "IS": ip_to_is,
+        "H": is_to_h + t_to_h,
+        "R": is_to_r + h_to_r + ia_to_r + t_to_r,
+        "D": h_to_d,
+    }
+    return daily_change, flows
 
 class StochasticSEIHRD(DiseaseModel):
 
@@ -237,15 +265,15 @@ class StochasticSEIHRD(DiseaseModel):
         ]
         self.has_treated_compartment = "T" in compartment_labels
         if self.has_treated_compartment:
-            t_to_r_days = self.parameters.disease_parameters.get('T_to_R_days', None)
-            if t_to_r_days is None:
+            if 'T_to_R_days' in self.parameters.disease_parameters:
+                self.T_to_R_rate = 1 / float(self.parameters.disease_parameters['T_to_R_days'])
+            else:
                 if self.parameters.antiviral_parameters:
                     raise ValueError("T_to_R_days is required when antiviral treatment can create T.")
                 logger.warning(
                     "T compartment specified without T_to_R_days; defaulting T_to_R_days to IS_to_R_days."
                 )
-                t_to_r_days = self.parameters.disease_parameters['IS_to_R_days']
-            self.T_to_R_rate = 1 / float(t_to_r_days)
+                self.T_to_R_rate = self.IS_to_R_rate
             self.rel_inf_T_to_IS = DiseaseModel.age_values(
                 self.parameters.disease_parameters.get('rel_inf_T_to_IS', 1.0),
                 num_age_grps,
@@ -375,6 +403,7 @@ class StochasticSEIHRD(DiseaseModel):
 
         # Need to update the node sense of time to get NPIs to take effect
         self.now = time
+        node.clear_incident_compartment_entries()
 
         # Snapshot: all compartments at start of the day so we don't call the updated subgroups
         compartments_today = {
@@ -467,11 +496,23 @@ class StochasticSEIHRD(DiseaseModel):
                     T_to_H_rate,
                     T_to_R_rate,
                 )
-                daily_change = SEITHRD_model(focal_group_compartments_today, *model_parameters, rng=self.rng)
+                daily_change, flows = SEITHRD_model(
+                    focal_group_compartments_today,
+                    *model_parameters,
+                    rng=self.rng,
+                    return_flows=True,
+                )
             else:
-                daily_change = SEIHRD_model(focal_group_compartments_today, *model_parameters, rng=self.rng)
+                daily_change, flows = SEIHRD_model(
+                    focal_group_compartments_today,
+                    *model_parameters,
+                    rng=self.rng,
+                    return_flows=True,
+                )
 
             compartments_tomorrow = focal_group_compartments_today + daily_change
             node.compartments.set_compartment_vector_for(focal_group, compartments_tomorrow)
+            for label, amount in flows.items():
+                node.record_compartment_entry(focal_group, label, amount)
 
         return

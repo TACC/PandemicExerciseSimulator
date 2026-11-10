@@ -1,4 +1,6 @@
-#//////////////////////////////////////////////////////////////////////////////////////
+#////////
+#### Script Overview ####
+#////////
 #' Estimate state-specific proportion of each age group at 
 #' high risk of severe influenza complications (hospitalization and death)
 
@@ -14,10 +16,10 @@
 #' Including flu shot survey results for scenario modeling
 #' 
 #' Parent dirs: BRFSS, NSCH, RISK_RATIOS
-#//////////////////////////////////////////////////////////////////////////////////////
-
-#///////////////////
+#////////
+#////////
 #### BRFSS VARS ####
+#////////
 #' _STATE   = state fips
 #' _STSTR   = strata
 #' _LLCPWT  = final weight assigned to each respondent
@@ -40,8 +42,9 @@
 #' _SMOKER3 = current smoker calculated
 #' CVDSTRK3 = ever had a stroke
 
-#///////////////////
+#////////
 #### NSCH VARS ####
+#////////
 #' FIPSST        = state fips
 #' STRATUM       = strata
 #' FWC           = final weight assigned to each respondent
@@ -62,16 +65,18 @@
 #' K2Q60B        = current intellectual disability
 #' BMICLASS      = BMI percentile
 
-#//////////////////
+#////////
 #### Libraries ####
+#////////
 # Load libraries
 library(tidyverse)
 library(srvyr)
 dir.create("../data/RISK_RATIOS/")
 dir.create("../figures/")
 
-#///////////////////
+#////////
 #### BRFSS DATA ####
+#////////
 # Read .XPT file using haven
 # If you wanted to use 2023 need 2022 as well
 # Kentucky (21) and Pennsylvania (42) did not collect enough data for 2023 survey so need 2022
@@ -89,12 +94,14 @@ brfss = haven::read_xpt("../data/BRFSS/LLCP2024.XPT") %>% # .XPT is the SAS tran
 # possibly make supplemental table, of the sample sizes per state per year
 #table(brfss$`_STATE`, brfss$IYEAR)
 
-#//////////////////
+#////////
 #### NSCH DATA ####
+#////////
 nsch = haven::read_sas("../data/NSCH/nsch_2024e_topical.sas7bdat")  
 
-#////////////////////////
+#////////
 #### BRFSS HIGH RISK ####
+#////////
 brfss_high_risk_df = brfss %>%
   mutate(`_STATE`= str_pad(as.character(`_STATE`), 2, "left", "0")) %>%
   transmute(
@@ -179,8 +186,9 @@ brfss_high_risk_df = brfss %>%
   ) %>%
   dplyr::filter(!(STATE_FIPS %in% c("66", "78", "72") )) # remove Guam, Puerto Rico, Virgin Islands if present
 
-#///////////////////////
+#////////
 #### NSCH HIGH RISK ####
+#////////
 nsch_high_risk_df = nsch %>%
   mutate(FIPSST  = str_pad(as.character(FIPSST), 2, "left", "0")) %>%
   transmute(
@@ -255,8 +263,9 @@ nsch_high_risk_df = nsch %>%
   ) %>%
   dplyr::filter(!(STATE_FIPS %in% c("66", "78", "72") )) # remove Guam, Puerto Rico, Virgin Islands if present
 
-#///////////////////////
+#////////
 #### DESIGN SURVEYS ####
+#////////
 options(survey.lonely.psu = "certainty") # treat single PSU strata as certainty
 
 brfss_design_survey = brfss_high_risk_df %>%
@@ -295,8 +304,9 @@ nsch_age_results = nsch_design_survey %>%
     n_unw = srvyr::unweighted(n()) ) %>%
   ungroup()
 
-#////////////////////
+#////////
 #### ROWBIND DFS ####
+#////////
 state_names_df = tigris::fips_codes %>%
   distinct(state_code, state_name, state) %>%  # state is USPS abbrev
   rename(STATE_FIPS = state_code,
@@ -318,8 +328,9 @@ write.csv(all_age_df,
           file_path_all,
           row.names = FALSE, quote = FALSE)
 
-#///////////////////////////////////
+#////////
 #### WRITE STATE SPECIFIC FILES ####
+#////////
 states = unique(all_age_df$STATE_NAME)
 for(state in states){
   state_name_hypen = str_replace_all(state, " ", "-")
@@ -340,8 +351,9 @@ for(state in states){
               sep = ",", col.names = FALSE,  row.names = FALSE, quote = FALSE)
 } # end loop over states
 
-#////////////////////////
+#////////
 #### COMORB BREAKOUT ####
+#////////
 brfss_comorb_vars = c(
   "asthma", "cancer", "copd", "ckd", "heart",
   "obese", "smoke", "diab", "preg", "stroke")
@@ -422,7 +434,9 @@ write.csv(nsch_comorb_breakout,
           row.names = FALSE, quote = FALSE)
 
 
+#////////
 #### BRFSS HEAT MAP ####
+#////////
 state_crosswalk = tidycensus::fips_codes %>%
   dplyr::select(state_code, state_name, state) %>%       # state = abbreviation
   distinct() %>%
@@ -473,7 +487,9 @@ ggsave(filename = "../figures/BRFSS_state-age_comorb-prev.png",
        bg="white", width=16, height=12, units="in", dpi=900)
 
 
+#////////
 #### NSCH HEAT MAP ####
+#////////
 nsch_state_comorb_mix = nsch_comorb_breakout %>%
   group_by(STATE_FIPS, age_group) %>%
   mutate(total = sum(prev, na.rm = TRUE),

@@ -8,6 +8,8 @@ __pycache__/
 *.pyc
 *.swp
 *.xml
+_build/
+deploy/
 
 # ignore local Python virtual environments
 .venv/
@@ -31,6 +33,7 @@ data/RISK_RATIOS/
 data/SVI/
 data/PLACES/
 data/VACCINATION/
+data/FLU_HUB/
 figures/
 
 # ignore output files

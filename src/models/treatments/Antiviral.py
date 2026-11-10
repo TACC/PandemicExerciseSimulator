@@ -14,6 +14,7 @@ class Antiviral:
     def __init__(self, parameters: Type[ModelParameters]):
         self.antiviral_model_str = 'parent'
         self.parameters = parameters
+        self.uses_incident_compartment_entries = False
 
         logger.info(f'Instantiated Antiviral object with model={self.antiviral_model_str}')
         logger.debug(f'Antiviral.parameters = {self.parameters}')

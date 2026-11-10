@@ -4,6 +4,7 @@ import logging
 import os
 from typing import List
 from uuid6 import uuid7
+from utils.Execution import parse_execution
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class InputProperties:
 
         # simulation control
         self.output_dir_path        = input['output_dir_path']
+        self.execution = parse_execution(input.get('execution'))
 
         batch_val = str(input["batch_num"]).strip()
         if batch_val.upper() == "GENERATE": # allow for any capitalization of "Generate"
@@ -73,8 +75,8 @@ class InputProperties:
         self.travel_model      = input['travel_model']['identity']
         self.travel_parameters = input['travel_model']['parameters']
 
-        # initial infected
-        self.initial     = input['initial_infected']
+        # initial exposed
+        self.initial     = input['initial_exposed']
 
         # non-pharmaceutical interventions (optional)
         self.non_pharma_interventions = input.get('non_pharma_interventions', [])
@@ -114,7 +116,7 @@ class InputProperties:
                 f'\n## TRAVEL MODEL ##\n'
                 f'travel_model={self.travel_model}\n'
                 f'travel_parameters={self.travel_parameters}\n'  
-                f'\n## INITIAL INFECTIONS ##\n'
+                f'\n## INITIAL EXPOSURES ##\n'
                 f'initial={self.initial}\n'
                 f'\n## NON-PHARMACEUTICAL INTERVENTIONS ##\n'
                 f'non_pharma_interventions={self.non_pharma_interventions}\n'
@@ -147,5 +149,4 @@ class InputProperties:
                 return False
         
         return True
-
 
