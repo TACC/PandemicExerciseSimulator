@@ -61,15 +61,21 @@ data_file <- function(name) {
   }
   normalizePath(target,mustWork=TRUE)
 }
-shape_path <- arg("--county-shapefile",file.path(repo,"data/Delaware/Delaware_counties.gpkg"))
+shape_path <- arg("--county-shapefile","")
 shape_snapshot <- file.path(data_snapshot,"Delaware_counties.gpkg")
-if (file.exists(shape_snapshot)) {
-  shape_path <- shape_snapshot
-} else if (file.exists(shape_path) && grepl("[.]gpkg$",shape_path,ignore.case=TRUE)) {
+if (nzchar(shape_path) && !file.exists(shape_path))
+  stop("County boundary file does not exist: ",shape_path)
+if (!nzchar(shape_path)) {
+  candidates <- c(shape_snapshot,file.path(out,"input_figure/Delaware_counties.gpkg"),
+    file.path(repo,"data/Delaware/Delaware_counties.gpkg"))
+  available <- candidates[file.exists(candidates)]
+  if (length(available)) shape_path <- available[1]
+}
+if (nzchar(shape_path) && !file.exists(shape_snapshot) && grepl("[.]gpkg$",shape_path,ignore.case=TRUE)) {
   if (!file.copy(shape_path,shape_snapshot)) stop("Could not snapshot county boundaries")
   shape_path <- shape_snapshot
 }
-if (!file.exists(shape_path)) stop("Supply county boundaries with --county-shapefile=PATH")
+# With no local boundary cache, 10c fetches Census boundaries when plotting.
 population_file <- data_file("county_pop_by_age_Delaware_2020-2024ACS.csv")
 pop <- read.csv(population_file, check.names = FALSE)
 stopifnot(identical(as.integer(pop$fips), c(10001L, 10003L, 10005L)))
@@ -535,7 +541,7 @@ write_example_notes <- function(path) {
 write_example_notes(file.path(figure_dir,"statewide_2x2_notes.pdf"))
 input_plot_status <- system2("Rscript", c("--vanilla", shQuote(file.path(repo, "scripts/10c_manuscript_illustrative_inputs.R")),
   shQuote(paste0("--output-dir=", file.path(out, "input_figure"))),
-  shQuote(paste0("--county-shapefile=",shape_path)),
+  if (nzchar(shape_path)) shQuote(paste0("--county-shapefile=",shape_path)) else character(),
   shQuote(paste0("--data-dir=",data_snapshot)),
   shQuote(paste0("--figure-dir=",figure_dir))))
 if (input_plot_status != 0) stop("Input figure export failed")

@@ -81,7 +81,12 @@ Rscript --vanilla scripts/10c_manuscript_illustrative_inputs.R
 
 Use `--figure-dir=PATH` to change the image destination, `--output-dir=PATH` for
 supporting input tables, and
-`--county-shapefile=PATH` to supply cached Census county boundaries.
+`--county-shapefile=PATH` as an optional boundary-file override. County geometry
+is a generated cache, not a required tracked data file. The plotter reuses an
+existing cache or downloads Delaware's 2023 Census cartographic boundaries
+(500k resolution) with `tigris`, then caches the county subset in the ignored
+experiment output. The local `data/Delaware/Delaware_counties.gpkg` cache is
+also ignored by Git. `tigris` is needed only when boundaries must be fetched.
 
 `10b_manuscript_illustrative_example.R` runs the Delaware intervention comparison
 with 100 realizations of each deterministic/stochastic model for 200 days. Its

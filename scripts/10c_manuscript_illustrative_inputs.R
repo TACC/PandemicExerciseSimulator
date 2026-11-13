@@ -21,11 +21,24 @@ pop$county <- c("Kent","New Castle","Sussex")
 contact <- as.matrix(read.csv(file.path(data_dir,"contact_matrix_Delaware_Mistry2021_all.csv"),header=FALSE))
 flow <- as.matrix(read.csv(file.path(data_dir,"Delaware_Q4-2019_mobility-matrix.csv"),header=FALSE))
 stopifnot(identical(dim(contact),c(5L,5L)), identical(dim(flow),c(3L,3L)))
-bundled_shape <- file.path(data_dir,"Delaware_counties.gpkg")
-shape_file <- arg("--county-shapefile=",if(file.exists(bundled_shape)) bundled_shape else
-  path.expand("~/Library/Caches/tigris/cb_2023_us_county_500k.shp"))
-if(!file.exists(shape_file)) stop("Supply cached Census county boundaries with --county-shapefile=")
-shape <- st_read(shape_file,quiet=TRUE)
+shape_file <- arg("--county-shapefile=","")
+if (nzchar(shape_file) && !file.exists(shape_file)) stop("County boundary file does not exist: ",shape_file)
+if (!nzchar(shape_file)) {
+  candidates <- c(file.path(out,"Delaware_counties.gpkg"),file.path(data_dir,"Delaware_counties.gpkg"))
+  # Reuse a national Census file already cached by the input-data plotting step.
+  if (requireNamespace("rappdirs",quietly=TRUE)) candidates <- c(candidates,
+    file.path(rappdirs::user_cache_dir("tigris"),"cb_2023_us_county_500k.shp"))
+  available <- candidates[file.exists(candidates)]
+  if (length(available)) shape_file <- available[1]
+}
+if (nzchar(shape_file)) {
+  shape <- st_read(shape_file,quiet=TRUE)
+} else {
+  if (!requireNamespace("tigris",quietly=TRUE))
+    stop("Install the R package 'tigris' to fetch Census boundaries, or provide --county-shapefile=PATH")
+  options(tigris_use_cache=TRUE)
+  shape <- tigris::counties(state="DE",year=2023,cb=TRUE,resolution="500k",class="sf")
+}
 shape <- st_transform(shape[shape$GEOID %in% as.character(pop$fips),],5070)
 shape <- shape[match(as.character(pop$fips),shape$GEOID),]
 shape$total <- pop$total; shape$id <- pop$id

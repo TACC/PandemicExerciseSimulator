@@ -34,6 +34,8 @@ data/SVI/
 data/PLACES/
 data/VACCINATION/
 data/FLU_HUB/
+# Generated county-boundary cache for the 10b/10c manuscript figures.
+data/Delaware/Delaware_counties.gpkg*
 figures/
 
 # ignore output files
