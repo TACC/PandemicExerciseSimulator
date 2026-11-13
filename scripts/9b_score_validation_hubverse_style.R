@@ -105,6 +105,41 @@ dir.create(STATE_TRAJECTORY_DIR, recursive = TRUE, showWarnings = FALSE)
 dir.create(STATE_COMPARTMENT_SPAGHETTI_DIR, recursive = TRUE, showWarnings = FALSE)
 
 AGE_GROUPS <- c("0-4", "5-17", "18-49", "50-64", "65+")
+# County-FIPS matching and age-specific population weighting for state summaries.
+read_population_weighted_risk <- function(risk_file, population, age_groups) {
+  age_pop <- as.matrix(population[, age_groups, drop = FALSE])
+  storage.mode(age_pop) <- "double"
+  first_line <- readLines(risk_file, n = 1L, warn = FALSE)
+  if (length(first_line) == 0) stop("Risk file is empty: ", risk_file)
+  if (grepl(",", first_line, fixed = TRUE)) {
+    risk <- read.csv(risk_file, check.names = FALSE, colClasses = "character")
+    if (!identical(names(risk)[1], "fips") || !setequal(names(risk)[-1], age_groups))
+      stop("County risk header must contain fips and the population age labels")
+    canonical_fips <- function(values) {
+      numbers <- suppressWarnings(as.numeric(values))
+      if (any(!is.finite(numbers)) || any(numbers < 0 | numbers != floor(numbers)))
+        stop("Invalid county FIPS")
+      sprintf("%05d", as.integer(numbers))
+    }
+    fips <- canonical_fips(risk$fips)
+    wanted <- canonical_fips(population$fips)
+    if (anyDuplicated(fips)) stop("Duplicate FIPS in county risk file")
+    indices <- match(wanted, fips)
+    if (anyNA(indices)) stop("Missing county risk ratios for ", paste(wanted[is.na(indices)], collapse = ", "))
+    fractions <- as.matrix(risk[indices, age_groups, drop = FALSE])
+    storage.mode(fractions) <- "double"
+  } else {
+    fractions <- scan(risk_file, quiet = TRUE)
+    if (length(fractions) != length(age_groups)) stop("State risk vector has wrong age count")
+    fractions <- matrix(rep(fractions, each = nrow(population)), nrow = nrow(population))
+  }
+  if (any(!is.finite(fractions)) || any(fractions < 0 | fractions > 1))
+    stop("Risk ratios must be finite fractions between zero and one")
+  totals <- colSums(age_pop)
+  result <- ifelse(totals > 0, colSums(age_pop * fractions) / totals, 0)
+  setNames(result, age_groups)
+}
+
 COMPARTMENTS <- c("S", "E", "A", "IA", "IP", "IS", "I", "T", "H", "R", "D")
 QUANTILE_LEVELS <- c(0.01, 0.025, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.975, 0.99)
 SCENARIO_ORDER <- c("NONE", "VACCINE", "NPI", "ANTIVIRAL", "VACCINE+ANTIVIRAL+NPI")
@@ -218,15 +253,11 @@ slugify <- function(x) {
     str_replace_all("^_|_$", "")
 }
 
+# Compact count axes, preserving fractional K/M/B values without trailing zeros.
 compact_axis_label <- function(x) {
-  dplyr::case_when(
-    is.na(x) ~ NA_character_,
-    abs(x) >= 1e9 ~ paste0(format(round(x / 1e9, 1), trim = TRUE, scientific = FALSE), "B"),
-    abs(x) >= 1e6 ~ paste0(format(round(x / 1e6, 1), trim = TRUE, scientific = FALSE), "M"),
-    abs(x) >= 1e3 ~ paste0(format(round(x / 1e3, 1), trim = TRUE, scientific = FALSE), "K"),
-    TRUE ~ format(round(x, 0), trim = TRUE, scientific = FALSE)
-  ) %>%
-    str_replace("\\.0([KMB])$", "\\1")
+  labels <- scales::label_number(scale_cut=scales::cut_short_scale())(x)
+  labels <- sub("(\\.[0-9]*[1-9])0+([KMB]?)$", "\\1\\2", labels)
+  sub("\\.0+([KMB]?)$", "\\1", labels)
 }
 
 network_compartment_spaghetti <- function(row) {
@@ -739,8 +770,7 @@ state_input_features <- function(metadata) {
       if (!file.exists(pop_file) || !file.exists(risk_file)) return(tibble())
       pop <- readr::read_csv(pop_file, show_col_types = FALSE)
       pop_age <- pop %>% summarise(across(all_of(AGE_GROUPS), ~ sum(safe_num(.x), na.rm = TRUE)))
-      risk <- as.numeric(readr::read_csv(risk_file, col_names = FALSE, show_col_types = FALSE)[[1]])
-      names(risk) <- AGE_GROUPS[seq_along(risk)]
+      risk <- read_population_weighted_risk(risk_file, pop, AGE_GROUPS)
       total_pop <- sum(pop_age[AGE_GROUPS], na.rm = TRUE)
       high_risk_pop <- as.numeric(pop_age[AGE_GROUPS]) * risk[AGE_GROUPS]
       contact_matrix <- if (file.exists(contact_file)) {
@@ -974,7 +1004,7 @@ save_vaccine_coverage_figures <- function(metadata) {
         breaks = c("Doses Given", "Doses 100% VE")
       ) +
       scale_y_continuous(
-        labels = scales::label_number(accuracy = 1, scale_cut = scales::cut_short_scale())
+        labels = compact_axis_label
       ) +
       scale_x_date(limits = c(x_min, x_max), expand = expansion(mult = c(0.02, 0.03))) +
       coord_cartesian(clip = "off") +
