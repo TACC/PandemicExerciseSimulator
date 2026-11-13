@@ -4,6 +4,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pandas as pd
+import numpy as np
 import pytest
 
 
@@ -79,6 +80,16 @@ def test_parse_args_defaults_to_incident_hospitalization_target(monkeypatch):
 
     assert args.fit_target == "hosp_incident"
     assert args.generated_metric == "admissions"
+
+
+def test_calibration_aggregates_county_risk_by_age_population(tmp_path):
+    fit = load_fit_script()
+    population = pd.DataFrame({"fips": ["01001", "01003"], **{
+        age: values for age, values in zip(fit.AGE_GROUPS, [[100,300],[200,100],[100,300],[200,100],[100,300]])
+    }})
+    path = tmp_path / "risk.csv"
+    path.write_text("fips,0-4,5-17,18-49,50-64,65+\n01003,.5,.6,.7,.8,.9\n01001,.1,.2,.3,.4,.5\n")
+    np.testing.assert_allclose(fit.population_weighted_risk(path, population), [.4, 1/3, .6, 8/15, .8])
 
 
 def test_parse_args_accepts_deprecated_generated_metric_alias(monkeypatch):

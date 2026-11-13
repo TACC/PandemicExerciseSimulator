@@ -57,7 +57,7 @@ class BinomialTravel(TravelModel):
         logging.debug('entered the travel function')
         logging.debug(f'network.nodes len = {len(network.nodes)} first_val = {network.nodes[0].node_id}')
 
-        # Keep the original calculation in DEBUG mode, including all pair/age
+        # Evaluate directly in DEBUG mode, including all pair/age
         # diagnostics. Otherwise each source's pressure is reusable across sinks.
         contact_pressures = None
         if not logging.getLogger().isEnabledFor(logging.DEBUG):
@@ -89,8 +89,8 @@ class BinomialTravel(TravelModel):
     def _source_contact_pressure(self, parameters, node_source, disease_model):
         """Cache county/age populations and contact pressure for this travel step.
 
-        Preserve the original multiplication and summation order rather than
-        changing floating-point results through a matrix-product reassociation.
+        Use the same multiplication and summation order as the uncached path.
+        Keep contacted ages separate until host-age denominators are available.
         Nothing is stored on the model or reused across days/realizations.
         """
         ages = parameters.number_of_age_groups
@@ -98,20 +98,23 @@ class BinomialTravel(TravelModel):
                      for age in range(ages)]
         transmitting = [node_source.compartments.transmitting_population_by_age(age, self.transmit_dict)
                         for age in range(ages)]
-        sink_to_source = []
-        source_to_sink = []
+        incoming_by_age = []
+        outgoing_by_age = []
+        source_age_populations = [node_source.compartments.population_by_age(age) for age in range(ages)]
         for ag1 in range(ages):
             sigma = float(disease_model.relative_susceptibility[ag1])
             beta = disease_model.beta
-            incoming = 0
-            outgoing = 0
+            incoming = []
+            outgoing = []
             for ag2 in range(ages):
                 contact = parameters.np_contact_matrix[ag1][ag2]
-                incoming += transmitting[ag2] * beta * self.rho * contact * sigma / self.flow_reduction[ag1]
-                outgoing += traveling[ag2] * beta * self.rho * contact * sigma / self.flow_reduction[ag2]
-            sink_to_source.append(incoming)
-            source_to_sink.append(outgoing)
-        return sink_to_source, source_to_sink
+                incoming.append(transmitting[ag2] * beta * self.rho * contact * sigma / self.flow_reduction[ag1])
+                outgoing.append(traveling[ag2] * beta * self.rho * contact * sigma / self.flow_reduction[ag2])
+            incoming_by_age.append(incoming)
+            outgoing_by_age.append(outgoing)
+        # Keep contacted ages separate: the two routes have different host nodes
+        # and therefore different age-cohort denominators.
+        return incoming_by_age, outgoing_by_age, source_age_populations
 
 
     def _calculate_flow_probability(self, parameters:Type[ModelParameters], network:Type[Network], node_sink:Type[Node],
@@ -119,9 +122,8 @@ class BinomialTravel(TravelModel):
                                     disease_model:Type[DiseaseModel], contact_pressure=None):
         """
         Given a pair of nodes, (1) identify whether travel happens between the nodes (based on
-        travel flow data), (2) if so, iterate over all pairs of age groups, (3) calculate number
-        of infectious contacts that happen, (4) add those contacts as a fraction of total
-        population to probabilities[].
+        travel flow data), (2) if so, iterate over all pairs of age groups, (3) calculate infectious contact pressure within each
+        contacted age cohort, (4) add the two travel routes to probabilities[].
 
         Args:
             parameters (ModelParameters): run parameters
@@ -137,47 +139,46 @@ class BinomialTravel(TravelModel):
 
         if flow_sink_to_source > 0 or flow_source_to_sink > 0:
 
-            if contact_pressure is not None:
-                sink_to_source, source_to_sink = contact_pressure
-                for ag1 in range(parameters.number_of_age_groups):
-                    probabilities[ag1] += flow_sink_to_source * sink_to_source[ag1] / node_source.total_population()
-                    probabilities[ag1] += flow_source_to_sink * source_to_sink[ag1] / node_sink.total_population()
-                return
-
             logging.debug(f'flow happening; sink id = {node_sink_id}, source id = {node_source_id}')
             logging.debug(f'flow sink value = {flow_sink_to_source}, flow source value = {flow_source_to_sink}')
+            sink_age_populations = [
+                node_sink.compartments.population_by_age(age)
+                for age in range(parameters.number_of_age_groups)
+            ]
+            if contact_pressure is not None:
+                incoming_by_age, outgoing_by_age, source_age_populations = contact_pressure
+            else:
+                source_age_populations = [
+                    node_source.compartments.population_by_age(age)
+                    for age in range(parameters.number_of_age_groups)
+                ]
 
             for ag1 in range(parameters.number_of_age_groups):
                 number_of_infectious_contacts_sink_to_source = 0
                 number_of_infectious_contacts_source_to_sink = 0
-                this_sigma = float(disease_model.relative_susceptibility[ag1])
-                this_beta_baseline = disease_model.beta
-
-                # TODO incorporate PHA bits to modify value of beta
-                # pha_effectiveness = params.pha_effectiveness (list)
-                # pha_halflife = params.pha_halflife (list)
-                # pha_age = float('inf') if time < parameters.pha_day else time - parameters pha_day
-                #if (PHA_effectiveness.size() > a && PHA_halflife.size() > a && PHA_halflife[a] > 0) {
-                #     beta = BETA_BASELINE * (1.0 - PHA_effectiveness[a] * pow(2, -PHA_age/PHA_halflife[a]) );
-                beta = this_beta_baseline
-                #}
-
                 for ag2 in range(parameters.number_of_age_groups):
-                    traveling = node_source.compartments.traveling_population_by_age(ag2, self.travel_dict)
-                    transmitting = node_source.compartments.transmitting_population_by_age(ag2, self.transmit_dict) # asymptomatic, treatable, and infectious
-                    contact_rate = parameters.np_contact_matrix[ag1][ag2] # age group to age group contacts
-                    logging.debug(f'traveling = {traveling}, transmitting = {transmitting}, contact_rate = {contact_rate}')
+                    if contact_pressure is not None:
+                        incoming = incoming_by_age[ag1][ag2]
+                        outgoing = outgoing_by_age[ag1][ag2]
+                    else:
+                        traveling = node_source.compartments.traveling_population_by_age(ag2, self.travel_dict)
+                        transmitting = node_source.compartments.transmitting_population_by_age(ag2, self.transmit_dict)
+                        contact_rate = parameters.np_contact_matrix[ag1][ag2]
+                        sigma = float(disease_model.relative_susceptibility[ag1])
+                        beta = disease_model.beta
+                        logging.debug(f'traveling = {traveling}, transmitting = {transmitting}, contact_rate = {contact_rate}')
+                        incoming = transmitting * beta * self.rho * contact_rate * sigma / self.flow_reduction[ag1]
+                        outgoing = traveling * beta * self.rho * contact_rate * sigma / self.flow_reduction[ag2]
+                    # Susceptible residents visiting the source meet infectious
+                    # people within the source's contacted age cohort.
+                    if source_age_populations[ag2] > 0:
+                        number_of_infectious_contacts_sink_to_source += incoming / source_age_populations[ag2]
+                    # Infectious visitors meet the sink's resident age cohorts.
+                    if sink_age_populations[ag2] > 0:
+                        number_of_infectious_contacts_source_to_sink += outgoing / sink_age_populations[ag2]
+                probabilities[ag1] += flow_sink_to_source * number_of_infectious_contacts_sink_to_source
+                probabilities[ag1] += flow_source_to_sink * number_of_infectious_contacts_source_to_sink
 
-                    number_of_infectious_contacts_sink_to_source += transmitting * beta * self.rho * contact_rate \
-                                                                    * this_sigma / self.flow_reduction[ag1]
-                    number_of_infectious_contacts_source_to_sink += traveling * beta * self.rho * contact_rate \
-                                                                    * this_sigma / self.flow_reduction[ag2]
-
-
-                probabilities[ag1] += flow_sink_to_source * number_of_infectious_contacts_sink_to_source \
-                                                   / node_source.total_population()
-                probabilities[ag1] += flow_source_to_sink * number_of_infectious_contacts_source_to_sink \
-                                                   / node_sink.total_population()
         return
 
 

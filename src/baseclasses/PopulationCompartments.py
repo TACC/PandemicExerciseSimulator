@@ -109,6 +109,14 @@ class PopulationCompartments:
         return
 
 
+    def population_by_age(self, age_group_idx:int) -> float:
+        """Conserved age-cohort size across all disease, risk and vaccine states.
+
+        Includes R and, where present, D; this is the model's cohort denominator,
+        not the number currently susceptible, infectious, or eligible to travel.
+        """
+        return float(np.sum(self.compartment_data[age_group_idx]))
+
     def demographic_population(self, group:Type[Group]) -> float:
         """
         Return sum population of all compartments for a given Group

@@ -26,7 +26,7 @@ def SEAITRD_model(
     Parameters:
         y (List[float]): Current values for compartments [S, E, A, I, T, R, D]
         transmission_prob (float): beta modified by NPIs, vaccine effectiveness, contact rate, relative susceptibility,
-                                   has (A+I+T)/N hidden in it to do node based proportion of population infectious
+                                   includes (A+I+T) divided by the contacted age population
                                    Transmission rate converted to probability to keep between 0 and 1
         E_to_A_rate (float): Exposed to asymptomatic rate in 1/days
         A_to_I_rate (float): Asymptomatic to infectious rate in 1/days
@@ -188,8 +188,12 @@ class DeterministicSEAITRD(DiseaseModel):
             for group in node.compartments.get_all_groups()
         }
 
-        # Get the total population of node
-        total_node_pop = node.total_population()
+        # Mistry et al. (2021), Eq. 8: normalize by the contacted age cohort.
+        # Evaluate once before updating any risk/vaccine subgroup for this day.
+        contacted_age_populations = [
+            node.compartments.population_by_age(age)
+            for age in range(self.parameters.number_of_age_groups)
+        ]
 
         # beta is set for all age groups by node and day, so calc before loop over groups in node
         beta_vector = self._calculate_beta_w_npi(node.node_index, node.node_id)
@@ -216,6 +220,9 @@ class DeterministicSEAITRD(DiseaseModel):
             # This is constant in time if we don't have an NPI schedule hitting beta each day
             transmission_rate = 0
             for contacted_group in node.compartments.get_all_groups():
+                contacted_age_population = contacted_age_populations[contacted_group.age]
+                if contacted_age_population <= 0:
+                    continue
                 contact_rate = float(self.parameters.np_contact_matrix[focal_group.age][contacted_group.age])
                 if contact_rate== 0:
                     continue
@@ -228,10 +235,8 @@ class DeterministicSEAITRD(DiseaseModel):
                 T = contacted_compartments[self.compartment_index["T"]]
                 infectious_contacted = A + I + T
 
-                # infectious_contacted/total_node_pop this captures the fraction of population we need to move from S -> E
-                # NOTE: Maybe an under-weighting if we should be doing age group specific: infectious_age/total_age_pop
                 transmission_rate += beta_vector[contacted_group.age] * contact_rate \
-                                     * (infectious_contacted/total_node_pop)
+                                     * (infectious_contacted/contacted_age_population)
             # Apply VE to the susceptible group (focal group)
             transmission_rate *= (1.0 - vaccine_effectiveness) * self.relative_susceptibility[focal_group.age]
             #print(f"{node.node_id}, {focal_group}, transmission_rate: {transmission_rate}")

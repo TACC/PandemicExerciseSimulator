@@ -230,3 +230,35 @@ def test_simulate_uses_treated_compartment_when_present():
     assert T_after < 20.0
     assert R_after > 70.0
     assert min(S_after, E_after, I_after, T_after, R_after) >= 0.0
+
+
+@pytest.mark.parametrize("treated", [False, True])
+def test_age_contact_prevalence_uses_whole_contacted_age_snapshot(treated):
+    """Mistry denominator is N_age across disease/risk/vax groups, not N_node or N_subgroup."""
+    labels = ["S", "E", "I", "T", "R"] if treated else ["S", "E", "I", "R"]
+    net = Network(labels)
+    # Infectious source age is visited before the susceptible focal age. An empty
+    # third age has nonzero contacts to verify that zero population is safe.
+    pc = PopulationCompartments(age_group_pops=[200, 800, 0], high_risk_ratios=[.5, .5, .5])
+    node = Node(node_index=0, node_id=0, fips_id=0, compartments=pc)
+    net._add_node(node)
+    source = [10., 10., 10., 10., 10.] if treated else [20., 10., 10., 10.]
+    for risk in RiskGroup:
+        for vaccine in VaccineGroup:
+            pc.set_compartment_vector_for(get_group(age=0, risk=risk.value, vax=vaccine.value),
+                                          np.array(source))
+    params = make_params(num_age=3, compartments=labels)
+    params.np_contact_matrix = np.array([[1., 0., 0.], [2., 1., 1.], [0., 0., 1.]])
+    model = make_seirs_model(params)
+    # Four 50-person subgroups contain 40 I (plus 40 T with weight .5).
+    # The source denominator is 200; E/R/T remain part of that population.
+    effective_infectious = 40. + (20. if treated else 0.)
+    expected_probability = -np.expm1(-model.beta * 2. * effective_infectious / 200.)
+    model.simulate(node, time=1, vaccine_model=DummyVax([0., 0., 0.]))
+    for risk in RiskGroup:
+        focal = pc.get_compartment_vector_for(get_group(age=1, risk=risk.value))
+        assert focal[Compartments.E.value] == pytest.approx(400. * expected_probability)
+        assert focal[Compartments.S.value] == pytest.approx(400. * (1. - expected_probability))
+    assert np.isfinite(pc.compartment_data).all()
+    assert (pc.compartment_data >= 0).all()
+    assert pc.compartment_data.sum() == pytest.approx(1000.)

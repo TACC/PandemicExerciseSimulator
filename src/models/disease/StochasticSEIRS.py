@@ -25,7 +25,7 @@ def SEITRS_model(
     Parameters:
         y (List[float]): Current values for compartments [S, E, I, T, R]
         transmission_rate (float): beta modified by NPIs, vaccine effectiveness, contact rate,
-                                   has I/N hidden in it to do node based proportion of population infectious
+                                   includes the infectious fraction within each contacted age group
         sigma (float): 1/Latency period in days (exposed to infectious E->I)
         gamma (float): 1/infectious period in days (infectious to recovered I->R)
         T_to_R_rate (float): 1/treated infectious period in days
@@ -76,7 +76,7 @@ def SEIRS_model(y, transmission_rate, sigma, gamma, omega, rng, return_flows=Fal
     Parameters:
         y (List[float]): Current values for compartments [S, E, I, R]
         transmission_rate (float): beta modified by NPIs, vaccine effectiveness, contact rate,
-                                   has I/N hidden in it to do node based proportion of population infectious
+                                   includes the infectious fraction within each contacted age group
         sigma (float): 1/Latency period in days (exposed to infectious E->I)
         gamma (float): 1/infectious period in days (infectious to recovered)
         omega (float): 1/time to lose immunity in days (recovered to susceptible)
@@ -218,8 +218,12 @@ class StochasticSEIRS(DiseaseModel):
             for group in node.compartments.get_all_groups()
         }
 
-        # Get the total population of node
-        total_node_pop = node.total_population()
+        # Mistry et al. (2021), Eq. 8: normalize by the contacted age cohort.
+        # Evaluate once before updating any risk/vaccine subgroup for this day.
+        contacted_age_populations = [
+            node.compartments.population_by_age(age)
+            for age in range(self.parameters.number_of_age_groups)
+        ]
 
         # beta is set for all age groups by node and day, so calc before loop over groups in node
         beta_vector = self._calculate_beta_w_npi(node.node_index, node.node_id)
@@ -243,6 +247,9 @@ class StochasticSEIRS(DiseaseModel):
             # This is constant in time if we don't have an NPI schedule hitting beta each day
             transmission_rate = 0
             for contacted_group in node.compartments.get_all_groups():
+                contacted_age_population = contacted_age_populations[contacted_group.age]
+                if contacted_age_population <= 0:
+                    continue
                 contact_rate = float(self.parameters.np_contact_matrix[focal_group.age][contacted_group.age])
                 if contact_rate== 0:
                     continue
@@ -258,10 +265,8 @@ class StochasticSEIRS(DiseaseModel):
                     I = contacted_compartments[Compartments.I.value]
                     infectious_contacted = I
 
-                # infectious_contacted/total_node_pop this captures the fraction of population we need to move from S -> E
-                # NOTE: Maybe an under-weighting if we should be doing age group specific: infectious_age/total_age_pop
                 transmission_rate += beta_vector[contacted_group.age] * contact_rate \
-                                     * (infectious_contacted/total_node_pop)
+                                     * (infectious_contacted/contacted_age_population)
             # Apply VE to the susceptible group (focal group)
             transmission_rate *= (1.0 - vaccine_effectiveness) * self.relative_susceptibility[focal_group.age]
             #print(f"{node.node_id}, {focal_group}, transmission_rate: {transmission_rate}")

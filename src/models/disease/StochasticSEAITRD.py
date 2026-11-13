@@ -357,6 +357,9 @@ class StochasticSEAITRD(DiseaseModel):
         individual contacts other susceptible individuals and queues new contact events.
         """
         beta = self._calculate_beta_w_npi(node.node_index, node.node_id)
+        source_age_population = node.compartments.population_by_age(group.age)
+        if source_age_population <= 0:
+            return
 
         for ag in range(self.parameters.number_of_age_groups):
             relative_susceptibility = float(self.relative_susceptibility[ag])
@@ -364,12 +367,13 @@ class StochasticSEAITRD(DiseaseModel):
             for rg in range(len(RiskGroup)):
                 for vg in range(len(VaccineGroup)):
                     to = Group(ag, rg, vg)
-                    contact_rate = float(self.parameters.np_contact_matrix[group.age][to.age])
-
-                    # If no one is vaccinated, then the transmission rate for vaccine group is 0 and
-                    # causes runtime warning divide by zero error in the rand_exp step
-                    # TODO dig in to what is expected behavior of this method when group size is 0
-                    if (group_cache[ag][rg][vg] == 0): continue
+                    # One infectious person of age j generates contacts into target
+                    # subgroup (i,r,v) at beta_j C_ij N_irv/N_j. Sampling a
+                    # susceptible target then recovers lambda_i = sum_j beta_j C_ij I_j/N_j.
+                    contact_rate = float(self.parameters.np_contact_matrix[to.age][group.age])
+                    target_population = node.compartments.demographic_population(to)
+                    if target_population <= 0:
+                        continue
                     
                     # TODO we should really only be using vaccine_effectiveness[] in this 
                     # Cannot have vaccine effectiveness hitting beta unless in vaccinated group
@@ -377,9 +381,8 @@ class StochasticSEAITRD(DiseaseModel):
                         vaccine_effectiveness =  vaccine_model.vaccine_effectiveness[ag]
                     else:  # if you're not vaccinated, it has no effectiveness
                         vaccine_effectiveness = 0
-                    # group_cache is weighting the force of infection
-                    transmission_rate = (1.0 - vaccine_effectiveness) * beta[ag] * contact_rate \
-                                        * relative_susceptibility * group_cache[ag][rg][vg]
+                    transmission_rate = (1.0 - vaccine_effectiveness) * beta[group.age] * contact_rate \
+                                        * relative_susceptibility * target_population / source_age_population
                     # if the rate is zero (VE=1 or other reasons), do not schedule contacts
                     if transmission_rate <= 0.0:
                         continue

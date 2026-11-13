@@ -99,8 +99,10 @@ def test_two_days_transmission():
     snapshot = simulation_days.snapshot(network)
     S_total, E_total, A_total, *_ = snapshot
 
+    # Day 1 has .25 infectious A in the 10-person contacted age cohort.
+    new_infections = 9 * -np.expm1(-.25 / 10)
     expected_snapshot_day2 = {
-        "S": 18.8882002, "E": 0.6742998, "A": 0.375, "I": 0.0625,
+        "S": 19 - new_infections, "E": .5625 + new_infections, "A": 0.375, "I": 0.0625,
         "T": 0.0, "R": 0.0, "D": 0.0
     }
     expected_vec = np.array([expected_snapshot_day2[lbl] for lbl in compartment_labels], dtype=float)

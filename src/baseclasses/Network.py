@@ -8,6 +8,7 @@ from .Group import RiskGroup, VaccineGroup, Compartments
 from .Node import Node
 from .PopulationCompartments import PopulationCompartments
 from .TravelFlow import TravelFlow
+from utils.RiskRatios import parse_high_risk_ratios
 
 logger = logging.getLogger(__name__)
 
@@ -60,25 +61,11 @@ class Network:
         Store population data as list of nodes. Needs high_risk_ratios to
         partition between high risk and low risk compartments
         """
-        high_risk_ratios_md =[] # multidimensional high risk ratios
-
-        if ',' in high_risk_ratios[0]:
-            logging.info('detected multidimensional high risk ratio file')
-            _ = high_risk_ratios.pop(0)
-            for line in high_risk_ratios:
-                ratios = [float(x) for x in line.split(',')[1:]]
-                high_risk_ratios_md.append(ratios)
-            logger.debug(f'high_risk_ratios_proc = {high_risk_ratios_md}')
-
-        else:
-            logger.info('detected single dimensional high risk ratio file')
-            for _ in range(len(self.df_county_age_matrix)):
-                ratios = [float(x) for x in high_risk_ratios]
-                high_risk_ratios_md.append(ratios)
-            logger.debug(f'high_risk_ratios_proc = {high_risk_ratios_md}')
-
-        #TODO : This requires that rows / columns in county high risk ratio file are in the
-        # same order as the population file
+        high_risk_ratios_md = parse_high_risk_ratios(
+            high_risk_ratios,
+            self.df_county_age_matrix.iloc[:, 0].tolist(),
+            self.df_county_age_matrix.columns[1:].tolist(),
+        )
 
         for index, row in self.df_county_age_matrix.iterrows():
             this_index = index

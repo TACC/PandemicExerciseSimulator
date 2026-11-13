@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 import traceback
 from dataclasses import dataclass
 from datetime import datetime
@@ -25,6 +26,8 @@ import pandas as pd
 from scipy import stats
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "src"))
+from utils.RiskRatios import parse_high_risk_ratios
 
 try:
     from epydemix.calibration import ABCSampler
@@ -392,6 +395,17 @@ def load_observed_hospitalizations(
     return pd.DatetimeIndex(wide.index), wide.to_numpy(dtype=float)
 
 
+def population_weighted_risk(high_risk_file: Path, population_df: pd.DataFrame) -> np.ndarray:
+    """The state-aggregated fitter uses county-population-weighted risk by age."""
+    county_risk = parse_high_risk_ratios(
+        high_risk_file.read_text().splitlines(), population_df["fips"].tolist(), AGE_GROUPS,
+    )
+    population = population_df[AGE_GROUPS].to_numpy(dtype=float)
+    totals = population.sum(axis=0)
+    return np.divide((population * county_risk).sum(axis=0), totals,
+                     out=np.zeros(len(AGE_GROUPS)), where=totals > 0)
+
+
 def load_config_and_data(args: argparse.Namespace) -> tuple[dict[str, Any], CalibrationData]:
     input_json = args.input_json.resolve()
     with open(input_json) as fp:
@@ -406,7 +420,7 @@ def load_config_and_data(args: argparse.Namespace) -> tuple[dict[str, Any], Cali
     population_df = pd.read_csv(population_file, dtype={"fips": str})
     population = population_df[AGE_GROUPS].sum(axis=0).to_numpy(dtype=float)
     contact_matrix = np.genfromtxt(contact_file, delimiter=",")
-    high_risk_ratios = np.genfromtxt(high_risk_file, delimiter=",")
+    high_risk_ratios = population_weighted_risk(high_risk_file, population_df)
 
     initial_exposed = np.zeros(len(AGE_GROUPS), dtype=float)
     for row in config.get("initial_exposed", []):

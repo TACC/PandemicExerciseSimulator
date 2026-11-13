@@ -491,6 +491,9 @@ def test_contact_initialization_skips_empty_groups_and_uses_vaccine_effectivenes
     node.events.clear()
     node.group_cache[:] = 0.0
     node.group_cache[0, RiskGroup.L.value, VaccineGroup.V.value] = 1.0
+    # Move the actual target population, not just its old demographic cache.
+    node.compartments.compartment_data[0, RiskGroup.L.value, VaccineGroup.U.value, Compartments.S.value] = 0
+    node.compartments.compartment_data[0, RiskGroup.L.value, VaccineGroup.V.value, Compartments.S.value] = 10
     model._initialize_contact_events(
         node,
         group,

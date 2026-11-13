@@ -257,3 +257,30 @@ def test_weighted_populations_are_computed_once_per_source_age(monkeypatch, capl
         model.travel(network, ExposingDiseaseModel(), model.parameters, 1,
                      SimpleNamespace(vaccine_effectiveness=[0.0]))
     assert counts == {'traveling': 3, 'transmitting': 3}
+
+
+@pytest.mark.parametrize('visitor_flow,infectious_traveler_flow', [(.3, 0), (0, .4), (.3, .4)])
+@pytest.mark.parametrize('cached', [False, True])
+def test_travel_normalizes_each_contacted_age_in_the_host_node(visitor_flow, infectious_traveler_flow, cached):
+    network = Network(['S', 'E', 'I', 'R'])
+    for index, populations in enumerate(([1000, 500, 0], [200, 100, 0])):
+        network._add_node(Node(index, index, index, PopulationCompartments(populations, [0.]*3)))
+    sink, source = network.nodes
+    source.compartments.compartment_data[1, 0, 0, Compartments.S.value] = 80
+    source.compartments.compartment_data[1, 0, 0, Compartments.I.value] = 20
+    network.add_travel_flow_data(np.array([[0, visitor_flow], [infectious_traveler_flow, 0]]))
+    parameters = make_parameters(flow_reduction=['2', '3', '4'])
+    parameters.number_of_age_groups = 3
+    parameters.np_contact_matrix = np.array([[1., 4., 9.], [0., 1., 9.], [1., 1., 1.]])
+    model = make_model(parameters)
+    disease = ExposingDiseaseModel()
+    disease.relative_susceptibility = [1.]*3
+    pressure = model._source_contact_pressure(parameters, source, disease) if cached else None
+    probabilities = [0.]*3
+    model._calculate_flow_probability(parameters, network, sink, 0, source, 1, probabilities, disease, pressure)
+    # Susceptible visitors see source age N=100; infectious visitors mix into
+    # sink age N=500. Divisors retain the route-specific age indices.
+    expected = visitor_flow * (20 * .1 * .5 * 4 / 2 / 100)
+    expected += infectious_traveler_flow * (20 * .2 * .1 * .5 * 4 / 3 / 500)
+    assert probabilities[0] == pytest.approx(expected)
+    assert np.isfinite(probabilities).all()  # Nonzero contacts with empty age 2 are safe.
