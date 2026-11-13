@@ -19,7 +19,7 @@ env/
 
 .Rproj.user
 .vscode/
-scripts/.Rhistory
+.Rhistory
 scripts/.RData
 scripts/.RDataTmp
 

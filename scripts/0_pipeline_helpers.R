@@ -437,7 +437,10 @@ run_logged_command <- function(command, args = character(), workdir = NULL) {
     shQuote(pipeline_log_file),
     "; exit ${PIPESTATUS[0]}"
   )
-  system(paste("bash -lc", shQuote(shell_line)))
+  # Preserve the caller's runtime environment. A login shell reloads host
+  # startup files from the bound home directory on LS6 and can select host
+  # Poetry/Python instead of the container's /opt installations.
+  system(paste("bash -c", shQuote(shell_line)))
 }
 
 #' Check whether a saved input uses the requested simulation date
