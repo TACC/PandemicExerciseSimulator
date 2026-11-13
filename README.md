@@ -99,7 +99,7 @@ The simulator requires the data from the following folder:
 * **contact_matrix_State_Mistry2021_all.csv:** Age x Age matrix of daily contacts between age groups taken from Epydemix python package (see `scripts/`). 
   * Top to bottom must match the left to right order of age groups in population file.
 * **county_pop_by_age_State_2019-2023ACS.csv:** Populations for each county divided into age groups
-* **\*_State_high-risk-ratios-flu-only.csv:** state or county specific high risk ratios for proportion of population at increased risk of severe outcome (hospitalization/death).
+* **state_State_high-risk-ratios-flu-only.csv or county_State_high-risk-ratios-flu-only.csv:** Both are supported formats for age-specific fractions at increased risk of severe outcomes (hospitalization/death). The state file supplies one age-specific fraction shared across counties; the county file supplies separate age-specific fractions for each county, matched to the population file by FIPS and age labels. County-file row order may differ from population-file order. **All project use cases, examples, and input templates use the county-specific version.**
 * **State_Q\*-2019_mobility-matrix.csv:** County x County mobility matrix of the fraction of the population that visits the other counties per day. 
   * Must be ordered to match fips order of population file, i.e. sequential FIPS codes of counties.
 * **State_quarterly-2019_mobility.csv** Non-matrix form of mobility data with column labels, file the matrices are derived from.

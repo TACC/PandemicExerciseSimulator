@@ -3,9 +3,126 @@
 The `scripts/` directory contains the reproducible data-preparation pipeline
 for `data/<STATE>/` and the post-simulation analysis workflow.
 
+## Manuscript fit figures
+
+`10a_manuscript_state_fit_figures.R` begins the manuscript figure series. It
+screens all saved state final fits from the LS6 Rm search using the selected
+candidate's actual weekly observations and saved median for screening. PNG
+figures show the median and nested central 50%, 80% and 95% prediction intervals
+across individual simulations, calculated with `hubUtils::convert_output_type()`
+following hubverse conventions, plus population, county count and mobility
+inside each panel. These describe variation across runs conditional on the
+selected Rm; they are not confidence intervals for the mean.
+`good_states_five_scenarios_2x2.png` adds a companion comparison of no
+interventions, vaccine, NPI, antiviral, and all interventions for the same
+four good-fit states in the same panel order. Compact upper-right rows show
+color-keyed cumulative counts alongside a shared labeled bottom legend,
+with the red observed point last in each list. Observed totals
+sum available weeks; modeled totals are medians of per-realization sums over
+those same weeks. Exact totals are saved in
+`good_states_five_scenarios_cumulative_totals.csv`.
+Saved scenario runs use each state's calibrated Rm; their summaries and source
+paths are written to `good_states_five_scenarios_data.csv`.
+It writes an all-state category/metric catalog, peak-shape review flags, county,
+population and mobility context, a supplement atlas, and two draft 2x2
+figures directly under `figures/manuscript/`; supporting tables and screening
+notes remain under `figures/manuscript/state-fit/`. The supplement excludes states
+in the main figures and clusters the remainder by observed hospitalization
+shape: single peaks (earlier to later), then two peaks, then multiple peaks.
+Single- and double-peak states form separate figure sets, with eight panels
+per page except each set's final page and alphabetical order within each page.
+Panel letters continue across pages within a set (A-Z, then AA, AB, etc.)
+and restart at A for the next set.
+`supplement_panel_selection.csv` records page/panel membership. The generated README explains
+the provisional thresholds and selection. Early overshoot flags a seeding
+hypothesis; it does not establish that initialization caused the mismatch.
+
+```bash
+Rscript --vanilla scripts/10a_manuscript_state_fit_figures.R
+```
+
+Optional arguments: `--sweep-dir=PATH`, `--figure-dir=PATH`,
+`--acs-year-range=2020-2024`, `--good-states=New-York,New-Jersey,Washington,Colorado`,
+and `--bad-states=Pennsylvania,North-Dakota,Florida,Arizona`. The script reads
+existing outputs and local input data only; it does not launch simulations.
+
 R scripts are easiest to run from RStudio by opening `scripts.Rproj`. This sets
 the working directory to `scripts/`, which is assumed by the relative paths in
 scripts `0` through `6`. Python dependencies are managed through Poetry.
+
+`10c_manuscript_illustrative_inputs.R` creates the Delaware five-panel input figure:
+SEI(T)R diagram, county population, and directed travel network in the top row;
+age-specific contacts and county-specific high-risk fractions in the bottom row.
+The I-to-T arrow is dashed because allocation depends on the antiviral stockpile.
+The figure body is exported at 12.5 x 8.5 inches, with a 600 dpi PNG (7500 x 5100
+pixels) and a PDF. Color legends sit to the right of each panel; the contact
+heatmap has square cells, youngest contactor ages at the bottom and oldest at
+the top, and a `Contacts/person/day` scale. Long legend titles wrap across two
+lines and are centered. Descriptions,
+parameter values (including R0), former subtitles,
+and travel-route explanations appear in a separate caption figure as one full-width
+paragraph at 11 pt, also exported as PNG/PDF. Panel titles are 17 pt to match
+10a; other main figure text is 13 pt, with
+standalone bold cowplot panel letters at 24 pt to match 10a;
+the model arrows retain mean-duration labels (1, 7, and 5 days). The 5-day label
+is centered on its arrow with a solid white background. High-risk cell labels
+show percentages to one decimal place. The caption
+defines every symbol in the full travel equations. County risks
+are matched by FIPS. PNG/PDF figures and their caption figure are saved directly
+under `figures/manuscript/`. County boundaries, full caption text, and plotted
+county/travel tables remain under `MANUSCRIPT_ILLUSTRATIVE_EXAMPLE_TEST/input_figure/`.
+The composite filenames are `Delaware_inputs_5panel.png` and
+`Delaware_inputs_5panel.pdf`; the caption figures are
+`Delaware_inputs_caption.png` and `Delaware_inputs_caption.pdf`.
+
+```bash
+Rscript --vanilla scripts/10c_manuscript_illustrative_inputs.R
+```
+
+Use `--figure-dir=PATH` to change the image destination, `--output-dir=PATH` for
+supporting input tables, and
+`--county-shapefile=PATH` to supply cached Census county boundaries.
+
+`10b_manuscript_illustrative_example.R` runs the Delaware intervention comparison
+with 100 realizations of each deterministic/stochastic model for 200 days. Its
+defaults compare 1K/10K initial exposures, vaccination at 60% effectiveness with
+100K/1M doses released on days 30-50 (14-day protection lag), school closure on
+days 30-50, and 10K/100K antiviral courses released on day 30. Every scenario uses
+county-specific age risk fractions matched by FIPS. Source and input-data hashes,
+snapshots, and initial county-age risk allocations are checked for the new runs.
+The script writes PNG/PDF intervention plots directly under `figures/manuscript/`
+and invokes `10c` to save the explanatory figure and separate caption there too.
+All composite panels use the same standalone bold cowplot letters as `10a`.
+The intervention composite retains its panel headings and color/model legends;
+panel titles and model legend labels are 17 pt, axis titles are 16 pt, other plot
+text is 13 pt, and standalone cowplot panel letters are 24 pt, with compact
+spacing between color keys and labels.
+The overall title, subtitle, and explanatory footnotes are exported separately
+to `figures/manuscript/statewide_2x2_notes.pdf`. Vaccination and closure markers are at days
+30 and 50; the antiviral marker is at day 30. The notes explain the 14-day vaccine
+protection lag and that normal school contacts resume on day 51.
+
+```bash
+Rscript --vanilla scripts/10b_manuscript_illustrative_example.R --workers=8
+```
+
+The default output is
+`MANUSCRIPT_ILLUSTRATIVE_EXAMPLE_TEST/` (no additional enclosing experiment folder).
+Use `--prepare-only` to write configurations, `--resume` to continue verified
+completed batches, and `--plots-only` to regenerate figures from saved runs.
+Use `--figure-dir=PATH` to override the shared manuscript figure destination.
+All batches are local to this directory; external `--reuse-dir` references are
+disabled. Scientific CSVs and Delaware county boundaries are captured under
+`data_snapshot/`, and the saved manifest uses experiment-relative paths.
+
+There is one main 10b entry point and one helper file alongside it:
+`10b_manuscript_illustrative_example.R` and
+`10b_manuscript_illustrative_example_helpers.R`. Running the main file again
+validates and resumes completed local batches automatically. There is no separate
+reviewer runner or executable copy of the scripts inside the output directory.
+`source_snapshot/src/` is retained only as a passive record of the Python code
+used for the saved simulations. Run the main script with `--plots-only` to
+regenerate saved figures without running simulations.
 
 ## State Data Preparation
 
@@ -313,6 +430,12 @@ data/<STATE>/
 ├── <STATE>_quarterly-2019_mobility.csv
 └── <STATE>_quarterly-2019_county-connection-ranking.csv
 ```
+
+Both state-level and county-level risk files are valid simulator inputs. The
+state file also supplies the estimates used to derive county-level fractions.
+All project simulation use cases, examples, and input templates select
+`county_<STATE>_high-risk-ratios-flu-only.csv` so each county uses its own
+age-specific fractions. County risk rows are matched by FIPS and age labels.
 
 The age-group order must match across population, contact, risk, model,
 vaccine, and antiviral inputs. Mobility-matrix county order must match the
