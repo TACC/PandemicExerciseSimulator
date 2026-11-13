@@ -369,6 +369,7 @@ daily_ts = ggplot(flow_diff_df)+
                             as.Date("2019-07-01"), as.Date("2019-10-01")),
              color="red", linetype="dashed", alpha=0.5)+
   geom_line(aes(x=date, y=new_flow_total), color="black")+
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale()))+
   labs(x="Date", y="2019 US Daily Population Flow", 
        title="2019 SafeGraph cell-phone based estimates of people leaving home")+
   theme_bw()

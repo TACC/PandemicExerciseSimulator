@@ -118,7 +118,7 @@ format_ve_label <- function(x) {
 }
 
 format_count_label <- function(x) {
-  scales::label_number(accuracy = 1, scale_cut = scales::cut_short_scale())(x)
+  scales::label_number(scale_cut = scales::cut_short_scale())(x)
 }
 
 format_initial_exposed_percent_label <- function(x) {
@@ -764,7 +764,7 @@ save_vaccine_coverage_figures <- function(metadata) {
       annotate("label", x = state_day0, y = y_top, label = "Sim Day 0", hjust = 0.5, vjust = -0.4, color = "grey30", fontface = "bold", size = 8) +
       scale_color_manual(values = age_colors, name = NULL) +
       scale_linetype_manual(values = c("Doses Given" = "solid", "Doses 100% VE" = "dashed"), name = NULL, breaks = c("Doses Given", "Doses 100% VE")) +
-      scale_y_continuous(labels = scales::label_number(accuracy = 1, scale_cut = scales::cut_short_scale())) +
+      scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
       scale_x_date(limits = c(x_min, x_max), expand = expansion(mult = c(0.02, 0.03))) +
       coord_cartesian(clip = "off") +
       guides(

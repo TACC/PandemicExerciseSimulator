@@ -525,7 +525,7 @@ for (state_dir_i in state_lookup$STATE_DIR) {
     geom_line(color = "black", linewidth = 0.8) +
     geom_point(color = "#2C7FB8", size = 2) +
     scale_x_date(date_breaks = "1 month", date_labels = "%b") +
-    scale_y_continuous(labels = scales::comma) +
+    scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
     labs(
       x = paste0(analysis_year, " month"),
       y = "Estimated adult out-of-county flow",

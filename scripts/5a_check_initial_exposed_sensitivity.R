@@ -379,7 +379,7 @@ summary_plot <- summary_by_date |>
   )) +
   ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.75), width = 0.68) +
   ggplot2::facet_wrap(ggplot2::vars(.data$first_week_rule), scales = "free_x") +
-  ggplot2::scale_y_continuous(labels = scales::comma) +
+  ggplot2::scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
   ggplot2::labs(
     title = "Initial Exposed Sensitivity To Simulation Start Date",
     subtitle = "State-age totals inferred from first nonzero weekly Hub incident hospitalizations",
