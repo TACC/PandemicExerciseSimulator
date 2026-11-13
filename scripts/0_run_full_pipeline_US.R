@@ -76,7 +76,8 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
 #### Section 0b Ensuring Poetry Dependencies ####
     # ////////
     section_banner("0. Dependencies")
-    poetry_install_args <- c("install", "--no-root")
+    # Match the container build: fitting needs runtime dependencies only.
+    poetry_install_args <- c("install", "--only", "main", "--no-root")
     cat("Ensuring Poetry dependencies are installed:\n")
     cat("  poetry ", paste(shQuote(poetry_install_args), collapse = " "), "\n", sep = "")
     poetry_install_status <- run_logged_command("poetry", poetry_install_args, workdir = repo_root)

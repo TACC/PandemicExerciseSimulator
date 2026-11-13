@@ -80,6 +80,9 @@ run_phase <- function(name, target = "ls6", fail_fits = FALSE, fail_outputs = FA
       env$log_pipeline_settings <- function() invisible(NULL)
       env$section_banner <- function(...) invisible(NULL)
       env$run_logged_command <- function(command, args, ...) {
+        if (command == "poetry") {
+          stopifnot(identical(args, c("install", "--only", "main", "--no-root")))
+        }
         record(paste0("command:", command)); 0L
       }
       env$prepare_pipeline_seeds <- function() record("seeds")
