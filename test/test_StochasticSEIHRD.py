@@ -254,3 +254,60 @@ def test_seihrd_records_incident_compartment_entries():
     model.simulate(node, time=1, vaccine_model=DummyVax())
 
     assert node.incident_compartment_entry_count(group, ["IS"]) == 10.0
+
+
+@pytest.mark.parametrize("p", [0.0, 0.012, 0.105, 0.315, 1.0])
+def test_ngm_symptomatic_duration_matches_corrected_clinical_branch_probability(p):
+    split = DiseaseModel.adjust_two_way_split_proportion(
+        desired_realized_fraction=p, competing_rate=1/7, target_rate=1/3,
+    )
+    duration = StochasticSEIHRDModule.symptomatic_duration(1/3, 1/7, split)
+    # Independent identity for the intended clinical branching distribution.
+    assert duration == pytest.approx(p * 3 + (1-p) * 7)
+
+
+def test_risk_averaged_beta_matches_full_progression_ngm():
+    compartments = ["S", "E", "IA", "IP", "IS", "H", "R", "D"]
+    model, node = make_model(compartments)
+    node.compartments = PopulationCompartments([100], [0.25])
+    net = Network(compartments)
+    net._add_node(node)
+    model.set_initial_conditions([], net, DummyVax())
+    assert model.baseline_high_risk_fraction == pytest.approx([0.25])
+
+    # Construct F V^-1 independently on all eight E/IP/IS/IA x risk states.
+    # The target-risk shares come from population; clinical probabilities are
+    # the supplied .1/.2, rather than reusing the model's corrected splits.
+    F = np.zeros((8, 8))
+    V = np.zeros((8, 8))
+    for risk, (share, p_hosp) in enumerate([(0.75, 0.1), (0.25, 0.2)]):
+        e, ip, symptomatic, ia = range(4*risk, 4*risk+4)
+        V[e, e] = 1.0
+        V[ip, e] = -0.75
+        V[ia, e] = -0.25
+        V[ip, ip] = 1.0
+        V[symptomatic, ip] = -1.0
+        V[symptomatic, symptomatic] = 1 / (p_hosp*3 + (1-p_hosp)*7)
+        V[ia, ia] = 1/2
+        for source_risk in range(2):
+            for offset, infectiousness in [(1, .45), (2, 1.0), (3, .97)]:
+                F[e, 4*source_risk+offset] = share * model.beta * infectiousness
+    full_r0 = max(abs(np.linalg.eigvals(F @ np.linalg.inv(V))))
+    assert full_r0 == pytest.approx(model.R0)
+    expected_w = .75 * (.45 + .75*6.6 + .25*6.2) + .25*.97*2
+    assert model.beta == pytest.approx(model.R0 / expected_w)
+
+
+def test_baseline_risk_mix_uses_demographic_counts_before_and_after_seeding():
+    compartments = ["S", "E", "IA", "IP", "IS", "H", "T", "R", "D"]
+    model, node = make_model(compartments, {"antiviral_effectiveness_hosp": "0.25"})
+    node.compartments = PopulationCompartments([100], [0.25])
+    net = Network(compartments)
+    net._add_node(node)
+    model.set_initial_conditions([{"county": 0, "infected": 10, "age_group": 0}], net, DummyVax())
+    beta = model.beta
+    assert model.baseline_high_risk_fraction == pytest.approx([0.25])
+    assert node.compartments.get_disease_compartment_sum()[Compartments.E.value] == 10
+    # Reinitializing the calibration uses demographic counts, not remaining S.
+    model.set_initial_conditions([], net, DummyVax())
+    assert model.beta == pytest.approx(beta)

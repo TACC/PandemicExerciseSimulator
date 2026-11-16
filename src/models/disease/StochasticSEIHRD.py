@@ -10,10 +10,35 @@ from models.treatments.Vaccination import Vaccination
 
 logger = logging.getLogger(__name__)
 
+
+def symptomatic_duration(IS_to_H_rate, IS_to_R_rate, prop_IS_to_H):
+    """Continuous-time IS residence time using corrected competing-clock splits.
+
+    prop_IS_to_H is the rate multiplier, not the desired realized probability.
+    Accept age vectors or low/high-risk x age arrays, matching simulate().
+    """
+    split = np.asarray(prop_IS_to_H, dtype=float)
+    if np.any(~np.isfinite(split)) or np.any((split < 0) | (split > 1)):
+        raise ValueError("Corrected IS-to-H splits must be finite values in [0, 1].")
+    exit_rate = split * IS_to_H_rate + (1.0 - split) * IS_to_R_rate
+    if np.any(~np.isfinite(exit_rate)) or np.any(exit_rate <= 0):
+        raise ValueError("Baseline IS exit rates must be finite and positive.")
+    return 1.0 / exit_rate
+
+
+def average_risk_weights(values, high_risk_fraction):
+    """Reduce low/high-risk x age weights under age-only contact mixing."""
+    values = np.asarray(values, dtype=float)
+    fraction = np.asarray(high_risk_fraction, dtype=float)
+    if values.shape != (2, len(fraction)) or np.any(~np.isfinite(fraction)) or np.any((fraction < 0) | (fraction > 1)):
+        raise ValueError("Risk weights require two risk rows and valid age-specific fractions.")
+    return (1.0 - fraction) * values[0] + fraction * values[1]
+
 #### Estimate the generation time based only on input parameters
 def compute_generation_time(
         E_out_rate, IP_to_IS_rate, IS_to_H_rate, IS_to_R_rate, IA_to_R_rate,
-        prop_E_to_IA, rel_inf_IP_to_IS=1.0, rel_inf_IA_to_IS=1.0, rel_inf_IS=1.0):
+        prop_E_to_IA, rel_inf_IP_to_IS=1.0, rel_inf_IA_to_IS=1.0, rel_inf_IS=1.0,
+        *, prop_IS_to_H, high_risk_fraction):
     """
     Approximate mean generation time (days) from input parameters.
     Generation time (GT) is time interval between the infection of a primary case (infector)
@@ -28,17 +53,15 @@ def compute_generation_time(
     # ----- durations -----
     D_E  = 1.0 / E_out_rate               # latent period
     D_IP = 1.0 / IP_to_IS_rate
-    D_IS = 1.0 / (IS_to_H_rate + IS_to_R_rate)
+    D_IS = symptomatic_duration(IS_to_H_rate, IS_to_R_rate, prop_IS_to_H)
     D_IA = 1.0 / IA_to_R_rate
 
-    # ----- asymptomatic -----
-    prop_asymp      = np.array(prop_E_to_IA, dtype=float)   # per-age, then take mean
-    prop_asymp_mean = prop_asymp.mean()
+    prop_asymp = np.array(prop_E_to_IA, dtype=float)
 
     # ----- total infectious durations (weighted) -----
-    W_IP = (1 - prop_asymp_mean) * rel_inf_IP_to_IS * D_IP
-    W_IS = (1 - prop_asymp_mean) * rel_inf_IS       * D_IS
-    W_IA = prop_asymp_mean       * rel_inf_IA_to_IS * D_IA
+    W_IP = (1 - prop_asymp) * rel_inf_IP_to_IS * D_IP
+    W_IS = (1 - prop_asymp) * rel_inf_IS       * D_IS
+    W_IA = prop_asymp       * rel_inf_IA_to_IS * D_IA
     W_total = W_IP + W_IS + W_IA
 
     # ----- mean generation time numerator -----
@@ -48,24 +71,29 @@ def compute_generation_time(
         W_IA * (D_E + D_IA)
     )
 
-    return numerator / W_total
+    return float(np.sum(average_risk_weights(numerator, high_risk_fraction)) /
+                 np.sum(average_risk_weights(W_total, high_risk_fraction)))
 
 #### Get beta from R0 and Next Generation Matrix
 def compute_w(prop_E_to_IA,
               IP_to_IS_rate, IS_to_H_rate, IS_to_R_rate, IA_to_R_rate,
-              rel_inf_IP=1.0, rel_inf_IS=1.0, rel_inf_IA=1.0):
+              rel_inf_IP=1.0, rel_inf_IS=1.0, rel_inf_IA=1.0,
+              *, prop_IS_to_H):
     """
-    Compute per-group infectiousness weights w_j.
+    Compute baseline infectiousness weights by age, optionally by risk x age.
     prop_E_to_IA : array-like (n,)
         Fraction asymptomatic for each group j.
     A_to_B_rate: scalar rates (already 1/days).
     rel_inf_* : relative infectiousness multipliers.
+    prop_IS_to_H : corrected competing-clock rate multipliers used by simulate.
+        Baseline weights exclude treatment, vaccines, NPIs and travel. The daily
+        Poisson implementation remains an approximation to these mean durations.
     """
     prop_E_to_IA = np.asarray(prop_E_to_IA, dtype=float)
 
     # Durations are reciprocals of total exit rates, i.e. back to days
     d_IP = 1.0 / IP_to_IS_rate
-    d_IS = 1.0 / (IS_to_H_rate + IS_to_R_rate)
+    d_IS = symptomatic_duration(IS_to_H_rate, IS_to_R_rate, prop_IS_to_H)
     d_IA = 1.0 / IA_to_R_rate
 
     symptomatic_block = rel_inf_IP * d_IP + rel_inf_IS * d_IS
@@ -350,9 +378,24 @@ class StochasticSEIHRD(DiseaseModel):
         #----------------------------------------------------
         # `beta` is a required name for _calculate_beta_w_npi
         # estimate with R0 and next generation matrix
-        w = compute_w(self.prop_E_to_IA,
+        # Network risk counts are available at set_initial_conditions(). Use a
+        # low-risk reference until then; refresh before any people are seeded.
+        self._calibrate_baseline_beta(np.zeros(num_age_grps))
+
+        # this isn't used in this file, but _calculate_beta_w_npi inherits from this init
+        self.npis_schedule = disease_model.npis_schedule
+        logger.info('instantiated StochasticSEIHRD object')
+        logger.debug(f'{self.parameters}')
+
+    def _calibrate_baseline_beta(self, high_risk_fraction):
+        self.baseline_high_risk_fraction = np.asarray(high_risk_fraction, dtype=float)
+        self.baseline_infectiousness_weights_by_risk = compute_w(self.prop_E_to_IA,
                   self.IP_to_IS_rate, self.IS_to_H_rate, self.IS_to_R_rate, self.IA_to_R_rate,
-                  rel_inf_IP=self.rel_inf_IP_to_IS, rel_inf_IA=self.rel_inf_IA_to_IS)
+                  rel_inf_IP=self.rel_inf_IP_to_IS, rel_inf_IA=self.rel_inf_IA_to_IS,
+                  prop_IS_to_H=self.prop_IS_to_H)
+        w = average_risk_weights(self.baseline_infectiousness_weights_by_risk,
+                                 self.baseline_high_risk_fraction)
+        self.baseline_infectiousness_weights = w
         self.beta = DiseaseModel.estimate_baseline_beta(
             self.parameters.np_contact_matrix,
             self.R0,
@@ -374,15 +417,27 @@ class StochasticSEIHRD(DiseaseModel):
         # ----------------------------------------------------
         gen_time = compute_generation_time(
             self.E_out_rate, self.IP_to_IS_rate, self.IS_to_H_rate, self.IS_to_R_rate, self.IA_to_R_rate,
-            self.prop_E_to_IA, self.rel_inf_IP_to_IS, self.rel_inf_IA_to_IS)
+            self.prop_E_to_IA, self.rel_inf_IP_to_IS, self.rel_inf_IA_to_IS,
+            prop_IS_to_H=self.prop_IS_to_H,
+            high_risk_fraction=self.baseline_high_risk_fraction)
         logger.info(f'Estimated mean generation time is {gen_time}')
 
-        # this isn't used in this file, but _calculate_beta_w_npi inherits from this init
-        self.npis_schedule = disease_model.npis_schedule
+    def set_initial_conditions(self, initial, network, vaccine_model):
+        """Calibrate age-only baseline NGM using initialized population risk mix.
 
-        logger.info(f'instantiated StochasticSEIHRD object')
-        logger.debug(f'{self.parameters}')
-        return
+        Contacts and susceptibility are age-specific, with no risk preference,
+        so weight each source-age infectious duration by that age's risk shares.
+        This calibrates the baseline age-contact model, not the full travel/NPI
+        system or its discrete-time realized reproduction number.
+        """
+        counts = np.zeros((2, self.parameters.number_of_age_groups))
+        for node in network.nodes:
+            counts += np.sum(node.compartments.compartment_data, axis=(2, 3)).T
+        total = counts.sum(axis=0)
+        high_fraction = np.divide(counts[RiskGroup.H.value], total,
+                                  out=np.zeros_like(total), where=total > 0)
+        self._calibrate_baseline_beta(high_fraction)
+        super().set_initial_conditions(initial, network, vaccine_model)
 
     def expose_number_of_people(self, node:Type[Node], group:Type[Group], num_to_expose:int, vaccine_model:Type[Vaccination]):
         # this is a bulk transfer of people to move from S to E by group
