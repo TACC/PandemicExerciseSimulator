@@ -155,6 +155,8 @@ initialize_pipeline_inputs <- function(config_file = NULL, args = character(), r
       stop("For execution_target=ls6, choose fit, scenarios, or results explicitly.")
     }
     SELECTED_RUN_STATES <- normalize_state_dir_names(split_arg(get_arg_value("--selected-states="), character()))
+    FIT_STATES <- normalize_state_dir_names(split_arg(get_arg_value("--fit-states="), character()))
+    if (length(setdiff(FIT_STATES, gsub(" ", "-", c(state.name, "District of Columbia"))))) stop("fit_states must use US state/DC directory names.")
     SELECTED_RUN_SCENARIOS <- split_arg(get_arg_value("--selected-scenarios="), character())
     R0_FIT_SCENARIO <- get_arg_value("--r0-fit-scenario=")
     REUSE_BEST_FIT_SIMULATIONS <- get_bool_arg("--reuse-best-fit-simulations=")
@@ -169,9 +171,15 @@ initialize_pipeline_inputs <- function(config_file = NULL, args = character(), r
     EPYDEMIX_PEAK_HEIGHT_WEIGHT <- as.numeric(get_arg_value("--epydemix-peak-height-weight="))
     EPYDEMIX_NSIM <- as.integer(get_arg_value("--epydemix-nsim="))
     R0_FIT_METHOD <- get_arg_value("--r0-fit-method=")
+    R0_BASE <- as.numeric(get_arg_value("--r0-base="))
+    R0_SCREENING_REALIZATIONS <- as.integer(get_arg_value("--r0-screening-realizations="))
+    R0_EXPOSURE_MULTIPLIERS <- sort(unique(split_numeric_arg(get_arg_value("--r0-exposure-multipliers="))))
+    R0_PEAK_HEIGHT_TOLERANCE <- as.numeric(get_arg_value("--r0-peak-height-tolerance="))
+    R0_REFINE_STEP <- as.numeric(get_arg_value("--r0-refine-step="))
     if (R0_FIT_METHOD %in% c("wis_small_states", "wis_county_threshold")) {
       R0_FIT_METHOD <- "simulator_county_threshold"
     }
+    if (length(FIT_STATES) && R0_FIT_METHOD != "staged_simulator") stop("fit_states is supported by staged_simulator fitting.")
     sys.source(file.path(repo_root, "scripts", "5c_Rm_search_helpers.R"), envir = environment())
     R0_SELECTION_METRIC = get_arg_value("--r0-selection-metric=")
     R0_SEARCH_METRICS = get_arg_value("--r0-search-metrics=")
@@ -179,6 +187,18 @@ initialize_pipeline_inputs <- function(config_file = NULL, args = character(), r
     R0_SELECTION_METRIC = parse_r0_search_metrics(R0_SELECTION_METRIC)
     if (length(R0_SELECTION_METRIC) != 1) stop("Choose one final R0 selection metric.")
     R0_SEARCH_METRICS = unique(c(R0_SELECTION_METRIC, parse_r0_search_metrics(R0_SEARCH_METRICS)))
+    if (R0_FIT_METHOD == "staged_simulator") {
+      if (!identical(R0_SELECTION_METRIC, "peak_height") || !identical(R0_SEARCH_METRICS, "peak_height")) {
+        stop("Staged fitting requires r0_selection_metric='peak_height' and r0_search_metrics='peak_height'. Exposure timing is a separate stage.")
+      }
+      if (!is.finite(R0_BASE) || R0_BASE < 1.01 || R0_BASE > 3.5 ||
+          is.na(R0_SCREENING_REALIZATIONS) || R0_SCREENING_REALIZATIONS < 1L ||
+          !length(R0_EXPOSURE_MULTIPLIERS) || any(!is.finite(R0_EXPOSURE_MULTIPLIERS) | R0_EXPOSURE_MULTIPLIERS <= 0) ||
+          !is.finite(R0_PEAK_HEIGHT_TOLERANCE) || R0_PEAK_HEIGHT_TOLERANCE <= 0 || R0_PEAK_HEIGHT_TOLERANCE >= 1 ||
+          !is.finite(R0_REFINE_STEP) || R0_REFINE_STEP <= 0 || R0_REFINE_STEP > .2) {
+        stop("Invalid staged R0/exposure settings: require positive multipliers/screening, R0 in [1.01,3.5], tolerance in (0,1), and refine step <=0.2.")
+      }
+    }
     R0_EXECUTION_MODE = get_arg_value("--execution-mode=")
     R0_WORKERS = get_arg_value("--workers=")
     R0_FIT_LAUNCH = get_arg_value("--r0-fit-launch=")
@@ -223,22 +243,22 @@ initialize_pipeline_inputs <- function(config_file = NULL, args = character(), r
       stop("Reusing best-fit simulations requires matching sim_realization_range and r0_realization_range.")
     }
     if ((REUSE_BEST_FIT_SIMULATIONS || R0_FIT_SCENARIO != "ALL_INTERVENTIONS") &&
-        (R0_FIT_METHOD != "simulator_county_threshold" || R0_COUNTY_THRESHOLD < 254L)) {
-      stop("Scenario-specific fitting/reuse requires simulator_county_threshold covering all states (255 recommended).")
+        !(R0_FIT_METHOD == "staged_simulator" || (R0_FIT_METHOD == "simulator_county_threshold" && R0_COUNTY_THRESHOLD >= 254L))) {
+      stop("Scenario-specific fitting/reuse requires staged_simulator or simulator_county_threshold covering all states (255 recommended).")
     }
     SIM_DAY_0 = SIM_DAY_0_VALUES[[1]]
     SIM_DAY_0_LABEL = as.character(SIM_DAY_0)
     if (!EPYDEMIX_FIT_TARGET %in% c("hosp_incident", "hosp_increase")) {
       stop("--epydemix-fit-target must be one of: hosp_incident, hosp_increase.")
     }
-    if (!R0_FIT_METHOD %in% c("epydemix_all", "simulator_county_threshold")) {
-      stop("--r0-fit-method must be one of: epydemix_all, simulator_county_threshold.")
+    if (!R0_FIT_METHOD %in% c("staged_simulator", "epydemix_all", "simulator_county_threshold")) {
+      stop("--r0-fit-method must be staged_simulator, epydemix_all, or simulator_county_threshold.")
     }
     if (!R0_FIT_LAUNCH %in% c("direct", "pylauncher")) {
       stop("--r0-fit-launch must be direct or pylauncher.")
     }
-    if (R0_FIT_LAUNCH == "pylauncher" && R0_FIT_METHOD != "simulator_county_threshold") {
-      stop("PyLauncher preparation is for Section 5c; use --r0-fit-method=simulator_county_threshold.")
+    if (R0_FIT_LAUNCH == "pylauncher" && !R0_FIT_METHOD %in% c("staged_simulator", "simulator_county_threshold")) {
+      stop("PyLauncher requires staged_simulator or simulator_county_threshold.")
     }
     if (!R0_EXECUTION_MODE %in% c("serial", "parallel") ||
       (R0_WORKERS != "auto" && (is.na(suppressWarnings(as.integer(R0_WORKERS))) || as.integer(R0_WORKERS) < 1))) {
@@ -266,11 +286,11 @@ initialize_pipeline_inputs <- function(config_file = NULL, args = character(), r
     NONE_TEMPLATE_FILE <- pipeline_input_path(NONE_TEMPLATE_FILE, repo_root)
     INTERVENTION_TEMPLATE_FILES <- vapply(INTERVENTION_TEMPLATE_FILES, pipeline_input_path, character(1), repo_root = repo_root)
     # Catch syntax errors before any long-running fitting work starts.
-    if (R0_FIT_METHOD == "simulator_county_threshold") {
+    if (R0_FIT_METHOD %in% c("staged_simulator", "simulator_county_threshold")) {
       invisible(parse(file = file.path(repo_root, "scripts", "5c_Rm_search.R")))
     }
     available_state_dirs <- basename(list.dirs(file.path(repo_root, "data"), recursive = FALSE, full.names = TRUE))
-    missing_state_dirs <- setdiff(SELECTED_RUN_STATES, available_state_dirs)
+    missing_state_dirs <- setdiff(union(SELECTED_RUN_STATES, FIT_STATES), available_state_dirs)
     if (length(missing_state_dirs) > 0) {
       suggestions <- vapply(
         missing_state_dirs,
@@ -336,6 +356,12 @@ split_numeric_arg <- function(value, default = character()) {
 #'   whitespace replaced by hyphens.
 normalize_state_dir_names <- function(states) {
   gsub("[[:space:]]+", "-", trimws(states))
+}
+
+#' State scope for fitting and its phase prerequisites; NULL keeps all 51.
+pipeline_fit_states <- function() {
+  selected <- get0("FIT_STATES", ifnotfound = character())
+  if (length(selected)) selected else gsub(" ", "-", c(state.name, "District of Columbia"))
 }
 #' Suggest the closest available state directory name
 #'
@@ -561,14 +587,50 @@ wis_calibrated_fit_matches <- function(path, expected_sim_day_0, expected_simula
   fit_scenario <- config$metadata_tags$epydemix_fit$distance_settings$scenario_label
   if (is.null(fit_scenario)) fit_scenario <- config$metadata_tags$r0_search$scenario_label
   if (is.null(fit_scenario)) fit_scenario <- "ALL_INTERVENTIONS"
+  staged <- identical(get0("R0_FIT_METHOD", ifnotfound = ""), "staged_simulator")
+  expected_method <- if (staged) "full_simulator_staged_r0_exposures" else "full_simulator_all_interventions_state_feature_search"
+  staged_matches <- !staged || staged_calibration_matches(config, expected_realization_range)
   date_matches &&
     identical(fit_scenario, expected_scenario) &&
-    identical(as.character(fit_method), "full_simulator_all_interventions_state_feature_search") &&
+    identical(as.character(fit_method), expected_method) && staged_matches &&
     identical(simulation_days, as.integer(expected_simulation_days)) &&
     identical(config$metadata_tags$epydemix_fit$distance_settings$scoring_version, R0_SCORING_VERSION) &&
     identical(as.character(unlist(config$metadata_tags$epydemix_fit$distance_settings$search_metrics)), R0_SEARCH_METRICS) &&
     identical(realization_range, as.integer(expected_realization_range)) &&
     identical(as.character(selection_metric), as.character(expected_selection_metric))
+}
+
+#' Canonical county-age exposure allocation for exact fit/batch comparisons
+canonical_initial_exposed <- function(rows) {
+  if (is.null(rows)) return(NULL)
+  if (!length(rows)) return(character())
+  sort(vapply(rows, function(row) paste(as.character(row$county), as.character(row$age_group),
+    as.integer(row$infected), sep = ":"), character(1)))
+}
+
+#' Validate staged settings, published exposures, and input/source fingerprints
+staged_calibration_matches <- function(config, realization_range) {
+  fit <- config$metadata_tags$staged_fit
+  if (is.null(fit) || !identical(fit$version, "staged_r0_exposures_v4")) return(FALSE)
+  cfg <- fit$settings
+  numeric_match <- function(x, y) isTRUE(all.equal(as.numeric(unlist(x)), as.numeric(y), tolerance = 1e-10))
+  settings_match <- identical(cfg$version, fit$version) &&
+    numeric_match(cfg$base_r0, R0_BASE) && numeric_match(cfg$refine_step, R0_REFINE_STEP) &&
+    numeric_match(cfg$screening_realizations, min(R0_SCREENING_REALIZATIONS, diff(realization_range) + 1L)) &&
+    numeric_match(cfg$height_tolerance, R0_PEAK_HEIGHT_TOLERANCE) &&
+    numeric_match(cfg$exposure_multipliers, R0_EXPOSURE_MULTIPLIERS)
+  if (!settings_match || !length(config$initial_exposed) ||
+      !numeric_match(sum(vapply(config$initial_exposed, function(row) as.numeric(row$infected), numeric(1))), fit$fitted_total)) return(FALSE)
+  hashes_match <- function(hashes) {
+    if (!length(hashes)) return(FALSE)
+    paths <- vapply(names(hashes), function(path) {
+      if (startsWith(path, "pipeline:")) return(file.path(pipeline_output_root, substring(path, 10L)))
+      if (grepl("^/", path)) path else file.path(repo_root, path)
+    }, character(1))
+    if (!all(file.exists(paths))) return(FALSE)
+    identical(unname(as.character(tools::md5sum(paths))), as.character(unlist(hashes, use.names = FALSE)))
+  }
+  hashes_match(fit$source_hashes) && hashes_match(fit$input_hashes)
 }
 
 #' Select completed best-fit batches for downstream analyses
@@ -592,6 +654,8 @@ prepare_reused_fit_outputs <- function(envir = parent.frame()) {
       for (date in as.character(SIM_DAY_0_VALUES)) {
         fit_files <- list.files(file.path(pipeline_output_root, "epydemix_fit", date),
           pattern = "_EPYDEMIX_R0_ONLY\\.json$", recursive = TRUE, full.names = TRUE)
+        if (length(FIT_STATES)) fit_files <- fit_files[sub("_SEED_NONE_EPYDEMIX_R0_ONLY[.]json$", "",
+          sub("^INPUT_SEIHRD-STOCH_", "", basename(fit_files))) %in% FIT_STATES]
         if (!length(fit_files)) stop("No calibrated fits available to reuse for ", date)
         candidates <- list.files(file.path(pipeline_output_root, "Rm_search", date),
           pattern = "^metadata_batch-.*\\.json$", recursive = TRUE, full.names = TRUE)
@@ -604,7 +668,8 @@ prepare_reused_fit_outputs <- function(envir = parent.frame()) {
           state <- sub("^INPUT_SEIHRD-STOCH_", "", sub("_SEED_NONE_EPYDEMIX_R0_ONLY\\.json$", "", basename(fit_file)))
           chosen <- fit$metadata_tags$r0_search$selected_metadata_file
           # A saved LS6 absolute path may have moved when results were copied.
-          paths <- unique(c(chosen, candidates))
+          relocated <- candidates[basename(candidates) %in% basename(chosen)]
+          paths <- unique(c(chosen, relocated, if (is.null(fit$metadata_tags$staged_fit)) candidates))
           paths <- paths[!is.na(paths) & file.exists(paths)]
           #' Check a saved batch against the selected calibrated fit
           #'
@@ -619,6 +684,10 @@ prepare_reused_fit_outputs <- function(envir = parent.frame()) {
                 !identical(as.integer(m$cli_args$days), SIMULATION_DAYS) ||
                 !isTRUE(all.equal(as.numeric(m$disease_model$parameters$R0),
                   as.numeric(fit$disease_model$parameters$R0), tolerance = 1e-5))) return(FALSE)
+            if (!is.null(fit$initial_exposed) && !identical(canonical_initial_exposed(m$initial_exposed),
+                  canonical_initial_exposed(fit$initial_exposed))) return(FALSE)
+            if (!is.null(fit$metadata_tags$staged_fit) &&
+                !identical(m$metadata_tags$staged_fit$run_signature, fit$metadata_tags$staged_fit$run_signature)) return(FALSE)
             timing <- file.path(dirname(path), paste0("simulation_times_batch-", m$batch_num, ".csv"))
             if (!file.exists(timing)) return(FALSE)
             ids <- readr::read_csv(timing, show_col_types = FALSE)$sim_id
@@ -818,6 +887,12 @@ log_pipeline_settings <- function() {
   cat("  ACS_YEAR = ", ACS_YEAR, "\n", sep = "")
   cat("  SIM_DAY_0 = ", paste(as.character(SIM_DAY_0_VALUES), collapse = ", "), "\n", sep = "")
   cat("  SIMULATION_DAYS = ", SIMULATION_DAYS, "\n", sep = "")
+  cat("  FIT_STATES = ", if (length(FIT_STATES)) paste(FIT_STATES, collapse = ", ") else "all states + DC", "\n", sep = "")
+  if (R0_FIT_METHOD == "staged_simulator") {
+    cat("  STAGED FIT: base R0 = ", R0_BASE, "; screening = ", R0_SCREENING_REALIZATIONS,
+      "; exposure multipliers = ", paste(R0_EXPOSURE_MULTIPLIERS, collapse = ","),
+      "; peak-height tolerance = ", R0_PEAK_HEIGHT_TOLERANCE, "; R0 refinement = ", R0_REFINE_STEP, "\n", sep = "")
+  }
   cat("  SIM_REALIZATION_RANGE = ", paste(SIM_REALIZATION_RANGE, collapse = ", "), "\n", sep = "")
   cat("  R0_SEARCH_REALIZATION_RANGE = ", paste(R0_SEARCH_REALIZATION_RANGE, collapse = ", "), "\n", sep = "")
   cat("  PIPELINE_OUTPUT_DIR = ", PIPELINE_OUTPUT_DIR, "\n", sep = "")
@@ -856,14 +931,18 @@ log_pipeline_settings <- function() {
 #' @details Reads state-specific RDS files in each date's checkpoints directory
 #'   and atomically publishes Rm_search_*.csv tables in the shared date directory.
 #'   Called once by the scenarios phase; performs no fitting or simulations.
-aggregate_rm_search_checkpoints <- function(states = gsub(" ", "-", c(state.name, "District of Columbia"))) {
-  for (date in as.character(SIM_DAY_0_VALUES)) {
+aggregate_rm_search_checkpoints <- function(states = pipeline_fit_states(), dates = SIM_DAY_0_VALUES) {
+  for (date in as.character(dates)) {
     root <- file.path(pipeline_output_root, "Rm_search", date)
     checkpoints <- file.path(root, "checkpoints")
     expected <- list(sim_day_0 = date, scenario = R0_FIT_SCENARIO,
       simulation_days = as.integer(SIMULATION_DAYS), realization_range = as.integer(R0_SEARCH_REALIZATION_RANGE),
       selection_metric = R0_SELECTION_METRIC, search_metrics = R0_SEARCH_METRICS,
       scoring_version = R0_SCORING_VERSION)
+    if (R0_FIT_METHOD == "staged_simulator") {
+      expected$fit_method <- "staged_simulator"
+      expected$staged_version <- "staged_r0_exposures_v4"
+    }
     required <- c("search_trace", "scores_by_week", "quantile_predictions", "best_by_state",
       "summary", "featured_candidate_comparison", "calibrated_json_manifest")
     tables <- list()
@@ -891,25 +970,47 @@ aggregate_rm_search_checkpoints <- function(states = gsub(" ", "-", c(state.name
         paste0(stem, "_EPYDEMIX_R0_ONLY.json"))
       best <- readRDS(file.path(checkpoints, paste0(prefix, "best_by_state.rds")))
       fit <- jsonlite::read_json(fit_path)
+      if (R0_FIT_METHOD == "staged_simulator" &&
+          !identical(readRDS(settings)$run_signature, fit$metadata_tags$staged_fit$run_signature)) {
+        missing <- c(missing, state)
+        problems <- c(problems, paste0(state, ": checkpoints do not match the completed staged fit"))
+        next
+      }
       if (nrow(best) != 1L || !isTRUE(all.equal(as.numeric(best$disease_R0),
           as.numeric(fit$disease_model$parameters$R0), tolerance = 1e-5))) {
         missing <- c(missing, state)
         problems <- c(problems, paste0(state, ": best checkpoint R0 does not match calibrated JSON"))
         next
       }
+      if (R0_FIT_METHOD == "staged_simulator" &&
+          (!"initial_exposed_total" %in% names(best) ||
+           !isTRUE(all.equal(as.numeric(best$initial_exposed_total), as.numeric(fit$metadata_tags$staged_fit$fitted_total))))) {
+        missing <- c(missing, state)
+        problems <- c(problems, paste0(state, ": best checkpoint exposures do not match calibrated JSON"))
+        next
+      }
       paths <- list.files(checkpoints, full.names = TRUE)
       paths <- paths[startsWith(basename(paths), prefix) & endsWith(paths, ".rds") & paths != settings]
       for (path in paths) {
         name <- sub("\\.rds$", ".csv", substring(basename(path), nchar(state) + 2L))
-        tables[[name]] <- dplyr::bind_rows(tables[[name]], readRDS(path))
+        value <- readRDS(path)
+        if (R0_FIT_METHOD == "staged_simulator" && name == "Rm_search_best_by_state.csv") {
+          value$original_initial_exposed_total <- as.numeric(fit$metadata_tags$staged_fit$original_total)
+          value$exposure_multiplier <- as.numeric(fit$metadata_tags$staged_fit$exposure_multiplier)
+          value$peak_height_within_tolerance <- isTRUE(fit$metadata_tags$staged_fit$height_within_tolerance)
+          value$median_peak_week_matches <- isTRUE(fit$metadata_tags$staged_fit$median_peak_week_matches)
+        }
+        tables[[name]] <- dplyr::bind_rows(tables[[name]], value)
       }
     }
     if (length(missing)) stop("Finish state fitting checkpoints before preparing scenarios for ", date,
       ": ", paste(missing, collapse = ", "), "\nCheckpoint directory: ", checkpoints,
       "\n", paste(problems, collapse = "\n"),
       "\nCore checkpoints can exist even when later plotting failed. Check the state fit logs; ",
-      "after fixing the error, use --recover-existing=true --run-sims=false on the original ",
-      "state fit commands to rebuild outputs without launching simulations.")
+      if (R0_FIT_METHOD == "staged_simulator")
+        "rerun the original 5c state command to rebuild checkpoints using its verified candidate caches."
+      else paste0("after fixing the error, use --recover-existing=true --run-sims=false on the original ",
+        "state fit commands to rebuild outputs without launching simulations."))
     for (name in names(tables)) {
       path <- file.path(root, name)
       temporary <- tempfile(pattern = ".sweep-table-", tmpdir = root)
@@ -929,15 +1030,15 @@ aggregate_rm_search_checkpoints <- function(states = gsub(" ", "-", c(state.name
 #'   the state/date pairs to finish. No fitting commands are executed.
 #' @details Uses initialized settings and pipeline_output_root from the
 #'   enclosing pipeline environment.
-require_completed_pipeline_fits <- function(states = gsub(" ", "-", c(state.name, "District of Columbia"))) {
+require_completed_pipeline_fits <- function(states = pipeline_fit_states()) {
   missing <- character()
   for (date in as.character(SIM_DAY_0_VALUES)) {
     for (state in states) {
       stem <- paste0("INPUT_SEIHRD-STOCH_", state, "_SEED_NONE")
       path <- file.path(pipeline_output_root, "epydemix_fit", date, stem,
         paste0(stem, "_EPYDEMIX_R0_ONLY.json"))
-      full_simulator <- R0_FIT_METHOD == "simulator_county_threshold" &&
-        county_count_for_state(state) <= R0_COUNTY_THRESHOLD
+      full_simulator <- R0_FIT_METHOD == "staged_simulator" || (R0_FIT_METHOD == "simulator_county_threshold" &&
+        county_count_for_state(state) <= R0_COUNTY_THRESHOLD)
       matches <- file.exists(path) && if (full_simulator) {
         wis_calibrated_fit_matches(path, date, SIMULATION_DAYS,
           R0_SEARCH_REALIZATION_RANGE, R0_SELECTION_METRIC)
@@ -991,10 +1092,25 @@ require_completed_scenario_outputs <- function(states = if (length(SELECTED_RUN_
             if (!identical(as.integer(m$cli_args$days), SIMULATION_DAYS) ||
                 !isTRUE(all.equal(as.numeric(m$disease_model$parameters$R0),
                   as.numeric(expected$disease_model$parameters$R0), tolerance = 1e-5))) next
+            if (!is.null(expected$initial_exposed) && !identical(canonical_initial_exposed(m$initial_exposed),
+                canonical_initial_exposed(expected$initial_exposed))) next
+            if (!is.null(expected$metadata_tags$staged_fit) && !identical(m$metadata_tags$staged_fit$run_signature,
+                expected$metadata_tags$staged_fit$run_signature)) next
             folder <- dirname(files[[i]])
             timing <- file.path(folder, paste0("simulation_times_batch-", m$batch_num, ".csv"))
             network <- file.path(folder, paste0("network_batch-", m$batch_num, ".csv"))
-            if (!file.exists(timing) || !file.exists(network)) next
+            if (!file.exists(timing)) next
+            if (!file.exists(network)) {
+              if (diff(SIM_REALIZATION_RANGE) != 0L) next
+              json_dir <- file.path(folder, paste0("output_sim", SIM_REALIZATION_RANGE[[1]]))
+              json_files <- list.files(json_dir, pattern = "^output_[0-9]+\\.json$")
+              days <- as.integer(sub("^output_([0-9]+)\\.json$", "\\1", json_files))
+              if (!length(days) || !identical(sort(days), seq.int(0L, max(days)))) next
+              ids <- readr::read_csv(timing, show_col_types = FALSE)$sim_id
+              complete <- identical(as.integer(ids), SIM_REALIZATION_RANGE[[1]])
+              if (complete) break
+              next
+            }
             nodes <- list.files(folder, pattern = "^node_.*\\.csv$")
             nodes <- nodes[endsWith(nodes, paste0("_batch-", m$batch_num, ".csv"))]
             expected_nodes <- if (is.null(m$geo$node_count)) 1L else as.integer(m$geo$node_count)
@@ -1050,19 +1166,23 @@ prepare_pipeline_seeds <- function() {
     pattern = "^INPUT_SEIHRD-STOCH_.*_SEED_NONE\\.json$",
     full.names = TRUE
   )
+  wanted <- pipeline_fit_states()
+  seed_input_files <- seed_input_files[basename(seed_input_files) %in% paste0("INPUT_SEIHRD-STOCH_", wanted, "_SEED_NONE.json")]
   validation_fit_files <- list.files(
     validation_fit_data_dir,
     pattern = paste0("^validation_fit_inc_hosp_.*_", SIM_DAY_0_LABEL, "\\.csv$"),
     full.names = TRUE
   )
-  seed_inputs_match_sim_day_0 <- length(seed_input_files) >= 51 &&
+  validation_fit_files <- validation_fit_files[basename(validation_fit_files) %in%
+    paste0("validation_fit_inc_hosp_", wanted, "_", SIM_DAY_0_LABEL, ".csv")]
+  seed_inputs_match_sim_day_0 <- length(seed_input_files) == length(wanted) &&
     all(vapply(seed_input_files, json_sim_day_0_matches, logical(1), expected_sim_day_0 = SIM_DAY_0_LABEL))
 
   if (
     file.exists(state_initial_exposed_file) &&
       file.exists(county_initial_exposed_file) &&
-      length(seed_input_files) >= 51 &&
-      length(validation_fit_files) >= 51 &&
+      length(seed_input_files) == length(wanted) &&
+      length(validation_fit_files) == length(wanted) &&
       seed_inputs_match_sim_day_0
   ) {
     cat(
@@ -1177,6 +1297,11 @@ run_pipeline_fits <- function() {
     full.names = TRUE
   )
   seed_fit_states <- vapply(epydemix_seed_files, state_dir_from_seed_file, character(1))
+  if (length(FIT_STATES)) {
+    if (length(setdiff(FIT_STATES, seed_fit_states))) stop("Missing Section 5a seeds for fit_states.")
+    epydemix_seed_files <- epydemix_seed_files[seed_fit_states %in% FIT_STATES]
+    seed_fit_states <- seed_fit_states[seed_fit_states %in% FIT_STATES]
+  }
   expected_calibrated_jsons <- file.path(
     epydemix_output_dir,
     tools::file_path_sans_ext(basename(epydemix_seed_files)),
@@ -1193,6 +1318,64 @@ run_pipeline_fits <- function() {
       expected_fit_target = EPYDEMIX_FIT_TARGET,
       expected_peak_height_weight = EPYDEMIX_PEAK_HEIGHT_WEIGHT
     ))
+
+  if (R0_FIT_METHOD == "staged_simulator") {
+    requested <- seed_fit_states
+    if (length(requested) == 0L) stop("No Section 5a seed inputs found for staged fitting.")
+    reusable <- vapply(expected_calibrated_jsons, function(path) file.exists(path) &&
+      wis_calibrated_fit_matches(path, SIM_DAY_0_LABEL, SIMULATION_DAYS,
+        R0_SEARCH_REALIZATION_RANGE, "peak_height"), logical(1))
+    for (i in which(reusable)) {
+      checkpoint <- file.path(pipeline_output_root, "Rm_search", SIM_DAY_0_LABEL,
+        "checkpoints", paste0(requested[[i]], "_Rm_search_settings.rds"))
+      reusable[[i]] <- file.exists(checkpoint) && isTRUE(tryCatch(identical(readRDS(checkpoint)$run_signature,
+        jsonlite::read_json(expected_calibrated_jsons[[i]])$metadata_tags$staged_fit$run_signature), error = function(e) FALSE))
+    }
+    queued <- if (R0_FIT_LAUNCH == "pylauncher") requested else requested[!reusable]
+    if (!length(queued)) {
+      cat("Matching staged R0/exposure fits already exist for all requested states.\n")
+      return(invisible(TRUE))
+    }
+    queued <- queued[order(vapply(queued, county_count_for_state, integer(1)), queued)]
+    # Generate the actual fitted intervention scenario before launching jobs.
+    source("6a_vaccine_coverage_by_state.R", local = TRUE)
+    source("6b_outpatient_antiviral_coverage_by_state.R", local = TRUE)
+    source("6c_weekend_npi_schedule.R", local = TRUE)
+    original_run_scenarios <- SELECTED_RUN_SCENARIOS
+    SELECTED_RUN_SCENARIOS <- unique(c(SELECTED_RUN_SCENARIOS, R0_FIT_SCENARIO))
+    USE_CALIBRATED_INPUTS <- FALSE
+    source("6d_create_intervention_inputs.R", local = TRUE)
+    SELECTED_RUN_SCENARIOS <- original_run_scenarios
+    staged_args <- c(file.path(repo_root, "scripts", "5c_Rm_search.R"), "--fit-initial-exposed=true",
+      paste0("--output-dir=", PIPELINE_OUTPUT_DIR), paste0("--sim-day-0=", SIM_DAY_0_LABEL),
+      paste0("--selected-states=", paste(queued, collapse = ",")),
+      paste0("--realization-range=", paste(R0_SEARCH_REALIZATION_RANGE, collapse = ",")),
+      paste0("--simulation-days=", SIMULATION_DAYS), paste0("--scenario=", R0_FIT_SCENARIO),
+      paste0("--screening-realizations=", R0_SCREENING_REALIZATIONS),
+      paste0("--exposure-multipliers=", paste(R0_EXPOSURE_MULTIPLIERS, collapse = ",")),
+      paste0("--peak-height-tolerance=", R0_PEAK_HEIGHT_TOLERANCE),
+      paste0("--base-r0=", R0_BASE), paste0("--refine-step=", R0_REFINE_STEP),
+      "--r0-selection-metric=peak_height", "--r0-search-metrics=peak_height",
+      paste0("--execution-mode=", R0_EXECUTION_MODE), paste0("--workers=", R0_WORKERS),
+      paste0("--none-template=", NONE_TEMPLATE_FILE),
+      paste0("--vaccine-template=", INTERVENTION_TEMPLATE_FILES[["VACCINE"]]),
+      paste0("--antiviral-template=", INTERVENTION_TEMPLATE_FILES[["ANTIVIRAL"]]),
+      paste0("--npi-template=", INTERVENTION_TEMPLATE_FILES[["NPI"]]),
+      paste0("--all-interventions-template=", INTERVENTION_TEMPLATE_FILES[["ALL_INTERVENTIONS"]]),
+      paste0("--calibrated-output-root=", epydemix_output_dir))
+    if (R0_FIT_LAUNCH == "pylauncher") {
+      write_rm_fit_launcher(queued, staged_args, file.path(pipeline_output_root, "Rm_search", SIM_DAY_0_LABEL))
+      return(invisible(FALSE))
+    }
+    for (state in queued) {
+      state_args <- staged_args
+      state_args[startsWith(state_args, "--selected-states=")] <- paste0("--selected-states=", state)
+      status <- run_logged_command("Rscript", c(state_args, "--defer-sweep-tables=true",
+        "--write-calibrated-jsons=true", "--source-5a-if-missing=false", "--source-6d-if-missing=false"), workdir = repo_root)
+      if (!identical(status, 0L)) stop("Staged R0/exposure fitting failed for ", state, " with exit status ", status)
+    }
+    return(invisible(TRUE))
+  }
 
   if (R0_FIT_METHOD == "epydemix_all") {
     if (length(epydemix_seed_files) >= 51 && epydemix_calibrated_jsons_match) {

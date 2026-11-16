@@ -88,6 +88,8 @@ if (length(sim_day_0_values) > 0) {
 }
 input_metadata <- input_metadata %>%
   dplyr::filter(.data$scenario %in% selected_run_scenarios)
+fit_states <- get0("FIT_STATES", ifnotfound = character())
+if (length(fit_states)) input_metadata <- dplyr::filter(input_metadata, .data$state %in% fit_states)
 if (nrow(input_metadata) == 0) {
   stop(
     "No TACC JSONs matched selected scenario label(s): ",

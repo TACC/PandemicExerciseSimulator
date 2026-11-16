@@ -271,6 +271,9 @@ state_lookup <- tigris::fips_codes |>
   dplyr::mutate(state_dir = stringr::str_replace_all(.data$state_name, " ", "-")) |>
   dplyr::arrange(.data$state_name)
 
+fit_states <- get0("FIT_STATES", ifnotfound = character())
+if (length(fit_states)) state_lookup <- dplyr::filter(state_lookup, .data$state_dir %in% fit_states)
+
 flu_ts <- readr::read_csv(hospitalization_file, show_col_types = FALSE) |>
   dplyr::mutate(
     date = as.Date(.data$date),

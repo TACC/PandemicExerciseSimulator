@@ -4,7 +4,8 @@
 #' Edit scientific settings here once for 1_RUN_FIT.R, 2_RUN_SCENARIOS.R, and
 #' 3_RUN_FIGURES.R. Keep these four files together when copying an experiment.
 #' The phase files inherit this list; command-line overrides take precedence.
-#' Fit candidates and downstream scenarios both use 100 realizations.
+#' Staged fitting screens with 25 realizations and confirms with 100; downstream
+#' scenarios use 100, allowing reuse of the selected all-interventions batch.
 #' No local preview simulations run: selected_states is NULL.
 
 pipeline_inputs <- list(
@@ -28,19 +29,26 @@ pipeline_inputs <- list(
   # 4_PREPARE_DEPLOYMENT.R overrides this for its deployment-only subset.
   selected_scenarios = c("NONE", "VACCINE", "ANTIVIRAL", "NPI", "ALL_INTERVENTIONS"),
 
-  # R_m fitting: simulator_county_threshold uses 5c up to the county threshold;
-  # larger states use Epydemix. A threshold of 255 includes all states + DC.
-  r0_fit_method = "simulator_county_threshold", # Alternative: "epydemix_all".
-  r0_county_threshold = 255L,
+  # Staged full-simulator R0 + initial-exposure fitting for all 50 states + DC.
+  # Legacy alternatives: "simulator_county_threshold" or "epydemix_all".
+  r0_fit_method = "staged_simulator",
+  r0_county_threshold = 255L,         # Used only by the legacy threshold method.
   r0_realization_range = c(0L, 99L),    # Inclusive IDs per candidate R_m; 0..99 = 100 sims.
-  r0_search_metrics = c("total", "peak_height", "peak_timing", "wis"),
+  r0_search_metrics = "peak_height", # R0 follows maximum peak height only.
+  r0_base = 1.2,
+  r0_screening_realizations = 25L,
+  # Adaptive E0 search uses the minimum/maximum as bounds, not a fixed sweep.
+  r0_exposure_multipliers = c(1/32, 1/16, 1/8, 1/4, 1/2, 2/3, .8, 1, 1.5, 2),
+  r0_peak_height_tolerance = .15,
+  r0_refine_step = .025,
   r0_selection_metric = "peak_height", # R_m exported to ALL downstream scenarios.
   r0_fit_scenario = "ALL_INTERVENTIONS", # Scenario fitted to observed hospitalizations.
   reuse_best_fit_simulations = TRUE, # TRUE keeps the chosen candidate for downstream use.
   # Reuse requires matching fit/downstream realization ranges. Keep the fitting
   # scenario in selected_scenarios to include it in analyses; its rerun is omitted.
-  # Each criterion is searched independently; there is no combined objective.
-  # "all" means the three features; c("all", "wis") includes all four criteria.
+  # E0 timing is bracketed/refined in log space, alternating with Rm rechecks
+  # for at most three passes. Earlier fully evaluated candidates remain eligible.
+  # Timing ties prefer the original E0, then WIS; poor matches are reported.
   # Weekly scoring includes only complete Sun-Sat MMWR weeks within the horizon.
   # Peak height is the maximum of the weekly median trajectory, not its first peak.
 

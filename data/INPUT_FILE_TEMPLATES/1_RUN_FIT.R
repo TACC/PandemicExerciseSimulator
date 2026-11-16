@@ -1,7 +1,8 @@
 #////////
 #### LS6 Fit Phase Inputs ####
 #////////
-#' Prepare state R_m fitting launchers, then stop. Submit the generated launcher.
+#' Prepare staged state R_m + initial-exposure fitting launchers, then stop.
+#' Submit the generated launcher; it fits all 50 states and DC.
 #' Shared experiment settings: LS6_PIPELINE_INPUTS.R in this directory.
 #' The wrapper loads Apptainer and sets the WORK R library on every invocation.
 #' From the repository root:

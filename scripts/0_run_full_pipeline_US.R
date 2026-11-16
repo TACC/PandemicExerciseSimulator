@@ -157,7 +157,7 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
 
   if (PIPELINE_PHASE == "scenarios") {
     require_completed_pipeline_fits()
-    if (EXECUTION_TARGET == "ls6") aggregate_rm_search_checkpoints()
+    if (EXECUTION_TARGET == "ls6" || R0_FIT_METHOD == "staged_simulator") aggregate_rm_search_checkpoints()
   }
 
   if (PIPELINE_PHASE %in% c("all", "fit", "scenarios")) {
@@ -174,10 +174,11 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
         prepare_pipeline_seeds()
 
         # ////////
-#### Section 5b/5c R_m Fits ####
+#### Section 5b/5c R_m and Initial Exposure Fits ####
         # ////////
-        section_banner("5b/5c. R_m fitting")
+        section_banner("5b/5c. R_m and initial-exposure fitting")
         if (!run_pipeline_fits()) next
+        if (R0_FIT_METHOD == "staged_simulator") aggregate_rm_search_checkpoints(dates = SIM_DAY_0_LABEL)
       }
       if (PIPELINE_PHASE == "fit") next
 

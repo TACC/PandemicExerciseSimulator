@@ -193,6 +193,100 @@ files out of commits.
 | 9b | `9b_score_validation_hubverse_style.R` | Scores validation outputs, writes WIS summaries, and writes validation figures under `<PIPELINE_OUTPUT_DIR>/validation_scores/plots/`. |
 | 9c | `9c_score_validation_run_diagnostics.R` | Calculates additional simulations needed for a 95% CI and runtime diagnostics by state/scenario, then writes a combined runtime plot and a compartment-level heatmap. |
 
+The simulator's SEIHRD baseline beta uses infectiousness weights calculated from
+the corrected competing-clock IS-to-H and IS-to-R rates. At initialization, its
+age-only NGM averages low/high-risk weights using actual age-specific population
+risk shares. This baseline excludes treatment, vaccination, NPIs and travel;
+those mechanisms act during simulation. Its generation-time diagnostic uses the
+same corrected durations. The daily stochastic transition scheme is unchanged.
+Fits and simulation outputs created with the previous weights must be rerun in a
+fresh output directory; reusing a saved R0 alone does not preserve the old beta.
+The separate Epydemix fitting implementation is unchanged by this simulator fix.
+
+Pipeline 0 now defaults to `r0_fit_method="staged_simulator"`. This applies the
+tested New Jersey/Arizona/Delaware/Rhode Island approach to all states and DC;
+it runs directly in `5c_Rm_search.R` with `--fit-initial-exposed=true`, using the
+same evaluator and R0 search as ordinary 5c fitting. There is no separate fitting
+controller or R/Python wrapper. `r0_county_threshold` is used only by the legacy method. Edit scientific settings
+once in `data/INPUT_FILE_TEMPLATES/LS6_PIPELINE_INPUTS.R`, then use the same phases:
+
+`fit_states=NULL` retains all 51 fits. For a local smoke test, set `fit_states`
+and `selected_states` to the same small subset; the former scopes seed creation,
+fitting and scenario preparation, while the latter selects local simulations.
+Keep fit and simulation realization ranges equal to test best-batch reuse.
+
+The final staged choice first requires the 15% peak-height tolerance, then
+minimizes absolute peak-week error. Ties prefer exposures closest to the
+hospitalization-derived seed (absolute log ratio), then lower WIS. The E0
+search brackets timing by halving/doubling, then uses geometric midpoints and a
+10% bracket-width stopping tolerance. All fully evaluated Rm/E0 candidates
+remain eligible, including earlier points inside an Rm refinement. Up to three
+coordinate passes alternate E0 timing searches and Rm height refinements; these
+bounded passes do not imply a global optimum.
+The staged procedure figure shows every tested Rm as hollow grey dots on each
+adaptive-search row and highlights the retained final fit. Full search windows
+are saved separately as `<state>_Rm_search_windows.png`.
+
+1. Run `0_run_full_pipeline_US.R` with `1_RUN_FIT.R`; submit the generated
+   `Rm_search/<date>/fit_state_pylauncher.sh` from that directory.
+2. After fitting completes, run with `2_RUN_SCENARIOS.R`; submit the generated
+   `TACC_FILES/state_pylauncher.sh` as before.
+3. After scenarios complete, run with `3_RUN_FIGURES.R`.
+
+On LS6 retain the existing `bash scripts/ls6_container_exec.sh Rscript ...`
+invocation shown in each phase template. Launcher preparation does not submit
+jobs. Local execution is still available through the same pipeline inputs.
+
+Staged R0 search uses **peak height only**, starting at `r0_base=1.2`. Exposures
+are scaled from the original Section 5a county-age rows using largest-remainder
+allocation; reruns never compound a previous fitted multiplier. The default
+`r0_exposure_multipliers` sets the allowed E0 range through its minimum and
+maximum (defaults 1/32 to 2x); intermediate multipliers are no longer a fixed
+list to sweep. `r0_screening_realizations=25` controls cheap E0 probes;
+`r0_realization_range=c(0L,99L)` controls confirmed candidates and selected batch
+reuse. Screening is capped at the confirmation count. Set both to 100 to use
+100 simulations in every comparison.
+
+E0 timing is bracketed and refined adaptively in log space, with at most eight
+probes per pass, integer bounds, and a 10% relative bracket-width tolerance.
+Matching-week plateaus are refined toward the original seed. The best timing
+candidate can receive an Rm recheck even when its current height misses the
+15% tolerance. Rm rechecks use `r0_refine_step=.025`; every fully evaluated point
+remains available to the final height/timing/original-E0/WIS ranking. This avoids
+losing a better-timed candidate when a later Rm refinement improves height.
+
+There are at most three coordinate passes. The search stops on a matching peak
+week within height tolerance, an unchanged exploratory coordinate pair,
+or the pass limit. The existing peak metrics are computed over weeks with
+observations; no scoring-series definition is changed. This is a bounded
+adaptive search rather than a guarantee of a global joint optimum. Secondary
+humps and epidemic tails are not fitting targets.
+
+Staged candidate summaries are under `Rm_search/<date>/staged/<state>/`.
+Simulation and input caches are separated by state, input fingerprint, exposure
+count and realization count under 5c's existing `sim_outputs/` and
+`candidate_inputs/` directories. R0 evaluations can be reused across confirmation
+and refinement when all those settings match. Final seed JSONs keep the existing
+`epydemix_fit/<date>/<stem>/<stem>_EPYDEMIX_R0_ONLY.json` filename for 6d
+compatibility, but contain **both fitted R0 and exposures** and a distinct staged
+method tag. Phase 2 combines private state checkpoints and reports exposure
+multipliers and peak-height/timing quality flags in `Rm_search_best_by_state.csv`.
+All downstream scenario templates receive that state's same fitted R0 and seeds.
+Initial-exposure maps prefer these fitted seeds over the original 5a estimates.
+The chosen all-interventions batch can be reused only when R0, exact exposure
+allocation, run fingerprint, dates and realization IDs match.
+
+Old R0-only calibrations are stale for staged fitting. Changed clinical inputs,
+data, templates, simulator code or staged settings invalidate its cache. Failed
+jobs can be resumed with the original `5c_Rm_search.R` command; verified candidate
+caches are reused and private checkpoints rebuilt. Preserve the complete dated
+seed, validation, calibrated and Rm_search directories when moving results.
+
+The existing 5c weekly series is preserved (positive daily statewide H-occupancy
+changes summed over complete MMWR weeks); this does not change incident-admission
+bookkeeping. Historical four-state proof results remain in
+`STAGED_R0_EXPOSURE_FIT`; their standalone experiment runners have been retired.
+
 If a full-simulator R0 run finishes its simulations but stops before writing its summary or
 calibrated JSONs, replay the search from saved outputs with the original settings:
 

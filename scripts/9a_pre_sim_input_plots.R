@@ -411,6 +411,29 @@ initial_exposed_by_county <- function(metadata) {
     summarise(initial_exposed = sum(.data$infected, na.rm = TRUE), .groups = "drop")
 }
 
+read_staged_initial_exposed_by_county <- function() {
+  root <- file.path(search_root, "epydemix_fit")
+  if (nzchar(sim_day_0_label)) root <- file.path(root, sim_day_0_label) else {
+    dates <- list.dirs(root, recursive = FALSE, full.names = TRUE)
+    dates <- dates[grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", basename(dates))]
+    if (!length(dates)) return(tibble())
+    root <- sort(dates, decreasing = TRUE)[[1]]
+  }
+  files <- list.files(root, pattern = "_EPYDEMIX_R0_ONLY[.]json$", recursive = TRUE, full.names = TRUE)
+  rows <- map_dfr(files, function(path) {
+    config <- jsonlite::read_json(path)
+    if (is.null(config$metadata_tags$staged_fit)) return(tibble())
+    state <- sub("_SEED_NONE_EPYDEMIX_R0_ONLY[.]json$", "", sub("^INPUT_SEIHRD-STOCH_", "", basename(path)))
+    map_dfr(config$initial_exposed, function(row) tibble(geo_region = state,
+      county = stringr::str_pad(as.character(row$county), 5, pad = "0"),
+      initial_exposed = as.numeric(row$infected)))
+  })
+  if (!nrow(rows)) return(tibble())
+  rows %>%
+    group_by(.data$geo_region, .data$county) %>%
+    summarise(initial_exposed = sum(.data$initial_exposed), .groups = "drop")
+}
+
 read_derived_initial_exposed_by_county <- function() {
   if (!dir.exists(derived_initial_exposed_dir)) return(tibble())
 
@@ -574,6 +597,11 @@ plot_initial_exposed_for_us <- function(initial_exposed, out_file) {
 
 save_initial_exposed_figures <- function(metadata) {
   initial_exposed <- read_derived_initial_exposed_by_county()
+  fitted <- read_staged_initial_exposed_by_county()
+  if (nrow(fitted)) {
+    initial_exposed <- if (nrow(initial_exposed)) bind_rows(fitted,
+      anti_join(initial_exposed, distinct(fitted, .data$geo_region), by = "geo_region")) else fitted
+  }
   if (nrow(initial_exposed) == 0) {
     initial_exposed <- initial_exposed_by_county(metadata)
   }

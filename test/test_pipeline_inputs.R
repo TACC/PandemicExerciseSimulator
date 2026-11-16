@@ -18,13 +18,14 @@ setup <- function(file = NULL, args = character()) {
 expect_error <- function(expr) stopifnot(inherits(tryCatch(force(expr), error = identity), "error"))
 
 defaults <- setup()
-stopifnot(defaults$R0_SELECTION_METRIC == "peak_height",
-          setequal(defaults$R0_SEARCH_METRICS, c("total", "peak_height", "peak_timing", "wis")),
-          identical(defaults$R0_SEARCH_REALIZATION_RANGE, c(0L, 9L)),
+stopifnot(defaults$R0_SELECTION_METRIC == "peak_height", defaults$R0_FIT_METHOD == "staged_simulator",
+          identical(defaults$R0_SEARCH_METRICS, "peak_height"),
+          identical(defaults$R0_SEARCH_REALIZATION_RANGE, c(0L, 99L)),
           defaults$R0_FIT_LAUNCH == "direct", defaults$MOBILITY_YR == 2025L,
           all(file.exists(c(defaults$NONE_TEMPLATE_FILE, defaults$INTERVENTION_TEMPLATE_FILES))))
 
 config <- write_config(list(output_dir = file.path(temporary, "results"),
+  r0_fit_method = "simulator_county_threshold", r0_search_metrics = c("total", "peak_height", "peak_timing", "wis"),
   sim_day_0 = c("2025-09-27", "2025-10-04"), selected_states = "New Jersey",
   r0_realization_range = c(0L, 99L), workers = 32L, r0_fit_launch = "pylauncher",
   r0_fit_scenario = "VACCINE"))
@@ -46,7 +47,7 @@ expect_error(setup(args = "--run-web-preview=perhaps"))
 expect_error(setup(write_config(list(selected_states = "Not-A-State"), "bad-state.R")))
 expect_error(setup(write_config(list(r0_realization_range = c(9L, 0L)), "bad-range.R")))
 expect_error(setup(write_config(list(r0_fit_scenario = "UNKNOWN"), "bad-scenario.R")))
-expect_error(setup(write_config(list(reuse_best_fit_simulations = TRUE), "bad-reuse-range.R")))
+expect_error(setup(write_config(list(reuse_best_fit_simulations = TRUE, r0_realization_range = c(0L,9L)), "bad-reuse-range.R")))
 expect_error(setup(write_config(list(r0_fit_scenario = "VACCINE", r0_fit_method = "epydemix_all"), "bad-method.R")))
 
 # Empty selections use TACC output for ingestion and bundling, without replacing
@@ -184,6 +185,7 @@ stopifnot(isTRUE(inputs$run_pipeline_fits()))
 
 # Reuse only the completed winning candidate, including after an LS6 path moves.
 reuse <- setup(write_config(list(output_dir = file.path(temporary, "reuse"),
+  r0_fit_method = "simulator_county_threshold", r0_search_metrics = c("total", "peak_height", "peak_timing", "wis"),
   selected_states = NULL, r0_fit_scenario = "VACCINE", reuse_best_fit_simulations = TRUE,
   r0_realization_range = c(0L, 99L)), "reuse.R"))
 reuse$pipeline_output_root <- reuse$PIPELINE_OUTPUT_DIR

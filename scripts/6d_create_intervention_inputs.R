@@ -26,6 +26,7 @@ SELECTED_RUN_SCENARIOS <- get0(
   ifnotfound = c("NONE", names(INTERVENTION_TEMPLATE_FILES))
 )
 INPUT_CREATOR <- get0("INPUT_CREATOR", ifnotfound = "Emily M Javan")
+USE_CALIBRATED_INPUTS <- get0("USE_CALIBRATED_INPUTS", ifnotfound = TRUE)
 
 seed_input_dir <- file.path("..", PIPELINE_OUTPUT_DIR, "SEED_INPUT_JSONS", as.character(SIM_DAY_0))
 epydemix_fit_dir <- file.path("..", PIPELINE_OUTPUT_DIR, "epydemix_fit", as.character(SIM_DAY_0))
@@ -87,6 +88,7 @@ state_from_seed_path <- function(path) {
 }
 
 find_calibrated_json <- function(seed_path) {
+  if (!USE_CALIBRATED_INPUTS) return(NA_character_)
   stem <- tools::file_path_sans_ext(basename(seed_path))
   fit_subdir <- file.path(epydemix_fit_dir, stem)
   candidates <- list.files(
@@ -114,6 +116,10 @@ copy_calibrated_fields <- function(target, calibrated) {
   if (!is.null(purrr::pluck(calibrated, "metadata_tags", "validation", .default = NULL))) {
     if (is.null(target$metadata_tags)) target$metadata_tags <- list()
     target$metadata_tags$validation <- calibrated$metadata_tags$validation
+  }
+  if (!is.null(purrr::pluck(calibrated, "metadata_tags", "staged_fit", .default = NULL))) {
+    if (is.null(target$metadata_tags)) target$metadata_tags <- list()
+    target$metadata_tags$staged_fit <- calibrated$metadata_tags$staged_fit
   }
   if (!is.null(purrr::pluck(target, "disease_model", "parameters", .default = NULL)) &&
       !is.null(purrr::pluck(calibrated, "disease_model", "parameters", .default = NULL))) {
@@ -233,6 +239,8 @@ seed_files <- list.files(
 if (length(seed_files) == 0) {
   stop("No seed input JSONs found in ", seed_input_dir, ". Run 5a first.")
 }
+fit_states <- get0("FIT_STATES", ifnotfound = character())
+if (length(fit_states)) seed_files <- seed_files[vapply(seed_files, state_from_seed_path, character(1)) %in% fit_states]
 
 intervention_templates <- purrr::map(
   intervention_template_files,

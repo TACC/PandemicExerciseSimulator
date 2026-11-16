@@ -10,6 +10,8 @@
 # --r0-selection-metric=all is shorthand for --r0-selection-metric=total
 # --r0-search-metrics=all; total supplies the downstream calibrated JSON.
 # --execution-mode=parallel --workers=auto controls candidate realizations.
+# --fit-initial-exposed=true fits R0 by peak height, then initial exposures by
+# dominant-peak timing; confirmation and bounded rechecks run in this process.
 # --defer-sweep-tables=true stores private state checkpoints instead of combined
 # CSVs; script 0 combines them once in the scenarios phase after fitting finishes.
 # --state-output-subdir=true isolates one state's tables/plots under <date>/<state>
@@ -97,6 +99,15 @@ states <- split_arg(
     "Hawaii", "New-Hampshire")
 )
 scenario_label <- get_arg_value("--scenario=", "ALL_INTERVENTIONS")
+fit_initial_exposed <- get_bool_arg("--fit-initial-exposed=", FALSE)
+staged_version <- "staged_r0_exposures_v4"
+screening_realizations <- as.integer(get_arg_value("--screening-realizations=", "25"))
+exposure_multipliers <- sort(unique(as.numeric(split_arg(get_arg_value("--exposure-multipliers=",
+  "0.03125,0.0625,0.125,0.25,0.5,0.666666666666667,0.8,1,1.5,2")))))
+peak_height_tolerance <- as.numeric(get_arg_value("--peak-height-tolerance=", "0.15"))
+refine_step <- as.numeric(get_arg_value("--refine-step=", "0.025"))
+active_staged_context <- NULL
+winning_staged_contexts <- new.env(parent = emptyenv())
 state_output_subdir <- get_bool_arg("--state-output-subdir=", FALSE)
 defer_sweep_tables <- get_bool_arg("--defer-sweep-tables=", FALSE)
 if (defer_sweep_tables && length(states) != 1L) {
@@ -106,19 +117,19 @@ if (state_output_subdir && length(states) != 1L) {
   stop("--state-output-subdir=true requires exactly one --selected-states entry.")
 }
 simulation_days <- as.integer(get_arg_value("--simulation-days=", "200"))
-realization_range <- as.integer(split_arg(get_arg_value("--realization-range=", "0,9")))
+realization_range <- as.integer(split_arg(get_arg_value("--realization-range=", if (fit_initial_exposed) "0,99" else "0,9")))
 if (length(realization_range) != 2 || any(is.na(realization_range))) {
   stop("--realization-range must be two comma-separated integers, e.g. 0,9.")
 }
 
-base_r0 <- as.numeric(get_arg_value("--base-r0=", "2.2"))
+base_r0 <- as.numeric(get_arg_value("--base-r0=", "1.2"))
 r0_min <- as.numeric(get_arg_value("--r0-min=", "1.01"))
 r0_max <- as.numeric(get_arg_value("--r0-max=", "3.5"))
 initial_step <- as.numeric(get_arg_value("--initial-step=", "0.4"))
 min_step <- as.numeric(get_arg_value("--min-step=", "0.05"))
 step_shrink <- as.numeric(get_arg_value("--step-shrink=", "0.5"))
 max_iterations <- as.integer(get_arg_value("--max-iterations=", "8"))
-r0_selection_metric <- get_arg_value("--r0-selection-metric=", "total")
+r0_selection_metric <- get_arg_value("--r0-selection-metric=", if (fit_initial_exposed) "peak_height" else "total")
 # 'all' is shorthand for exploring all three features, with total selected for
 # the single calibrated JSON consumed downstream. Explicit search lists may add WIS.
 default_search_metrics <- r0_selection_metric
@@ -127,6 +138,14 @@ r0_selection_metric <- parse_r0_search_metrics(r0_selection_metric)
 if (length(r0_selection_metric) != 1) stop("Select one final R0 metric; use --r0-search-metrics for multiple paths.")
 r0_search_metrics <- unique(c(r0_selection_metric, parse_r0_search_metrics(
   get_arg_value("--r0-search-metrics=", default_search_metrics))))
+if (fit_initial_exposed && (!identical(r0_search_metrics, "peak_height") ||
+    is.na(screening_realizations) || screening_realizations < 1L ||
+    !length(exposure_multipliers) || any(!is.finite(exposure_multipliers) | exposure_multipliers <= 0) ||
+    !is.finite(peak_height_tolerance) || peak_height_tolerance <= 0 || peak_height_tolerance >= 1 ||
+    !is.finite(refine_step) || refine_step <= 0 || refine_step > .2 ||
+    realization_range[[1]] < 0 || realization_range[[2]] < realization_range[[1]])) {
+  stop("Staged fitting requires peak_height only, positive exposure/screening settings, and an ordered nonnegative realization range.")
+}
 execution_mode <- get_arg_value("--execution-mode=", "parallel")
 workers_arg <- get_arg_value("--workers=", "auto")
 workers <- if (workers_arg == "auto") "auto" else as.integer(workers_arg)
@@ -146,7 +165,7 @@ refresh_runtime_heatmap <- get_bool_arg("--refresh-runtime-heatmap=", FALSE)
 refresh_burden_from_complete_metadata <- get_bool_arg("--refresh-burden-from-complete-metadata=", TRUE)
 source_5a_if_missing <- get_bool_arg("--source-5a-if-missing=", TRUE)
 source_6d_if_missing <- get_bool_arg("--source-6d-if-missing=", TRUE)
-write_calibrated_jsons <- get_bool_arg("--write-calibrated-jsons=", FALSE)
+write_calibrated_jsons <- get_bool_arg("--write-calibrated-jsons=", fit_initial_exposed)
 calibrated_output_root_arg <- get_arg_value("--calibrated-output-root=", "")
 input_template_dir <- get_arg_value("--input-template-dir=", file.path(repo_root, "data", "INPUT_FILE_TEMPLATES"))
 shared_figure_dir <- get_arg_value("--shared-figure-dir=", file.path(repo_root, "figures"))
@@ -247,6 +266,13 @@ write_csv_preserving_existing <- function(data, path, keys = NULL) {
   out <- data
   if (file.exists(path)) {
     existing <- read_sweep_table(path, show_col_types = FALSE)
+    # A staged result describes one selected exposure allocation per state.
+    # Replace that state's old rows together, rather than retaining R0 points
+    # scored under a previous allocation or input fingerprint.
+    if (isTRUE(get0("fit_initial_exposed", ifnotfound = FALSE)) &&
+        "geo_region" %in% names(data) && "geo_region" %in% names(existing)) {
+      existing <- existing[!existing$geo_region %in% data$geo_region, , drop = FALSE]
+    }
     if ("search_centers" %in% names(existing)) existing$search_centers <- as.character(existing$search_centers)
     # Prefer recomputed rows by identity. Comparing every floating-point score
     # after a CSV round-trip can duplicate a candidate during recovery.
@@ -469,9 +495,14 @@ seed_input_file <- function(state) {
   )
 }
 
+candidate_context <- function(state) {
+  if (!is.null(active_staged_context) && identical(active_staged_context$state, state)) return(active_staged_context)
+  if (exists(state, winning_staged_contexts, inherits = FALSE)) get(state, winning_staged_contexts) else NULL
+}
+
 candidate_input_file <- function(state, r0) {
   file.path(
-    candidate_input_dir,
+    candidate_context(state)$input_dir %||% candidate_input_dir,
     paste0("INPUT_", state, "_", scenario_label, "_R0-", sprintf("%.4f", clip_r0(r0)), ".json")
   )
 }
@@ -484,9 +515,15 @@ write_candidate_input <- function(state, r0) {
   r0 <- clip_r0(r0)
   config <- jsonlite::fromJSON(source_file, simplifyVector = FALSE)
   config <- absolutize_data_paths(config, source_file)
+  context <- candidate_context(state)
+  candidate_range <- context$realization_range %||% realization_range
+  if (!is.null(context)) {
+    config$initial_exposed <- context$rows
+    config$metadata_tags$staged_fit <- list(version = staged_version, run_signature = context$run_signature)
+  }
   config$output_dir_path <- "GENERATE"
   config$batch_num <- "GENERATE"
-  config$realization_range <- as.character(realization_range)
+  config$realization_range <- as.character(candidate_range)
   config$execution <- list(mode = execution_mode, workers = workers)
   config$disease_model$parameters$R0 <- formatC(r0, format = "f", digits = 5)
   if (is.null(config$metadata_tags)) config$metadata_tags <- list()
@@ -496,7 +533,7 @@ write_candidate_input <- function(state, r0) {
     sweep_id = sweep_id,
     candidate_R0 = r0,
     source_input_file = source_file,
-    realization_range = realization_range,
+    realization_range = candidate_range,
     simulation_days = simulation_days,
     scoring_version = R0_SCORING_VERSION,
     r0_selection_metric = r0_selection_metric,
@@ -523,6 +560,9 @@ metadata_sim_day_0 <- function(metadata) {
 metadata_matches_candidate <- function(metadata_file, state, r0) {
   metadata <- tryCatch(jsonlite::fromJSON(metadata_file, simplifyVector = FALSE), error = function(e) NULL)
   if (is.null(metadata)) return(FALSE)
+  context <- candidate_context(state)
+  if (!is.null(context) && (!identical(metadata$metadata_tags$staged_fit$run_signature, context$run_signature) ||
+      !identical(exposure_allocation_key(metadata$initial_exposed), exposure_allocation_key(context$rows)))) return(FALSE)
   identical(metadata_state(metadata), state) &&
     identical(metadata$metadata_tags$scenario_label, scenario_label) &&
     identical(metadata_sim_day_0(metadata), sim_day_0) &&
@@ -531,9 +571,11 @@ metadata_matches_candidate <- function(metadata_file, state, r0) {
 }
 
 complete_metadata_for_candidate <- function(state, r0) {
-  expected_ids <- seq.int(realization_range[[1]], realization_range[[2]])
+  context <- candidate_context(state)
+  candidate_range <- context$realization_range %||% realization_range
+  expected_ids <- seq.int(candidate_range[[1]], candidate_range[[2]])
   metadata_files <- list.files(
-    sim_output_dir,
+    context$sim_dir %||% sim_output_dir,
     pattern = "^metadata_batch-.*\\.json$",
     recursive = TRUE,
     full.names = TRUE
@@ -553,6 +595,8 @@ complete_metadata_for_candidate <- function(state, r0) {
 }
 
 run_candidate <- function(input_file, state, r0) {
+  context <- candidate_context(state)
+  candidate_range <- context$realization_range %||% realization_range
   existing <- complete_metadata_for_candidate(state, r0)
   if (reuse_existing && !is.na(existing)) {
     message("SKIP existing complete output: ", state, " R0=", r0_key(r0))
@@ -571,10 +615,10 @@ run_candidate <- function(input_file, state, r0) {
   }
 
   message("RUN ", state, " ", scenario_label, " R0=", r0_key(r0),
-          " sims=", realization_range[[1]], "-", realization_range[[2]])
+          " sims=", candidate_range[[1]], "-", candidate_range[[2]])
   old_wd <- getwd()
   on.exit(setwd(old_wd), add = TRUE)
-  setwd(normalizePath(sim_output_dir, mustWork = TRUE))
+  setwd(normalizePath(context$sim_dir %||% sim_output_dir, mustWork = TRUE))
   dir.create("GENERATE", recursive = TRUE, showWarnings = FALSE)
   status <- system2(
     "poetry",
@@ -1039,12 +1083,12 @@ select_best_r0 <- function(summary_tbl, selection_metric = r0_selection_metric) 
     arrange(.data$selection_value, .data$disease_R0) %>% slice(1)
 }
 
-search_state <- function(state) {
+search_state <- function(state, search_base = base_r0, search_step = initial_step, search_min_step = min_step) {
   state <- normalize_state_dir(state)
   message("\nSearching R0 for ", state, " using ", paste(r0_search_metrics, collapse = ", "))
   evaluated <- new.env(parent = emptyenv())
   trace <- list(); summary_history <- list(); all_scores <- list(); all_predictions <- list()
-  center <- clip_r0(base_r0); step <- initial_step; exploration_centers <- center
+  center <- clip_r0(search_base); step <- search_step; exploration_centers <- center
   seen_candidate_windows <- character()
   get_eval <- function(r0) {
     key <- r0_key(r0)
@@ -1060,10 +1104,10 @@ search_state <- function(state) {
       candidates <- sort(unique(unlist(purrr::map(exploration_centers, ~ c(.x, .x - step, .x + step)))))
       candidates <- candidates[candidates >= r0_min & candidates <= r0_max]
       signature <- paste(formatC(candidates, format = "f", digits = 4), collapse = "|")
-      if (!signature %in% seen_candidate_windows || step < min_step) break
+      if (!signature %in% seen_candidate_windows || step < search_min_step) break
       step <- step * step_shrink
     }
-    if (step < min_step) break
+    if (step < search_min_step) break
     seen_candidate_windows <- c(seen_candidate_windows, signature)
     summaries <- purrr::map_dfr(purrr::map(candidates, get_eval), "summary")
     if (!nrow(summaries)) stop("No scored candidates for ", state)
@@ -1085,7 +1129,7 @@ search_state <- function(state) {
     if (identical(next_centers, sort(unique(exploration_centers))) && !frontier) step <- step * step_shrink
     center <- select_best_r0(explored, r0_selection_metric)$disease_R0
     exploration_centers <- next_centers
-    if (step < min_step) break
+    if (step < search_min_step) break
   }
   explored <- bind_rows(summary_history) %>% distinct(.data$disease_R0, .keep_all = TRUE)
   selected <- select_best_r0(explored, r0_selection_metric) %>% mutate(r0_selection_metric = r0_selection_metric)
@@ -1093,6 +1137,266 @@ search_state <- function(state) {
   list(best = selected, trace = bind_rows(trace), scores = bind_rows(all_scores) %>% distinct(),
        predictions = bind_rows(all_predictions) %>% distinct(), final_samples = final$samples,
        final_observed = final$observed, final_scores = final$scores)
+}
+
+# Staged fitting shares the existing evaluator, adaptive R0 search, plotting,
+# calibrated JSON writer and state checkpoints. Only candidate E0/ranges differ.
+exposure_allocation_key <- function(rows) {
+  sort(vapply(rows, function(row) paste(as.character(row$county), as.integer(row$age_group),
+    as.integer(row$infected), sep = ":"), character(1)))
+}
+
+scale_initial_exposed <- function(rows, total) {
+  weights <- vapply(rows, function(row) as.numeric(row$infected), numeric(1))
+  if (sum(weights) <= 0 || total < 1) stop("Staged fitting requires positive original exposures.")
+  exact <- weights / sum(weights) * total
+  counts <- floor(exact)
+  remaining <- as.integer(total - sum(counts))
+  if (remaining) {
+    chosen <- order(-(exact - counts), seq_along(counts))[seq_len(remaining)]
+    counts[chosen] <- counts[chosen] + 1
+  }
+  result <- Map(function(row, count) { row$infected <- as.character(count); row }, rows, counts)
+  result[counts > 0]
+}
+
+rank_exposure_candidates <- function(rows, tolerance = peak_height_tolerance, prefer_original = FALSE) {
+  rows$exposure_distance <- if (prefer_original && "original_initial_exposed_total" %in% names(rows))
+    abs(log(rows$initial_exposed_total / rows$original_initial_exposed_total)) else 0
+  rows %>% mutate(
+    height_error = abs(.data$predicted_peak_height / pmax(.data$observed_peak_height, 1e-12) - 1),
+    height_ok = .data$height_error <= tolerance + 1e-12,
+    timing_rank = if_else(.data$height_ok, abs(.data$peak_lag_weeks), .data$height_error)) %>%
+    arrange(desc(.data$height_ok), .data$timing_rank, .data$exposure_distance, .data$mean_wis, .data$height_error)
+}
+
+next_exposure_total <- function(records, final) {
+  current <- final$initial_exposed_total[[1]]
+  lag <- final$peak_lag_weeks[[1]]
+  options <- records$initial_exposed_total[records$sample_count == final$sample_count[[1]] &
+    ((lag > 0 & records$initial_exposed_total > current) | (lag < 0 & records$initial_exposed_total < current))]
+  if (!length(options)) return(NULL)
+  neighbor <- options[which.min(abs(log(options/current)))]
+  if (max(neighbor, current)/min(neighbor, current) <= 2) neighbor else floor(sqrt(neighbor*current) + .5)
+}
+
+# Bracket peak timing in log(E0), then refine toward the original seed on a
+# matching-week plateau. No smooth or globally monotonic response is assumed.
+next_adaptive_exposure <- function(rows, original, lower, upper, relative_tolerance = .1) {
+  rows <- rows %>% arrange(.data$initial_exposed_total) %>%
+    distinct(.data$initial_exposed_total, .keep_all = TRUE)
+  totals <- rows$initial_exposed_total
+  lag <- rows$peak_lag_weeks
+  midpoint <- function(a, b) {
+    if (abs(a-b) <= 1 || abs(log(a/b)) <= log1p(relative_tolerance)) return(NULL)
+    value <- as.integer(floor(sqrt(a*b) + .5))
+    if (value %in% totals || value <= lower || value >= upper) return(NULL)
+    value
+  }
+  zero <- which(lag == 0)
+  if (length(zero)) {
+    best <- zero[which.min(abs(log(totals[zero]/original)))]
+    if (totals[best] == original) return(NULL)
+    toward <- which((totals-totals[best])*(original-totals[best]) > 0 &
+      abs(log(totals/original)) < abs(log(totals[best]/original)))
+    if (!length(toward)) return(NULL)
+    neighbor <- toward[which.min(abs(log(totals[toward]/totals[best])))]
+    return(midpoint(totals[best], totals[neighbor]))
+  }
+  if (length(totals) > 1L) {
+    brackets <- which(head(lag,-1L)*tail(lag,-1L) < 0)
+    if (length(brackets)) {
+      i <- brackets[which.min(log(totals[brackets+1L]/totals[brackets]))]
+      return(midpoint(totals[i], totals[i+1L]))
+    }
+  }
+  best <- order(abs(lag), abs(log(totals/original)))[[1]]
+  value <- if (lag[best] < 0) max(lower, floor(min(totals)/2 + .5)) else
+    min(upper, floor(max(totals)*2 + .5))
+  if (value %in% totals) NULL else as.integer(value)
+}
+
+make_staged_context <- function(state) {
+  seed_path <- seed_input_file(state)
+  seed <- jsonlite::read_json(seed_path)
+  base <- absolutize_data_paths(jsonlite::read_json(base_input_file(state)), base_input_file(state))
+  original <- sum(vapply(seed$initial_exposed, function(row) as.numeric(row$infected), numeric(1)))
+  if (original < 1) stop(state, ": no original Section 5a exposures to scale.")
+  base$disease_model$parameters$R0 <- NULL
+  settings <- list(version = staged_version, scenario = scenario_label, simulation_days = simulation_days,
+    realization_range = realization_range, screening_realizations = min(screening_realizations, diff(realization_range) + 1L),
+    exposure_multipliers = exposure_multipliers, height_tolerance = peak_height_tolerance,
+    base_r0 = base_r0, refine_step = refine_step, exposure_max_rounds = 8L,
+    exposure_relative_tolerance = .1, coordinate_passes = 3L,
+    r0_selection_metric = "peak_height", search_metrics = "peak_height")
+  sources <- c(list.files(file.path(repo_root, "src"), pattern = "[.]py$", recursive = TRUE, full.names = TRUE),
+    file.path(repo_root, "scripts", c("5c_Rm_search.R", "5c_Rm_search_helpers.R")))
+  inputs <- c(seed_path, unlist(base$data), resolve_validation_file(base), none_template_file,
+    vaccine_template_file, antiviral_template_file, npi_template_file, all_interventions_template_file,
+    file.path(repo_root, "data", "VACCINATION", "all_US_weekly_vax_distribution.csv"),
+    file.path(repo_root, "data", "RISK_RATIOS", "state_insured-high-risk-antiviral-counts.csv"))
+  inputs <- unique(inputs[file.exists(inputs)])
+  manifest <- function(paths, pipeline = FALSE) {
+    paths <- normalizePath(paths, mustWork = TRUE)
+    names <- vapply(paths, function(path) {
+      if (pipeline && startsWith(path, paste0(pipeline_root, "/"))) return(paste0("pipeline:", substring(path, nchar(pipeline_root) + 2L)))
+      if (startsWith(path, paste0(repo_root, "/"))) substring(path, nchar(repo_root) + 2L) else path
+    }, character(1))
+    as.list(setNames(unname(tools::md5sum(paths)), names))
+  }
+  source_hashes <- manifest(sort(sources))
+  input_hashes <- manifest(inputs, TRUE)
+  protected <- base[c("disease_model", "travel_model", "non_pharma_interventions", "antiviral_model", "vaccine_model")]
+  payload <- list(settings = settings, original_exposed = seed$initial_exposed,
+    protected = protected, source_hashes = source_hashes, input_hashes = input_hashes)
+  temporary <- tempfile()
+  on.exit(unlink(temporary), add = TRUE)
+  writeLines(jsonlite::toJSON(payload, auto_unbox = TRUE, digits = NA, null = "null"), temporary)
+  signature <- unname(tools::md5sum(temporary))
+  list(state = state, original_rows = seed$initial_exposed, original_total = original,
+    settings = settings, source_hashes = source_hashes, input_hashes = input_hashes, run_signature = signature)
+}
+
+search_state_staged <- function(state) {
+  original_context <- make_staged_context(state)
+  confirm_n <- diff(realization_range) + 1L
+  trials <- list()
+  run_stage <- function(total, n, center, search = FALSE, step = initial_step, minimum = min_step,
+                        stage = "E0 screen") {
+    context <- original_context
+    context$rows <- scale_initial_exposed(context$original_rows, total)
+    context$realization_range <- c(realization_range[[1]], realization_range[[1]] + n - 1L)
+    suffix <- file.path(state, context$run_signature, paste0("E", total, "_N", n))
+    context$sim_dir <- file.path(sim_output_dir, suffix)
+    context$input_dir <- file.path(candidate_input_dir, suffix)
+    dir.create(context$sim_dir, recursive = TRUE, showWarnings = FALSE)
+    dir.create(context$input_dir, recursive = TRUE, showWarnings = FALSE)
+    previous <- active_staged_context
+    active_staged_context <<- context
+    on.exit(active_staged_context <<- previous, add = TRUE)
+    message(state, ": E0=", total, ", realizations=", n, if (search) "; adaptive R0" else paste0("; fixed R0=", center))
+    if (search) result <- search_state(state, center, step, minimum) else {
+      evaluated <- evaluate_candidate(state, center)
+      best <- select_best_r0(evaluated$summary) %>% mutate(r0_selection_metric = r0_selection_metric)
+      result <- list(best = best, trace = best %>% mutate(iteration = 1L, step = 0,
+        search_center = center, search_centers = paste0("R0=", r0_key(center))),
+        scores = evaluated$scores, predictions = evaluated$predictions,
+        final_samples = evaluated$samples, final_observed = evaluated$observed, final_scores = evaluated$scores)
+    }
+    result$best <- result$best %>% mutate(trial_id = length(trials) + 1L, stage = stage,
+      adaptive_search = search, initial_exposed_total = total,
+      original_initial_exposed_total = context$original_total, exposure_multiplier = total/context$original_total)
+    result$context <- context
+    result$adaptive_search <- search
+    trials[[length(trials) + 1L]] <<- result
+    result
+  }
+  # Every evaluated Rm is eligible for the incumbent, including candidates
+  # that were not the height-optimal point returned by an Rm refinement.
+  pool <- function(n = confirm_n) {
+    bind_rows(lapply(trials, function(trial) {
+      trial$trace %>% distinct(.data$disease_R0, .keep_all = TRUE) %>% mutate(
+        trial_id = trial$best$trial_id[[1]], stage = trial$best$stage[[1]],
+        initial_exposed_total = trial$best$initial_exposed_total[[1]],
+        original_initial_exposed_total = original_context$original_total,
+        exposure_multiplier = .data$initial_exposed_total / original_context$original_total)
+    })) %>% filter(.data$sample_count == n)
+  }
+  incumbent <- function() rank_exposure_candidates(pool(), prefer_original = TRUE) %>% slice(1L)
+  original <- original_context$original_total
+  screen_n <- original_context$settings$screening_realizations
+  baseline <- run_stage(original, screen_n, base_r0, search = TRUE, stage = "Initial Rm search")
+  if (baseline$best$observed_peak_height[[1]] <= 0) stop(state, ": no positive observed peak in the fitting window.")
+  confirmed_original <- if (screen_n < confirm_n) run_stage(original, confirm_n, baseline$best$disease_R0[[1]],
+    search = TRUE, step = 2*refine_step, minimum = refine_step, stage = "Confirm original E0: refine Rm") else baseline
+  lower <- max(1L, as.integer(floor(original*min(exposure_multipliers) + .5)))
+  upper <- max(original, as.integer(floor(original*max(exposure_multipliers) + .5)))
+  current <- confirmed_original$best
+  selected <- baseline
+  stop_reason <- "coordinate pass limit"
+  for (pass in seq_len(3L)) {
+    before <- current
+    center <- current$disease_R0[[1]]
+    total <- current$initial_exposed_total[[1]]
+    probes <- list()
+    for (iteration in seq_len(8L)) {
+      trial <- run_stage(total, screen_n, center,
+        stage = paste0("E0 bracket/refine ", pass, ".", iteration))
+      probes[[length(probes)+1L]] <- trial
+      probe_rows <- bind_rows(lapply(probes, `[[`, "best"))
+      total <- next_adaptive_exposure(probe_rows, original, lower, upper)
+      if (is.null(total)) break
+    }
+    # Timing determines which E0 to recheck with Rm, even when that E0's
+    # current height misses tolerance. This avoids rejecting a viable pair
+    # before Rm has had a chance to compensate.
+    target <- bind_rows(lapply(probes, `[[`, "best")) %>% mutate(
+      height_error = abs(.data$predicted_peak_height/.data$observed_peak_height-1),
+      distance = abs(log(.data$initial_exposed_total/original))) %>%
+      arrange(abs(.data$peak_lag_weeks), .data$distance, .data$height_error, .data$mean_wis) %>% slice(1L)
+    selected <- probes[[which(vapply(probes, function(x)
+      x$best$trial_id[[1]] == target$trial_id[[1]], logical(1)))[[1]]]]
+    refined <- run_stage(target$initial_exposed_total[[1]], confirm_n, center,
+      search = TRUE, step = 2*refine_step, minimum = refine_step,
+      stage = paste0("Refine Rm at adaptive E0 ", pass))
+    best_so_far <- incumbent()
+    if (best_so_far$height_ok[[1]] && best_so_far$peak_lag_weeks[[1]] == 0) {
+      stop_reason <- "matching peak week within height tolerance"; break
+    }
+    # Exploration follows the refined pair even when the incumbent remains
+    # better. A new coordinate can be a bridge to a better E0 on the next pass.
+    current <- refined$best
+    if (pass > 1L && identical(current$initial_exposed_total[[1]], before$initial_exposed_total[[1]]) &&
+        abs(current$disease_R0[[1]]-before$disease_R0[[1]]) < 1e-8) {
+      stop_reason <- "exploratory coordinate pair unchanged"; break
+    }
+  }
+  winner <- incumbent()
+  final <- trials[[winner$trial_id[[1]]]]
+  # Materialize the retained point from its completed batch; this may be an
+  # earlier point in an adaptive Rm search rather than that search's height best.
+  previous <- active_staged_context
+  active_staged_context <<- final$context
+  evaluated <- tryCatch(evaluate_candidate(state, winner$disease_R0[[1]]),
+    finally = {active_staged_context <<- previous})
+  final$best <- select_best_r0(evaluated$summary) %>% mutate(
+    trial_id = winner$trial_id[[1]], stage = winner$stage[[1]],
+    adaptive_search = final$adaptive_search,
+    initial_exposed_total = winner$initial_exposed_total[[1]],
+    original_initial_exposed_total = original, exposure_multiplier = .data$initial_exposed_total/original,
+    r0_selection_metric = r0_selection_metric)
+  final$final_samples <- evaluated$samples
+  final$final_observed <- evaluated$observed
+  final$final_scores <- evaluated$scores
+  records <- bind_rows(lapply(trials, `[[`, "best"))
+  final$best <- final$best %>% mutate(fit_method = "full_simulator_staged_r0_exposures",
+    peak_height_within_tolerance = abs(.data$predicted_peak_height/.data$observed_peak_height - 1) <= peak_height_tolerance + 1e-12,
+    median_peak_week_matches = .data$peak_lag_weeks == 0)
+  assign(state, final$context, winning_staged_contexts)
+  audit_dir <- file.path(sweep_root, "staged", state)
+  dir.create(audit_dir, recursive = TRUE, showWarnings = FALSE)
+  final$procedure <- records
+  final$procedure[final$best$trial_id[[1]], names(final$best)] <- final$best
+  final$procedure <- final$procedure %>% mutate(final_selected = .data$trial_id == final$best$trial_id[[1]])
+  readr::write_csv(pool(), file.path(audit_dir, "searched_candidates.csv"))
+  final$procedure$tested_r0_min <- vapply(trials, function(trial) min(trial$trace$disease_R0), numeric(1))
+  final$procedure$tested_r0_max <- vapply(trials, function(trial) max(trial$trace$disease_R0), numeric(1))
+  final$procedure$tested_rm <- vapply(trials, function(trial)
+    paste(sort(unique(trial$trace$disease_R0)), collapse = "|"), character(1))
+  readr::write_csv(final$procedure, file.path(audit_dir, "procedure.csv"))
+  # Preserve each adaptive search separately: exposures and replicate counts
+  # change between stages, so their error values must not share one path.
+  adaptive_trials <- Filter(function(trial) isTRUE(trial$adaptive_search), trials)
+  final$search_window_trace <- bind_rows(lapply(seq_along(adaptive_trials), function(i) {
+    trial <- adaptive_trials[[i]]
+    trial$trace %>% mutate(search_stage = paste0(if (i == 1L) "Initial search" else paste0("Refinement ", i - 1L),
+      "; E0=", trial$best$initial_exposed_total[[1]], "; n=", trial$best$sample_count[[1]]))
+  }))
+  readr::write_csv(final$search_window_trace, file.path(audit_dir, "search_windows.csv"))
+  readr::write_csv(records, file.path(audit_dir, "candidates.csv"))
+  jsonlite::write_json(list(baseline = baseline$best, exposure_selected = selected$best, final = final$best, stop_reason = stop_reason),
+    file.path(audit_dir, "result.json"), auto_unbox = TRUE, pretty = TRUE, digits = NA)
+  final
 }
 
 scenario_plot_label <- function(value) {
@@ -1369,7 +1673,7 @@ plot_wis_convergence <- function(state_result) {
       title = paste0(state_plot_label(state), paste0(" ", r0_metric_label(r0_selection_metric), " R_m convergence")),
       subtitle = paste0(
         "The search stops when step size drops below ",
-        formatC(min_step, format = "f", digits = 3),
+        formatC(if (fit_initial_exposed) refine_step else min_step, format = "f", digits = 3),
         " or after ",
         max_iterations,
         " iterations"
@@ -1388,19 +1692,95 @@ plot_wis_convergence <- function(state_result) {
   out_file
 }
 
+plot_staged_procedure <- function(records, state, path) {
+  records <- records %>% arrange(.data$trial_id) %>% mutate(
+    height_error_percent = 100 * (.data$predicted_peak_height/.data$observed_peak_height - 1),
+    row_label = paste0(stringr::str_wrap(paste0(sprintf("%02d", .data$trial_id), ". ", .data$stage), width = 27),
+      "\n(n=", .data$sample_count, ")", if_else(.data$final_selected, " [FINAL]", "")))
+  panels <- c("Rm", "Initial\nexposed", "Peak height\nerror (%)", "Peak lag\n(weeks)")
+  data <- bind_rows(
+    transmute(records, trial_id, final_selected, panel = panels[1], value = disease_R0,
+      label = sprintf("%.3f", disease_R0)),
+    transmute(records, trial_id, final_selected, panel = panels[2], value = initial_exposed_total,
+      label = as.character(initial_exposed_total)),
+    transmute(records, trial_id, final_selected, panel = panels[3], value = height_error_percent,
+      label = sprintf("%+.1f%%", height_error_percent)),
+    transmute(records, trial_id, final_selected, panel = panels[4], value = peak_lag_weeks,
+      label = sprintf("%+d", as.integer(peak_lag_weeks)))) %>%
+    mutate(panel = factor(.data$panel, levels = panels))
+  band <- tibble(panel = factor(panels[3], levels = panels),
+    low = -100*peak_height_tolerance, high = 100*peak_height_tolerance)
+  zero <- tibble(panel = factor(panels[3:4], levels = panels), value = 0)
+  ranges <- records %>% filter(.data$adaptive_search) %>% mutate(panel = factor(panels[1], levels = panels))
+  tested <- if ("tested_rm" %in% names(ranges)) ranges %>%
+    transmute(trial_id, panel, value = strsplit(.data$tested_rm, "|", fixed = TRUE)) %>%
+    tidyr::unnest_longer("value") %>% mutate(value = as.numeric(.data$value)) else tibble()
+  p <- ggplot(data, aes(x = .data$value, y = .data$trial_id)) +
+    geom_rect(data = band, aes(xmin = .data$low, xmax = .data$high, ymin = -Inf, ymax = Inf),
+      inherit.aes = FALSE, fill = "#e5f1e7") +
+    geom_vline(data = zero, aes(xintercept = .data$value), inherit.aes = FALSE,
+      color = "#888888", linetype = "dashed", linewidth = .4) +
+    geom_hline(yintercept = records$trial_id[records$final_selected], color = "#fce9cf", linewidth = 7) +
+    geom_segment(data = ranges,
+      inherit.aes = FALSE, mapping = aes(x = .data$tested_r0_min, xend = .data$tested_r0_max,
+        y = .data$trial_id, yend = .data$trial_id), color = "#aaaaaa", linewidth = 1) +
+    geom_point(data = tested, aes(x = .data$value, y = .data$trial_id), inherit.aes = FALSE,
+      color = "#888888", fill = "white", shape = 21, size = 2.2) +
+    geom_point(aes(color = .data$final_selected), size = 2.4) +
+    geom_text(aes(label = .data$label), nudge_y = -.24, size = 4) +
+    scale_color_manual(values = c("FALSE" = "#347d86", "TRUE" = "#dd7000"), guide = "none") +
+    facet_wrap(vars(.data$panel), nrow = 1, scales = "free_x") +
+    scale_y_reverse(breaks = records$trial_id, labels = records$row_label,
+      expand = expansion(add = c(.8, .5))) +
+    scale_x_continuous(expand = expansion(mult = .12, add = .05)) +
+    labs(title = paste0(state_plot_label(state), ": staged fitting procedure"),
+      subtitle = "Comparisons in execution order; the highlighted row is the retained final fit",
+      x = NULL, y = NULL,
+      caption = stringr::str_wrap(paste(
+        "Each row is one E0 comparison or an adaptive Rm search. Hollow grey dots show every Rm tested; the colored dot shows the row's representative result (the retained point on the highlighted row).",
+        "Rows are trials, not successive accepted fits. Final E0 selection prioritizes peak-week alignment within the green height tolerance band, then proximity to the hospital-derived E0, then WIS.",
+        "Rm searches minimize peak-height error. Negative peak lag means early; positive means late.",
+        "Earlier eligible candidates remain available after refinement."), width = 104)) +
+    theme_minimal(base_size = 14) +
+    theme(panel.grid.minor = element_blank(), panel.grid.major.y = element_line(color = "#eeeeee"),
+      axis.text.y = element_text(size = 13, lineheight = .95),
+      strip.text = element_text(face = "bold", size = 14), plot.title = element_text(face = "bold", size = 21),
+      plot.caption = element_text(hjust = 0, size = 11.5), panel.spacing.x = unit(.7, "lines"))
+  ggsave(path, p, width = 12, height = max(8, 3.3 + .63*nrow(records)), dpi = 200)
+  path
+}
+
 plot_wis_search_windows <- function(state_result) {
   trace <- state_result$trace
   if (!nrow(trace)) return(NA_character_)
   state <- trace$geo_region[[1]]
-  data <- r0_search_window_data(trace, r0_search_metrics, r0_min, r0_max)
+  window_trace <- state_result$search_window_trace
+  saved_windows <- file.path(sweep_root, "staged", state, "search_windows.csv")
+  if (is.null(window_trace) && fit_initial_exposed && file.exists(saved_windows)) {
+    window_trace <- readr::read_csv(saved_windows, show_col_types = FALSE)
+  }
+  if (!is.null(window_trace) && nrow(window_trace)) trace <- window_trace
+  staged <- "search_stage" %in% names(trace)
+  if (staged) {
+    stages <- unique(trace$search_stage)
+    parts <- lapply(stages, function(stage) {
+      part <- r0_search_window_data(filter(trace, .data$search_stage == stage), r0_search_metrics, r0_min, r0_max)
+      lapply(part, function(rows) mutate(rows, facet_label = paste0(stage, "\n", .data$facet_label)))
+    })
+    data <- setNames(lapply(names(parts[[1]]), function(key) bind_rows(lapply(parts, `[[`, key))), names(parts[[1]]))
+    for (key in names(data)) data[[key]]$facet_label <- factor(data[[key]]$facet_label,
+      levels = unique(data$points$facet_label))
+  } else data <- r0_search_window_data(trace, r0_search_metrics, r0_min, r0_max)
   if (!nrow(data$points)) return(NA_character_)
   n_panels <- length(unique(data$points$facet_label))
   caption_text <- stringr::str_wrap(paste(
-    "Each column shows one requested R_m search path. Grey segments connect candidates in that round's window;",
+    if (staged) "Columns show the initial R_m search and later refinements at their stated exposures and realization counts." else
+      "Each column shows one requested R_m search path.",
+    "Grey segments connect candidates in that round's window;",
     "teal diamonds mark centers unless also round-best; orange points mark the best candidate for that column's criterion.",
     "Black stars and facet titles mark the best in the last displayed window.",
     "Numeric labels show that criterion's error the first time an R_m appears in each column."
-  ), width = if (n_panels == 1) 95 else 165)
+  ), width = if (staged) 115 else if (n_panels == 1) 95 else 165)
   p <- ggplot() +
     geom_segment(data = data$segments,
       aes(x = .data$x_low, xend = .data$x_high, y = .data$iteration, yend = .data$iteration),
@@ -1420,7 +1800,7 @@ plot_wis_search_windows <- function(state_result) {
       box.padding = 0.12, point.padding = 0.20, min.segment.length = Inf,
       max.overlaps = Inf, seed = 20251004) +
     facet_wrap(vars(.data$facet_label), nrow = 1, scales = "free_x",
-      labeller = as_labeller(rm_plot_parse_strings, default = label_parsed)) +
+      labeller = if (staged) label_value else as_labeller(rm_plot_parse_strings, default = label_parsed)) +
     scale_y_reverse(breaks = sort(unique(trace$iteration)), expand = expansion(add = c(0.80, 0.45))) +
     scale_x_continuous(expand = expansion(mult = 0.16)) +
     labs(x = "Candidate R_m", y = "Search round",
@@ -1431,10 +1811,20 @@ plot_wis_search_windows <- function(state_result) {
           plot.title = element_text(face = "bold", size = 22), strip.text = element_text(face = "bold", size = 14),
           axis.title = element_text(size = 18), axis.text = element_text(size = 13),
           plot.caption = element_text(size = 13, hjust = 0, lineheight = 1.05),
+          panel.spacing.x = unit(1.5, "lines"),
           plot.caption.position = "panel", plot.margin = margin(10, 26, 8, 26))
-  path <- file.path(plot_dir, paste0(state, "_r0_search_windows.png"))
+  path <- file.path(plot_dir, paste0(state, "_Rm_search_windows.png"))
   p <- rm_plot_labels(p)
-  ggsave(path, p, width = max(8.8, 4.125 * n_panels), height = 7.5, dpi = 300)
+  ggsave(path, p, width = max(8.8, (if (staged) 6 else 4.125) * n_panels), height = 7.5, dpi = 300)
+  procedure <- state_result$procedure
+  procedure_file <- file.path(sweep_root, "staged", state, "procedure.csv")
+  if (is.null(procedure) && fit_initial_exposed && file.exists(procedure_file)) {
+    procedure <- readr::read_csv(procedure_file, show_col_types = FALSE)
+  }
+  if (!is.null(procedure) && nrow(procedure)) {
+    path <- file.path(plot_dir, paste0(state, "_Rm_E0_procedure.png"))
+    plot_staged_procedure(procedure, state, path)
+  }
   path
 }
 
@@ -1480,6 +1870,8 @@ complete_candidate_metadata_table <- function(selected_states = states) {
   purrr::map_dfr(metadata_files, function(metadata_file) {
     metadata <- tryCatch(jsonlite::fromJSON(metadata_file, simplifyVector = FALSE), error = function(e) NULL)
     if (is.null(metadata)) return(tibble())
+    if (fit_initial_exposed && !metadata_matches_candidate(metadata_file, metadata_state(metadata),
+        metadata_candidate_r0(metadata))) return(tibble())
 
     batch_num <- as.character(metadata$batch_num %||% "")
     timing_file <- file.path(dirname(metadata_file), paste0("simulation_times_batch-", batch_num, ".csv"))
@@ -1900,6 +2292,17 @@ write_calibrated_json <- function(row) {
   }
 
   config <- jsonlite::fromJSON(source_file, simplifyVector = FALSE)
+  context <- candidate_context(state)
+  if (!is.null(context)) {
+    config$initial_exposed <- context$rows
+    for (manifest in list(context$source_hashes, context$input_hashes)) {
+      paths <- vapply(names(manifest), function(path) {
+        if (startsWith(path, "pipeline:")) file.path(pipeline_root, substring(path, 10L)) else
+          if (grepl("^/", path)) path else file.path(repo_root, path)
+      }, character(1))
+      if (!identical(unname(tools::md5sum(paths)), unname(unlist(manifest)))) stop("Inputs changed during staged fitting for ", state)
+    }
+  }
   config$disease_model$parameters$R0 <- formatC(row$disease_R0, format = "f", digits = 5)
   if (is.null(config$metadata_tags)) config$metadata_tags <- list()
   config$metadata_tags$r0_search <- list(
@@ -1949,12 +2352,21 @@ write_calibrated_json <- function(row) {
       peak_lag_weeks = row$peak_lag_weeks
     )
   )
+  if (!is.null(context)) {
+    config$metadata_tags$epydemix_fit$method <- "full_simulator_staged_r0_exposures"
+    config$metadata_tags$epydemix_fit$note <- "Staged R0 and initial-exposure fit in 5c; compatible with Section 6d."
+    config$metadata_tags$staged_fit <- list(version = staged_version, run_signature = context$run_signature,
+      settings = context$settings, source_hashes = context$source_hashes, input_hashes = context$input_hashes,
+      original_initial_exposed = context$original_rows, original_total = context$original_total,
+      fitted_total = row$initial_exposed_total, exposure_multiplier = row$exposure_multiplier,
+      height_within_tolerance = row$peak_height_within_tolerance, median_peak_week_matches = row$median_peak_week_matches)
+  }
 
   stem <- tools::file_path_sans_ext(basename(source_file))
   out_dir <- file.path(calibrated_output_root, stem)
   out_file <- file.path(out_dir, paste0(stem, "_EPYDEMIX_R0_ONLY.json"))
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-  jsonlite::write_json(config, out_file, auto_unbox = TRUE, pretty = TRUE, null = "null")
+  jsonlite::write_json(config, out_file, auto_unbox = TRUE, pretty = TRUE, null = "null", digits = NA)
   out_file
 }
 
@@ -1971,7 +2383,7 @@ best_by_state_file <- sweep_table_path(file.path(sweep_root, "Rm_search_best_by_
 existing_best_by_state <- tibble()
 reused_best_by_state <- tibble()
 states_to_search <- states
-if (reuse_existing && file.exists(best_by_state_file)) {
+if (reuse_existing && !fit_initial_exposed && file.exists(best_by_state_file)) {
   existing_best_by_state <- read_sweep_table(best_by_state_file, show_col_types = FALSE) %>%
     mutate(geo_region = normalize_state_dir(.data$geo_region))
   for (column in c("r0_selection_metric", "scoring_version", "search_metrics")) {
@@ -2116,7 +2528,7 @@ if (!run_sims && !recover_existing) {
 if (length(states_to_search) > 0) {
   state_results <- list()
   for (state in states_to_search) {
-    state_result <- search_state(state)
+    state_result <- if (fit_initial_exposed) search_state_staged(state) else search_state(state)
     state_results[[state]] <- state_result
     # Save each finished state before plotting or starting the next state.
     # A later error must not discard hours of completed calibration work.
@@ -2242,6 +2654,11 @@ if (defer_sweep_tables) {
     simulation_days = as.integer(simulation_days), realization_range = as.integer(realization_range),
     selection_metric = r0_selection_metric, search_metrics = r0_search_metrics,
     scoring_version = R0_SCORING_VERSION)
+  if (fit_initial_exposed) {
+    settings$fit_method <- "staged_simulator"
+    settings$staged_version <- staged_version
+    settings$run_signature <- candidate_context(states[[1]])$run_signature
+  }
   path <- file.path(sweep_root, "checkpoints", paste0(states[[1]], "_Rm_search_settings.rds"))
   temporary <- tempfile(tmpdir = dirname(path))
   saveRDS(settings, temporary)

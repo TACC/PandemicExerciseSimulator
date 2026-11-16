@@ -24,23 +24,31 @@ pipeline_inputs <- list(
   # Set selected_states = NULL (or character()) to skip local simulations and
   # bundle all available TACC_FILES states for the selected scenarios instead.
   selected_states = c("District-of-Columbia", "Connecticut"),
+  fit_states = NULL,                 # NULL = all states/DC; optional subset for staged smoke tests.
   # In the deploy phase this same setting selects only the deployment states;
   # NULL includes all available states, without starting simulations.
   selected_scenarios = c("NONE", "VACCINE", "ANTIVIRAL", "NPI", "ALL_INTERVENTIONS"),
 
-  # R_m fitting: simulator_county_threshold uses 5c up to the county threshold;
-  # larger states use Epydemix. A threshold of 255 includes all states + DC.
-  r0_fit_method = "simulator_county_threshold", # Alternative: "epydemix_all".
+  # Staged full-simulator fitting for all 50 states + DC: R0 follows maximum
+  # peak height, initial exposures follow its timing with a height constraint.
+  # Legacy alternatives: "simulator_county_threshold" or "epydemix_all".
+  r0_fit_method = "staged_simulator",
   r0_county_threshold = 255L,
-  r0_realization_range = c(0L, 9L),    # Inclusive IDs per candidate R_m; 0..99 = 100 sims.
-  r0_search_metrics = c("total", "peak_height", "peak_timing", "wis"),
+  r0_realization_range = c(0L, 99L),   # Confirmation IDs; screening uses the first 25.
+  r0_search_metrics = "peak_height", # Other criteria never steer staged R0 selection.
+  r0_base = 1.2,
+  r0_screening_realizations = 25L,
+  # Adaptive E0 search uses the minimum/maximum as bounds, not a fixed sweep.
+  r0_exposure_multipliers = c(1/32, 1/16, 1/8, 1/4, 1/2, 2/3, .8, 1, 1.5, 2),
+  r0_peak_height_tolerance = .15,    # Exposure timing candidates must retain peak height.
+  r0_refine_step = .025,            # Fine R0 grid after exposure selection.
   r0_selection_metric = "peak_height", # R_m exported to ALL downstream scenarios.
   r0_fit_scenario = "ALL_INTERVENTIONS", # Scenario fitted to observed hospitalizations.
   reuse_best_fit_simulations = FALSE, # TRUE keeps the chosen candidate for downstream use.
   # Reuse requires matching fit/downstream realization ranges. Keep the fitting
   # scenario in selected_scenarios to include it in analyses; its rerun is omitted.
-  # Each criterion is searched independently; there is no combined objective.
-  # "all" means the three features; c("all", "wis") includes all four criteria.
+  # In staged fitting only peak_height steers R0. Exposures follow dominant-peak
+  # timing with WIS as a tie-break. Legacy 5c can explore multiple criteria.
   # Weekly scoring includes only complete Sun-Sat MMWR weeks within the horizon.
   # Peak height is the maximum of the weekly median trajectory, not its first peak.
 

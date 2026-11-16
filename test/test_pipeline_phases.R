@@ -90,7 +90,7 @@ run_phase <- function(name, target = "ls6", fail_fits = FALSE, fail_outputs = FA
         record("fit"); invisible(env$R0_FIT_LAUNCH != "pylauncher")
       }
       env$prepare_reused_fit_outputs <- function() record("reuse")
-      env$aggregate_rm_search_checkpoints <- function() record("aggregate")
+      env$aggregate_rm_search_checkpoints <- function(...) record("aggregate")
       env$require_completed_pipeline_fits <- function() {
         record("check-fits")
         if (fail_fits) stop("Incomplete fits")
