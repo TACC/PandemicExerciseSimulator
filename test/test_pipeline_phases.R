@@ -83,7 +83,9 @@ run_phase <- function(name, target = "ls6", fail_fits = FALSE, fail_outputs = FA
         if (command == "poetry") {
           stopifnot(identical(args, c("install", "--only", "main", "--no-root")))
         }
-        record(paste0("command:", command)); 0L
+        record(paste0("command:", command))
+        if (command == "Rscript") record(basename(args[[1]]))
+        0L
       }
       env$prepare_pipeline_seeds <- function() record("seeds")
       env$run_pipeline_fits <- function() {
@@ -115,8 +117,10 @@ stopifnot(is.null(scenarios$error),
     "6f_run_selected_scenarios.R", "7a_process_output_to_db.R") %in% scenarios$events))
 results <- run_phase("3_RUN_FIGURES.R")
 stopifnot(is.null(results$error),
-  all(c("check-fits", "check-outputs", "7a_process_output_to_db.R", "8_prepare_shinyapps_bundle.R") %in% results$events),
-  !any(c("fit", "seeds", "aggregate", "command:poetry", "6d_create_intervention_inputs.R",
+  all(c("check-fits", "check-outputs", "7a_process_output_to_db.R",
+    "9a_pre_sim_input_plots.R", "9b_score_validation_hubverse_style.R",
+    "9c_score_validation_run_diagnostics.R") %in% results$events),
+  !any(c("8_prepare_shinyapps_bundle.R", "fit", "seeds", "aggregate", "command:poetry", "6d_create_intervention_inputs.R",
     "6e_create_parallel_commands.R", "6f_run_selected_scenarios.R") %in% results$events))
 blocked <- run_phase("2_RUN_SCENARIOS.R", fail_fits = TRUE)
 for (target in c("local", "ls6")) {

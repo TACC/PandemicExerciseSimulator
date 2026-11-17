@@ -103,9 +103,10 @@ After the scenario jobs finish:
 bash 'scripts/ls6_container_exec.sh' Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/3_RUN_FIGURES.R
 ```
 
-This requires completed selected scenarios, then builds Parquet data, the
-deployment bundle, and figures. It never generates inputs or simulation
-commands. Keep `deploy_shinyapps = FALSE` to publish separately after review.
+This requires completed selected scenarios, then builds Parquet data and
+figures. Deployment bundle preparation and its size budget are handled separately
+by `4_PREPARE_DEPLOYMENT.R`, so deployment limits cannot block results figures.
+It never generates inputs or simulation commands.
 Use `--check-config` with any phase file to check merged settings without work.
 
 The explicit `pipeline_phase` values are `fit`, `scenarios`, `results`, and `deploy`.

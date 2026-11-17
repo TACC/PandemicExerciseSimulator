@@ -252,41 +252,45 @@ if (any(commandArgs(trailingOnly = TRUE) %in% c("--check-config", "--check-confi
         source("7a_process_output_to_db.R")
       }
 
-      # ////////
+      # Results must reach the figures independently of deployment size limits.
+      # The all-in-one local workflow retains its bundle preparation.
+      if (PIPELINE_PHASE %in% c("all", "deploy")) {
+        # ////////
 #### Section 8 Dashboard Bundle ####
-      # ////////
-      section_banner("8. Dashboard bundle")
-      source("8_prepare_shinyapps_bundle.R")
+        # ////////
+        section_banner("8. Dashboard bundle")
+        source("8_prepare_shinyapps_bundle.R")
 
-      # ////////
+        # ////////
 #### Section 8b shinyapps.io Deployment ####
-      # ////////
-      if (DEPLOY_SHINYAPPS) {
-        section_banner("Section 8b Deploying shinyapps.io Bundle")
-        if (!requireNamespace("rsconnect", quietly = TRUE)) {
-          stop("Package rsconnect is required for shinyapps.io deployment. Install it with install.packages('rsconnect').")
-        }
-        if (!nzchar(SHINYAPPS_ACCOUNT)) {
-          stop("Set --shinyapps-account=<account-name> when --deploy-shinyapps=true.")
-        }
+        # ////////
+        if (DEPLOY_SHINYAPPS) {
+          section_banner("Section 8b Deploying shinyapps.io Bundle")
+          if (!requireNamespace("rsconnect", quietly = TRUE)) {
+            stop("Package rsconnect is required for shinyapps.io deployment. Install it with install.packages('rsconnect').")
+          }
+          if (!nzchar(SHINYAPPS_ACCOUNT)) {
+            stop("Set --shinyapps-account=<account-name> when --deploy-shinyapps=true.")
+          }
 
-        shinyapps_bundle_dir <- normalizePath(
-          file.path(repo_root, "deploy", "shinyapps", "PandemicSimExplorer"),
-          mustWork = TRUE
-        )
-        message("Deploying shinyapps.io bundle:")
-        message("  appDir = ", shinyapps_bundle_dir)
-        message("  account = ", SHINYAPPS_ACCOUNT)
-        message("  appName = ", SHINYAPPS_APP_NAME)
-        rsconnect::deployApp(
-          appDir = shinyapps_bundle_dir,
-          appName = SHINYAPPS_APP_NAME,
-          account = SHINYAPPS_ACCOUNT
-        )
-      } else {
-        message("Prepared deployment bundle; no upload requested.")
-        message("Publish deploy/shinyapps/PandemicSimExplorer with Posit Publisher / Connect Cloud.")
-        message("For shinyapps.io, set deploy_shinyapps=TRUE and shinyapps_account in the input file.")
+          shinyapps_bundle_dir <- normalizePath(
+            file.path(repo_root, "deploy", "shinyapps", "PandemicSimExplorer"),
+            mustWork = TRUE
+          )
+          message("Deploying shinyapps.io bundle:")
+          message("  appDir = ", shinyapps_bundle_dir)
+          message("  account = ", SHINYAPPS_ACCOUNT)
+          message("  appName = ", SHINYAPPS_APP_NAME)
+          rsconnect::deployApp(
+            appDir = shinyapps_bundle_dir,
+            appName = SHINYAPPS_APP_NAME,
+            account = SHINYAPPS_ACCOUNT
+          )
+        } else {
+          message("Prepared deployment bundle; no upload requested.")
+          message("Publish deploy/shinyapps/PandemicSimExplorer with Posit Publisher / Connect Cloud.")
+          message("For shinyapps.io, set deploy_shinyapps=TRUE and shinyapps_account in the input file.")
+        }
       }
     }
 

@@ -1,7 +1,8 @@
 #////////
 #### LS6 Results Phase Inputs ####
 #////////
-#' Require completed simulations, then build Parquet data, figures, and the bundle.
+#' Require completed simulations, then build Parquet data and figures.
+#' Prepare the deployment separately with 4_PREPARE_DEPLOYMENT.R.
 #' Shared experiment settings: LS6_PIPELINE_INPUTS.R in this directory.
 #' The wrapper loads Apptainer and sets the WORK R library on every invocation.
 #' From the repository root:
