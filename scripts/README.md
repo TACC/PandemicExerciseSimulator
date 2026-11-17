@@ -456,6 +456,24 @@ When sourced by `0_run_full_pipeline_US.R`, `7a` uses the configured
 `(scenario_hash, batch_num)` pairs are skipped. Optional MongoDB ingestion is
 disabled by default.
 
+The master is checkpointed after **each finished batch**, using a temporary
+file and rename so a killed write preserves the previous checkpoint. Parquet
+files are also written this way. On restart, ingestion reuses an existing
+Parquet when its footer is readable and it is at least as new as all its
+source CSVs. This also recovers files produced by older runs that timed out
+before writing any master CSV. Keep the existing `sim_data/` directory when
+restarting. A batch interrupted during conversion will redo that unfinished
+file; completed files can be reused.
+
+The row count is a count of metadata batches, not CSVs: each batch may include
+many large county CSVs. Batches are processed sequentially and converted to
+Zstandard-compressed Parquet. Logs report CSV counts, input sizes, conversion
+times, reuse, and checkpoint progress. Use those timings to determine which
+conversion dominates before adjusting the compute job's wall time. The older
+implementation wrote the master only after every batch and rewrote Parquets
+when restarting without a master, so a timeout could discard the bookkeeping
+for an hour of completed conversions.
+
 When `0_run_full_pipeline_US.R` is run with `--run-web-preview=true`, it sources
 `6f_run_selected_scenarios.R`. By default, `6f` creates
 `<PIPELINE_OUTPUT_DIR>/WEB_INPUTS/web_state_commands.sh` inside the configured

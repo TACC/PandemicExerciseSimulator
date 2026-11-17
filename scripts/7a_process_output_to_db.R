@@ -8,7 +8,9 @@
 #   3. MongoDB              — metadata documents for the frontend (optional)
 #
 # Run after a batch of TACC jobs finishes. Re-running is safe: existing
-# (scenario_hash, batch_num) pairs are skipped everywhere.
+# (scenario_hash, batch_num) pairs complete in the master are skipped.
+# Each finished batch checkpoints the master; current Parquets can be reused
+# even when an earlier run timed out before its first master CSV was written.
 #
 # Design notes:
 #   - Disease/travel model parameters are stored as namespaced JSON strings,
@@ -256,6 +258,46 @@ format_bytes <- function(x) {
   )
 }
 
+# Write beside the destination, then rename: a timeout cannot replace a good
+# checkpoint/Parquet with a partially written file (same-filesystem rename).
+atomic_output <- function(path, writer) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  temporary <- tempfile(paste0(".", basename(path), "-"), tmpdir = dirname(path))
+  on.exit(unlink(temporary), add = TRUE)
+  writer(temporary)
+  if (!file.rename(temporary, path)) stop("Could not replace output: ", path)
+  invisible(path)
+}
+
+# Recover completed Parquets even from runs made before master checkpointing.
+# Opening the footer is cheap and rejects files truncated by a killed writer.
+parquet_is_current <- function(path, sources) {
+  if (!file.exists(path) || length(sources) == 0L) return(FALSE)
+  info <- file.info(c(path, sources))
+  if (anyNA(info$mtime) || any(info$mtime[-1] > info$mtime[1])) return(FALSE)
+  tryCatch({
+    reader <- arrow::ParquetFileReader$create(path)
+    reader$GetSchema()
+    TRUE
+  }, error = function(e) FALSE)
+}
+
+write_ingested_parquet <- function(path, sources, label, build) {
+  if (parquet_is_current(path, sources)) {
+    message(sprintf("  [%s] reusing %s", label, path))
+    return(invisible(path))
+  }
+  started <- proc.time()[["elapsed"]]
+  bytes <- sum(file.info(sources)$size)
+  message(sprintf("  [%s] reading %d CSV(s), %s", label, length(sources), format_bytes(bytes)))
+  atomic_output(path, function(temporary) {
+    arrow::write_parquet(build(), temporary, compression = "zstd")
+  })
+  message(sprintf("  [%s] wrote %s in %.1f s", label, path,
+                  proc.time()[["elapsed"]] - started))
+  invisible(path)
+}
+
 # ── Simulation times ──────────────────────────────────────────────────────────
 parse_sim_times <- function(metadata_path, batch_num) {
   sim_file <- file.path(
@@ -394,11 +436,10 @@ ingest_network <- function(metadata_dir, scenario_hash, batch_num) {
   out_dir <- file.path(PARQUET_ROOT, scenario_hash, batch_num)
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-  read_csv(csv_path, show_col_types = FALSE) %>%
-    mutate(scenario_hash = scenario_hash, batch_num = batch_num) %>%
-    write_parquet(file.path(out_dir, "network.parquet"), compression = "zstd")
-
-  message(sprintf("  [network] wrote %s", file.path(out_dir, "network.parquet")))
+  write_ingested_parquet(file.path(out_dir, "network.parquet"), csv_path, "network", function() {
+    read_csv(csv_path, show_col_types = FALSE) %>%
+      mutate(scenario_hash = scenario_hash, batch_num = batch_num)
+  })
 }
 
 # ── Parquet ingest: nodes ─────────────────────────────────────────────────────
@@ -424,12 +465,10 @@ ingest_nodes <- function(metadata_dir, scenario_hash, batch_num) {
   out_path <- file.path(out_dir, "nodes.parquet")
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-  arrow::open_csv_dataset(node_files) %>%
-    mutate(scenario_hash = scenario_hash, batch_num = batch_num) %>%
-    write_parquet(out_path, compression = "zstd")
-
-  message(sprintf("  [nodes]   wrote %s (%d file(s))",
-                  out_path, length(node_files)))
+  write_ingested_parquet(out_path, node_files, "nodes", function() {
+    arrow::open_csv_dataset(node_files) %>%
+      mutate(scenario_hash = scenario_hash, batch_num = batch_num)
+  })
 }
 
 # ── Parquet ingest: simulation times ──────────────────────────────────────────
@@ -451,14 +490,10 @@ ingest_sim_times <- function(metadata_dir, scenario_hash, batch_num) {
   out_path <- file.path(out_dir, "simulation_times.parquet")
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   
-  read_csv(csv_path, show_col_types = FALSE) %>%
-    mutate(
-      scenario_hash = scenario_hash,
-      batch_num = batch_num
-    ) %>%
-    write_parquet(out_path, compression = "zstd")
-  
-  message(sprintf("  [times]   wrote %s", out_path))
+  write_ingested_parquet(out_path, csv_path, "times", function() {
+    read_csv(csv_path, show_col_types = FALSE) %>%
+      mutate(scenario_hash = scenario_hash, batch_num = batch_num)
+  })
 }
 
 # ── MongoDB write ─────────────────────────────────────────────────────────────
@@ -747,6 +782,7 @@ message(sprintf(
 ))
 
 #### Ingest new rows ###########################################################
+updated_master <- master
 if (nrow(new_rows) > 0) {
 
   # Optional MongoDB connection
@@ -762,12 +798,13 @@ if (nrow(new_rows) > 0) {
   }
 
   walk(seq_len(nrow(new_rows)), function(i) {
+    batch_started <- proc.time()[["elapsed"]]
     row  <- new_rows[i, ]
     mdir <- dirname(row$file_path)
     hash <- row$scenario_hash
     bn   <- row$batch_num
 
-    message(sprintf("\nIngesting %s / %s", hash, bn))
+    message(sprintf("\nIngesting %d/%d: %s / %s", i, nrow(new_rows), hash, bn))
     
     #### Run ingest iuns #######################################################
     ingest_network(mdir, hash, bn)
@@ -776,7 +813,7 @@ if (nrow(new_rows) > 0) {
     
     sizes <- get_batch_file_sizes(hash, bn)
     
-    new_rows[i, c(
+    row[1, c(
       "network_parquet_bytes",
       "nodes_parquet_bytes",
       "sim_times_parquet_bytes",
@@ -795,35 +832,26 @@ if (nrow(new_rows) > 0) {
       )
       message("  [mongo]   upserted")
     }
-  })
 
-  #### Write metadata CSV ######################################################
-  if (is.null(master) || nrow(master) == 0) {
-    updated_master <- new_rows
-  } else {
-    keys_to_replace <- paste(new_rows$scenario_hash, new_rows$batch_num, sep = "::")
-    
-    updated_master <- master %>%
-      dplyr::filter(!paste(scenario_hash, batch_num, sep = "::") %in% keys_to_replace) %>%
-      bind_rows(new_rows)
-  }
-  
-  # Back filling file size since parquets don't exist at time of ingestion and initial master creation
-  for (i in seq_len(nrow(updated_master))) {
-    sizes <- get_batch_file_sizes(updated_master$scenario_hash[i], updated_master$batch_num[i])
-    
-    updated_master$network_parquet_bytes[i]   <- sizes$network_parquet_bytes
-    updated_master$nodes_parquet_bytes[i]     <- sizes$nodes_parquet_bytes
-    updated_master$sim_times_parquet_bytes[i] <- sizes$simulation_times_parquet_bytes
-    updated_master$total_parquet_file_size[i] <- format_bytes(sizes$total_parquet_bytes)
-  }
-  
-  write_csv(updated_master, MASTER_CSV)
+    # Commit only after all outputs for this batch have finished. The closure
+    # keeps the accumulated master for the next batch, including old rows.
+    if (is.null(updated_master) || nrow(updated_master) == 0) {
+      updated_master <<- row
+    } else {
+      updated_master <<- updated_master %>%
+        dplyr::filter(!(.data$scenario_hash == hash & .data$batch_num == bn)) %>%
+        bind_rows(row)
+    }
+    atomic_output(MASTER_CSV, function(path) write_csv(updated_master, path))
+    message(sprintf("  [checkpoint] %d/%d batches; %d master row(s); batch %.1f s",
+                    i, nrow(new_rows), nrow(updated_master),
+                    proc.time()[["elapsed"]] - batch_started))
+  })
   message(sprintf("\nMaster CSV: %s  (%d total row(s))", MASTER_CSV, nrow(updated_master)))
 
 } else {
   message("Nothing new to ingest.")
 }
 
-current_master <- if (exists("updated_master")) updated_master else master
+current_master <- updated_master
 write_scenario_features(current_master)
