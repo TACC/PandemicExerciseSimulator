@@ -136,7 +136,60 @@ find_peaks <- function(y, dates, min_fraction = .35, separation = 4, valley_drop
   }
   list(index = sort(kept), smooth = z)
 }
+# Descriptive median-curve diagnostics, not probabilistic forecast scores.
+# Thresholds are editorial screening choices; fitted Rm/E0 are never changed.
+FIT_SCREENING <- list(max_nrmse = .15, max_peak_error = .20,
+  max_total_error = .25, max_peak_week_error = 1,
+  max_width20_error_weeks = 2, max_width50_error_weeks = 1.5,
+  low_tail_deficit_fraction = .10)
 wape <- function(o, p) sum(abs(p-o))/max(sum(o), 1)
+peak_normalized_rmse <- function(o, p) sqrt(mean((p-o)^2))/max(o)
+
+# Outermost crossings capture broad shoulders, including a later resurgence.
+# Linear interpolation uses calendar dates; truncated windows are flagged.
+peak_width <- function(y, dates, fraction) {
+  dates <- as.numeric(dates)
+  peak <- which.max(y)
+  active <- which(y >= fraction*max(y))
+  first <- min(active); last <- max(active)
+  crossing <- function(i, j) dates[i] + (fraction*max(y)-y[i]) *
+    (dates[j]-dates[i])/(y[j]-y[i])
+  start <- if (first == 1L) dates[first] else crossing(first-1L, first)
+  end <- if (last == length(y)) dates[last] else crossing(last, last+1L)
+  rise <- (dates[peak]-start)/7
+  decline <- (end-dates[peak])/7
+  list(rise = rise, decline = decline, end = end,
+    asymmetry = if (rise+decline > 0) (decline-rise)/(decline+rise) else NA_real_,
+    censored = first == 1L || last == length(y))
+}
+curve_shape_metrics <- function(y, m, dates, fitted_mean = m) {
+  o20 <- peak_width(y, dates, .20); p20 <- peak_width(m, dates, .20)
+  o50 <- peak_width(y, dates, .50); p50 <- peak_width(m, dates, .50)
+  tail <- as.numeric(dates) > o20$end
+  total <- sum(y)
+  tibble(
+    rmse_median = sqrt(mean((m-y)^2)),
+    nrmse_peak = peak_normalized_rmse(y,m),
+    nrmse_mean_peak = peak_normalized_rmse(y,fitted_mean),
+    observed_rise20_weeks = o20$rise, fitted_rise20_weeks = p20$rise,
+    observed_decline20_weeks = o20$decline, fitted_decline20_weeks = p20$decline,
+    rise20_error_weeks = p20$rise-o20$rise,
+    decline20_error_weeks = p20$decline-o20$decline,
+    observed_rise50_weeks = o50$rise, fitted_rise50_weeks = p50$rise,
+    observed_decline50_weeks = o50$decline, fitted_decline50_weeks = p50$decline,
+    rise50_error_weeks = p50$rise-o50$rise,
+    decline50_error_weeks = p50$decline-o50$decline,
+    observed_asymmetry20 = o20$asymmetry, fitted_asymmetry20 = p20$asymmetry,
+    asymmetry20_error = p20$asymmetry-o20$asymmetry,
+    observed_tail_fraction = sum(y[tail])/total,
+    fitted_tail_fraction_of_observed_total = sum(m[tail])/total,
+    tail_deficit_fraction = sum(y[tail]-m[tail])/total,
+    shape_window_censored = o20$censored || p20$censored || o50$censored || p50$censored,
+    prolonged_rise_missed = o20$rise-p20$rise > FIT_SCREENING$max_width20_error_weeks,
+    prolonged_decline_missed = o20$decline-p20$decline > FIT_SCREENING$max_width20_error_weeks,
+    low_tail_underestimated = sum(y[tail]-m[tail])/total > FIT_SCREENING$low_tail_deficit_fraction
+  )
+}
 classify <- function(d) {
   y <- d$observed; m <- d$q0_5; pk <- find_peaks(y,d$date)
   raw_pk <- find_peaks(y,d$date, valley_drop = .10, smooth = FALSE)
@@ -149,8 +202,18 @@ classify <- function(d) {
   local <- which(abs(as.numeric(d$date-d$date[target]))<=14)
   local_error <- wape(y[local], m[local])
   local_good <- abs(as.numeric(d$date[mp]-d$date[target])) <= 7 && local_error <= .35
-  global_good <- wape(y,m) <= .45 && abs(as.numeric(d$date[mp]-d$date[op])) <= 7 &&
-    abs(max(m)/max(y)-1) <= .20 && abs(sum(m)/sum(y)-1) <= .25
+  shape <- curve_shape_metrics(y,m,d$date,d$mean_generated)
+  core_shape_match <- max(abs(c(shape$rise20_error_weeks, shape$decline20_error_weeks))) <=
+    FIT_SCREENING$max_width20_error_weeks &&
+    max(abs(c(shape$rise50_error_weeks, shape$decline50_error_weeks))) <=
+    FIT_SCREENING$max_width50_error_weeks
+  # A clean observed single peak is required for showcase eligibility. Raw
+  # secondary peaks are review flags, not proof of a biological second wave.
+  global_good <- shape$nrmse_peak <= FIT_SCREENING$max_nrmse && core_shape_match &&
+    !shape$shape_window_censored && length(raw_pk$index) == 1L &&
+    abs(as.numeric(d$date[mp]-d$date[op]))/7 <= FIT_SCREENING$max_peak_week_error &&
+    abs(max(m)/max(y)-1) <= FIT_SCREENING$max_peak_error &&
+    abs(sum(m)/sum(y)-1) <= FIT_SCREENING$max_total_error
   middle <- length(ii) == 2 && d$date[mp] > d$date[ii[1]]+7 && d$date[mp] < d$date[ii[2]]-7
   position <- if (length(ii) == 1) "single_peak" else if (middle) "between_peaks" else
     if (target == ii[1]) "first_peak" else "second_peak"
@@ -160,7 +223,7 @@ classify <- function(d) {
   early_ratio <- sum(m[early])/max(sum(y[early]),1)
   early_excess <- mean(m[early]-y[early])/max(y)
   similar <- length(ii) == 2 && min(pk$smooth[ii])/max(pk$smooth[ii]) >= .8
-  tibble(n_observed_weeks=nrow(d), expected_weeks=as.integer((max(weekly$date)-min(weekly$date))/7)+1L,
+  result <- tibble(n_observed_weeks=nrow(d), expected_weeks=as.integer((max(weekly$date)-min(weekly$date))/7)+1L,
     incomplete_observation_window=nrow(d)<as.integer((max(weekly$date)-min(weekly$date))/7)+1L,
     early_observed_weeks=length(early), n_significant_peaks = length(pk$index),
     peak_1_date = d$date[ii[1]], peak_2_date = if (length(ii)==2) d$date[ii[2]] else as.Date(NA),
@@ -184,13 +247,18 @@ classify <- function(d) {
     early_4week_ratio = early_ratio, early_excess_peak_fraction = early_excess,
     possible_excess_seeding = length(early)==4 && early_ratio >= 2 && early_excess >= .05,
     # An early fitted peak alone cannot diagnose an initialization error.
-    review_reason = if (length(early)==4 && early_ratio >= 2 && early_excess >= .05) "Early overshoot; investigate seeding" else
-      if (middle) "Fitted peak falls between observed peaks" else
-      if (similar) "Two observed peaks of similar height" else
-      if (length(ii)==2 && target==ii[1]) "Targets first observed peak" else
-      if (length(ii)==2) "Targets second observed peak" else
-      if (abs(mp-op)>1) "Peak timing mismatch" else
-      if (!global_good) "Epidemic width / total burden mismatch" else "Good single-peak fit")
+    review_reason = if (length(pk$index) >= 2L) "Multiple observed peaks; single fitted wave" else
+      if (length(raw_pk$index) >= 2L) "Secondary peak / shoulder; morphology review" else
+      if (shape$prolonged_rise_missed) "Observed rise longer than fitted rise" else
+      if (shape$prolonged_decline_missed) "Observed decline longer than fitted decline" else
+      if (shape$shape_window_censored) "Rise / decline truncated by observation window" else
+      if (abs(as.numeric(d$date[mp]-d$date[op])) > 7) "Peak timing mismatch" else
+      if (global_good && shape$low_tail_underestimated) "Single-peak core reproduced; low-level tail underestimated" else
+      if (global_good) "Single-peak core reproduced" else
+      if (shape$low_tail_underestimated) "Low-level tail underestimated" else
+      if (length(early)==4 && early_ratio >= 2 && early_excess >= .05) "Early overshoot; investigate seeding" else
+      "Curve width / amplitude / burden mismatch")
+  bind_cols(result,shape)
 }
 screen <- weekly %>% group_by(geo_region) %>% group_modify(~classify(.x)) %>% ungroup()
 
@@ -224,43 +292,36 @@ catalog <- screen %>% left_join(best %>% select(geo_region, disease_R0, sample_c
   left_join(context, by = "geo_region") %>%
   mutate(original_plot = file.path(sweep,"plots",paste0(geo_region,"_final_r0_fit.png")))
 
-# Exhaustive four-state selection maximizes the sum of pairwise distances in
-# standardized log(population), log(counties), and mobility, within good fits.
-good_pool <- catalog %>% filter(category == "single_peak_good", !incomplete_observation_window) %>% arrange(wape)
-diverse_four <- function(pool) {
-  if (nrow(pool)<4) stop("Fewer than four good single-peak states; review thresholds explicitly.")
-  x <- cbind(log(pool$population), log(pool$county_count), pool$weighted_offcounty_mobility)
-  x <- scale(x); x[!is.finite(x)] <- 0
-  distance <- as.matrix(dist(x))
-  sets <- combn(nrow(pool),4)
-  score <- apply(sets,2,function(i) sum(distance[i,i])/2)
-  pool$geo_region[sets[,which.max(score)]]
-}
-good <- diverse_four(good_pool)
-# Choose distinct examples, one per mechanism where available.
+# Showcase agreement in the observed single-peak core, then rank whole-curve
+# median RMSE normalized by observed peak. Demography is context, not a score.
+good_pool <- catalog %>%
+  filter(category == "single_peak_good", !incomplete_observation_window) %>%
+  arrange(nrmse_peak, abs(asymmetry20_error), geo_region)
+if (nrow(good_pool) < 4L) stop("Fewer than four states meet the single-peak core screening rules. ",
+  "Review the shape metrics and thresholds; no failing states are silently promoted.")
+good <- head(good_pool$geo_region,4)
+# Show distinct limitations of the saved fitted runs, not universal impossibility
+# claims about the simulator. Use complete windows for the main comparisons.
 bad <- character(); bad_labels <- character()
+limitation_pool <- catalog %>% filter(!incomplete_observation_window)
 pick_bad <- function(pool, label) {
-  pool <- pool %>% filter(!geo_region %in% c(bad, good)) %>% arrange(desc(wape))
+  pool <- pool %>% filter(!geo_region %in% c(bad, good)) %>% arrange(desc(nrmse_peak),geo_region)
   if (nrow(pool)) {bad <<- c(bad,pool$geo_region[1]); bad_labels <<- c(bad_labels,label)}
 }
-pick_bad(filter(catalog,fit_quality=="bad", possible_excess_seeding), "Early overshoot; seeding hypothesis")
-pick_bad(filter(catalog,fit_quality=="bad", similar_height_peaks), "Similar-height observed peaks")
-pick_bad(filter(catalog,fit_position=="between_peaks"), "Fitted peak between observed peaks")
-pick_bad(filter(catalog,fit_quality=="bad", second_peak_tallest, fit_position=="second_peak"), "Poor fit to taller second peak")
+pick_bad(filter(limitation_pool,n_significant_peaks>=2), "Multiple observed peaks; single fitted wave")
+pick_bad(filter(limitation_pool,prolonged_rise_missed), "Observed rise longer than fitted rise")
+pick_bad(filter(limitation_pool,prolonged_decline_missed), "Observed decline longer than fitted decline")
+pick_bad(filter(limitation_pool,low_tail_underestimated), "Low-level tail underestimated")
 while(length(bad)<4) {
   previous <- length(bad)
-  pick_bad(filter(catalog,fit_quality=="bad"),"Timing / epidemic-shape mismatch")
-  if (length(bad)==previous) stop("Fewer than four distinct bad-fit examples.")
+  pick_bad(filter(limitation_pool,fit_quality=="bad"),"Curve width / amplitude / burden mismatch")
+  if (length(bad)==previous) stop("Fewer than four distinct fit-limitation examples.")
 }
 parse_states <- function(key, default) {
   value <- arg(key, "")
   if (nzchar(value)) trimws(strsplit(value,",",fixed=TRUE)[[1]]) else default
 }
-# Manuscript reading order within the selected examples (A, B, C, D).
-good <- good[order(match(good,c("New-York","New-Jersey","Washington","Colorado")))]
-bad_order <- order(match(bad,c("Pennsylvania","North-Dakota","Florida","Arizona")))
-bad <- bad[bad_order]
-bad_labels <- bad_labels[bad_order]
+# Preserve metric-ranked panel order unless explicitly overridden.
 good <- parse_states("--good-states",good)
 bad_default <- bad
 bad <- parse_states("--bad-states",bad)
@@ -268,7 +329,7 @@ stopifnot(length(good)==4, length(bad)==4, !anyDuplicated(c(good,bad)),
           all(c(good,bad) %in% catalog$geo_region))
 if (!identical(bad,bad_default)) bad_labels <- catalog$review_reason[match(bad,catalog$geo_region)]
 selection <- tibble(geo_region=c(good,bad), figure=rep(c("good_single_peak","bad_fit_reasons"),each=4),
-                    panel=rep(LETTERS[1:4],2), panel_reason=c(rep("Good single-peak fit",4),bad_labels)) %>%
+                    panel=rep(LETTERS[1:4],2), panel_reason=c(catalog$review_reason[match(good,catalog$geo_region)],bad_labels)) %>%
   left_join(catalog, by="geo_region")
 write_csv(catalog %>% arrange(category,wape),file.path(out,"state_fit_catalog.csv"))
 write_csv(tibble(category=c("single_peak_good","single_peak_bad","first_peak_good","first_peak_bad",
@@ -313,11 +374,12 @@ panel_letters <- function(n) {
     label
   },character(1))
 }
-make_figure <- function(states, filename, width=12, height=8.5, scenario_data=NULL,panel_labels=NULL) {
+make_figure <- function(states, filename, width=12, height=8.5, scenario_data=NULL,panel_labels=NULL,shared_y=FALSE,
+                        panel_grobs=NULL,return_panels=FALSE,grid_rows=NULL) {
   if (is.null(panel_labels)) panel_labels <- panel_letters(length(states))
   stopifnot(length(panel_labels)==length(states),!anyDuplicated(panel_labels))
   comparison <- !is.null(scenario_data)
-  panels <- map(seq_along(states), function(i) {
+  panels <- if (!is.null(panel_grobs)) panel_grobs else map(seq_along(states), function(i) {
     state <- states[[i]]
     info <- catalog[match(state,catalog$geo_region),]
     d <- (if (comparison) scenario_data else plot_weekly) %>% filter(geo_region == state) %>%
@@ -325,22 +387,23 @@ make_figure <- function(states, filename, width=12, height=8.5, scenario_data=NU
     observations <- weekly %>% filter(geo_region==state,!is.na(observed)) %>%
       select(date,observed) %>% distinct() %>% arrange(date)
     bottom_row <- i > 2 * (ceiling(length(states)/2)-1)
+    if (shared_y) bottom_row <- bottom_row || (i-1L) %% 8L >= 6L
     # Separate columns keep colons aligned in the regular proportional font.
     context_values <- c(scales::comma(info$population,accuracy=1),
       as.character(info$county_count),
       formatC(info$weighted_offcounty_mobility,format="f",digits=2))
-    context_gp <- grid::gpar(fontsize=14,col="black")
+    context_gp <- grid::gpar(fontsize=if (shared_y) 11 else 14,col="black")
     value_width <- max(do.call(grid::unit.c,lapply(context_values,function(value)
       grid::grobWidth(grid::textGrob(value,gp=context_gp)))))
     value_x <- grid::unit(1,"npc")-grid::unit(8,"pt")-value_width
-    context_y <- grid::unit(1,"npc")-grid::unit(c(12,28,44),"pt")
+    context_y <- grid::unit(1,"npc")-grid::unit(if (shared_y) c(10,23,36) else c(12,28,44),"pt")
     label_width <- grid::grobWidth(grid::textGrob("Population",gp=context_gp))
     context <- grid::grobTree(
       # Opaque backing masks grid lines only behind the annotation block.
       grid::rectGrob(x=grid::unit(1,"npc")-grid::unit(4,"pt"),
         y=grid::unit(1,"npc")-grid::unit(4,"pt"),
         width=value_width+label_width+grid::unit(17,"pt"),
-        height=grid::unit(52,"pt"),just=c("right","top"),
+        height=grid::unit(if (shared_y) 43 else 52,"pt"),just=c("right","top"),
         gp=grid::gpar(fill="white",col=NA)),
       grid::textGrob(c("Population","Counties","Mobility"),
         x=value_x-grid::unit(9,"pt"),y=context_y,just="right",gp=context_gp),
@@ -389,31 +452,50 @@ make_figure <- function(states, filename, width=12, height=8.5, scenario_data=NU
       annotation_custom(context,xmin=as.Date(-Inf,origin="1970-01-01"),
         xmax=as.Date(Inf,origin="1970-01-01")) +
       scale_x_date(date_breaks="2 months",date_labels="%b %Y",expand=expansion(mult=.02)) +
-      # Only the annotated figures need extra room for the context block.
+      # Reserve clear space above every trajectory/ribbon for the atlas inset.
+      # At the fixed 3.5-inch row height, 60% expansion clears its 47-point
+      # extent (43-point backing plus 4-point top offset).
       scale_y_continuous(labels=compact_axis_label,
-        expand=expansion(mult=c(0,if (comparison) .06 else .40))) +
+        expand=expansion(mult=c(0,if (comparison) .06 else if (shared_y) .60 else .40))) +
       coord_cartesian(ylim=c(0,NA)) +
       labs(title=bquote(.(gsub("-"," ",state)) ~ " | " ~ R[m] == .(info$disease_R0)),
-        x=if (bottom_row) "Week ending date" else NULL,
-        y=if (i %% 2 == 1) "Weekly Incident Hosps" else NULL) +
+        x=if (bottom_row || shared_y) "Week ending date" else NULL,
+        y=if (i %% 2 == 1 && !shared_y) "Weekly Incident Hosps" else NULL) +
       theme_bw(base_size=14) +
       theme(legend.position="none",legend.text=element_text(size=14),
         panel.grid.minor=element_blank(),
         panel.background=element_rect(fill="white",colour=NA),
         plot.background=element_rect(fill="white",colour=NA),
         axis.text=element_text(size=14,color="black"),
-        axis.text.x=if (bottom_row) element_text(size=14,color="black") else element_blank(),
-        axis.ticks.x=if (bottom_row) element_line() else element_blank(),
+        axis.text.x=if (shared_y) element_text(size=14,color=if (bottom_row) "black" else "transparent") else
+          if (bottom_row) element_text(size=14,color="black") else element_blank(),
+        axis.ticks.x=if (shared_y) element_line(color=if (bottom_row) "black" else "transparent") else
+          if (bottom_row) element_line() else element_blank(),
         axis.title=element_text(size=16),
-        axis.title.x=element_text(margin=margin(t=8)),
+        axis.title.x=element_text(margin=margin(t=8),
+          color=if (shared_y && !bottom_row) "transparent" else "black"),
         axis.title.y=element_text(margin=margin(r=8)),
         plot.title=element_text(size=17,hjust=.5,margin=margin(b=6)),
         plot.margin=margin(t=12,r=12,b=8,l=10))
   })
-  # Align panel sides without padding the upper rows for hidden date labels.
-  p <- cowplot::plot_grid(plotlist=panels,ncol=2,align="v",axis="lr",
+  if (return_panels) return(panels)
+  # Atlas grobs reserve identical axis space so every panel within a page
+  # has the same plotting area, including its bottom row.
+  if (!is.null(grid_rows)) {
+    empty <- grid_rows*2L-length(panels)
+    stopifnot(empty >= 0L)
+    panels <- c(panels,rep(list(NULL),empty))
+    panel_labels <- c(panel_labels,rep("",empty))
+  }
+  p <- cowplot::plot_grid(plotlist=panels,ncol=2,nrow=grid_rows,
+    align=if (is.null(panel_grobs)) "v" else "none",axis="lr",
     labels=panel_labels,label_size=24,label_fontface="bold",
     label_x=.01,label_y=.99,hjust=0,vjust=1)
+  if (shared_y) {
+    # A shared title avoids collisions with postal labels in dense atlas pages.
+    p <- cowplot::ggdraw() + cowplot::draw_plot(p,x=.045,width=.955) +
+      cowplot::draw_label("Weekly Incident Hosps",x=.014,y=.5,angle=90,size=16)
+  }
   if (comparison) {
     legend <- cowplot::get_legend(panels[[1]] + theme(legend.position="bottom") +
       guides(color=guide_legend(nrow=1,override.aes=list(linewidth=1.2,alpha=1,
@@ -425,10 +507,8 @@ make_figure <- function(states, filename, width=12, height=8.5, scenario_data=NU
 # Remove only PDF artifacts previously generated by this script (PNG-only).
 old_pdfs <- list.files(figure_dir,pattern="^(good_single_peak_2x2|bad_fit_reasons_2x2|review_atlas_[0-9]{2})[.]pdf$",full.names=TRUE)
 if (length(old_pdfs)) unlink(old_pdfs)
-# Good-fit figure: A New York, B New Jersey, C Washington, D Colorado by default.
-# These relatively good single-peak fits span 21-64 counties and 5.86-19.85M
-# people. Washington follows the full curve best; late-season tails remain
-# underpredicted in the other panels. Selection can be overridden at the CLI.
+# Best eligible single-peak cores, selected from this run's actual diagnostics.
+# Eligibility does not imply agreement in the low-intensity tail.
 make_figure(good,"good_single_peak_2x2")
 # Scenario-comparison companion: same A-D states and fitted Rm as good-fit
 # figure; median lines and nested central 50/80/95% prediction intervals for
@@ -468,43 +548,41 @@ scenario_totals <- map_dfr(good,function(state) {
 write_csv(scenario_totals,file.path(out,"good_states_five_scenarios_cumulative_totals.csv"))
 make_figure(good,"good_states_five_scenarios_2x2",height=9,scenario_data=scenario_projections)
 
-# Fit-limitation figure, default panels:
-# A Pennsylvania: early overshoot; excess initial exposure is a hypothesis.
-# B North Dakota: fitted epidemic peaks too early, with a shape mismatch.
-# C Florida: two observed peaks of similar height; fit targets the first wave.
-# D Arizona: fitted peak falls between two observed peaks (second is taller).
+# Representative limitations selected from the current saved fits.
 make_figure(bad,"bad_fit_reasons_2x2")
-# Supplement: separate single/double-peak figure sets, excluding main figures.
-# Cluster earlier peaks before later peaks, paginate at eight panels, and
-# alphabetize each page. Letters continue across pages within each set (A-Z,
-# AA, AB, ...), restarting at A when a new shape set begins. Partial pages
-# finish each set so the double-peak set never shares a single-peak page.
+# Supplement: one alphabetical series for all remaining jurisdictions.
+# Eight panels per page (four rows by two columns), labeled by postal abbreviation (including DC).
+atlas_postal <- setNames(c(state.abb,"DC"),
+  c(gsub(" ","-",state.name,fixed=TRUE),"District-of-Columbia"))
 atlas_catalog <- catalog %>% filter(!geo_region %in% c(good,bad)) %>%
-  mutate(shape_cluster=case_when(n_significant_peaks==1 ~ "Single dominant peak",
-    n_significant_peaks==2 ~ "Two peaks",TRUE ~ "Multiple peaks"),
-    shape_order=match(shape_cluster,c("Single dominant peak","Two peaks","Multiple peaks"))) %>%
-  arrange(shape_order,peak_1_date,epidemic_shape,geo_region,.locale="C") %>%
-  group_by(shape_cluster) %>% mutate(set_page=as.integer(ceiling(row_number()/8))) %>%
-  ungroup() %>% arrange(shape_order,set_page,geo_region,.locale="C") %>%
-  group_by(shape_cluster) %>% mutate(set_panel=panel_letters(n())) %>% ungroup() %>%
-  mutate(page=as.integer(factor(paste(shape_order,set_page,sep="_"),
-    levels=unique(paste(shape_order,set_page,sep="_")))))
+  arrange(geo_region,.locale="C") %>%
+  mutate(page=as.integer(ceiling(row_number()/8)),
+    atlas_panel=unname(atlas_postal[geo_region]))
+stopifnot(!anyNA(atlas_catalog$atlas_panel), !anyDuplicated(atlas_catalog$atlas_panel))
+# Align all axis/header grobs before pagination so each page's plotting regions
+# are equal, even when tick-label widths differ between states.
+atlas_grobs <- make_figure(atlas_catalog$geo_region,"",shared_y=TRUE,return_panels=TRUE)
+atlas_grobs <- cowplot::align_plots(plotlist=atlas_grobs,align="hv",axis="tblr")
 atlas_pages <- split(atlas_catalog$geo_region,atlas_catalog$page)
 atlas_selection <- map_dfr(seq_along(atlas_pages),function(i) {
   states <- atlas_pages[[i]]
   filename <- sprintf("review_atlas_%02d",i)
-  labels <- atlas_catalog$set_panel[match(states,atlas_catalog$geo_region)]
-  make_figure(states,filename,height=3.5*ceiling(length(states)/2),panel_labels=labels)
+  labels <- atlas_catalog$atlas_panel[match(states,atlas_catalog$geo_region)]
+  grobs <- atlas_grobs[match(states,atlas_catalog$geo_region)]
+  page_rows <- ceiling(length(states)/2)
+  make_figure(states,filename,height=3.5*page_rows,panel_labels=labels,shared_y=TRUE,
+    panel_grobs=grobs,grid_rows=page_rows)
   tibble(figure=paste0(filename,".png"),page=i,panel=labels,geo_region=states)
-}) %>% left_join(atlas_catalog %>% select(geo_region,category,epidemic_shape,shape_cluster,set_page,peak_1_date),
+}) %>% left_join(atlas_catalog %>% select(geo_region,category,epidemic_shape,peak_1_date),
   by="geo_region")
 stopifnot(!anyDuplicated(atlas_selection$geo_region),
   !any(atlas_selection$geo_region %in% c(good,bad)),
   setequal(atlas_selection$geo_region,atlas_catalog$geo_region))
 write_csv(atlas_selection,file.path(out,"supplement_panel_selection.csv"))
 # Remove only obsolete atlas pages generated by earlier runs of this script.
-stale_atlas <- setdiff(list.files(out,pattern="^review_atlas_[0-9]{2}[.]png$",full.names=TRUE),
-  file.path(out,unique(atlas_selection$figure)))
+stale_atlas <- setdiff(unlist(lapply(unique(c(figure_dir,out)),list.files,
+  pattern="^review_atlas_[0-9]{2}[.]png$",full.names=TRUE)),
+  file.path(figure_dir,unique(atlas_selection$figure)))
 if (length(stale_atlas)) unlink(stale_atlas)
 summary_lines <- c(
   "# Manuscript state-fit screening (draft)", "",
@@ -515,23 +593,26 @@ summary_lines <- c(
   paste0("- Fit limitations: ",paste(gsub("-"," ",bad),collapse=", "),"."),
   "", "## Screening rules", "",
   "These are provisional editorial categories, not validated goodness-of-fit tests. A state outside the good group need not be unusable.",
-  "Good single peak requires WAPE <=0.45, absolute peak timing error <=1 week, peak-height error <=20%, and total-burden error <=25%.",
-  "WAPE is sum(abs(fitted median - observed))/sum(observed). The 0.45 cutoff defines relatively good examples for this draft; a stricter 0.35 cutoff retains only Washington and New York in this run.",
-  "Even these good examples can miss the late-season tail. Interval coverage is reported separately and is not used to reward wide intervals.",
-  "The weekly score table omits unavailable observations: Arkansas, Oklahoma and West Virginia have 27 weeks, DC 23 and Wyoming 10 (versus 28). Their classifications require coverage review; they are excluded from automatic good-panel selection. Metrics use scored dates; plotted simulations cover all complete weeks. Missing observations are never replaced by zero.",
+  "Single-peak core eligibility requires one significant smoothed peak and one raw peak, a complete observation window, uncensored width crossings, peak-normalized median RMSE <=15%, absolute peak timing error <=1 week, peak-height error <=20%, and median-curve total-burden error <=25%. Rise and decline width errors must each be <=2 weeks at 20% of peak and <=1.5 weeks at 50% of peak. These limits are provisional editorial thresholds, not validated tests.",
+  "nrmse_peak = sqrt(mean((median-observed)^2))/max(observed). It is a descriptive discrepancy for the displayed median, not a proper probabilistic forecast score. nrmse_mean_peak also reports squared-error agreement of the ensemble mean; WAPE remains a secondary diagnostic. WIS does not select these panels.",
+  "Rise and decline widths are calendar weeks from each curve's own raw maximum to its outermost 20% and 50% peak-height crossings, linearly interpolated between available weeks. They expose broad shoulders, slow rise and slow decline even when peak height and week match. Truncated crossings are flagged; missing observations are not interpolated into the scored residual series.",
+  "Observed and fitted asymmetry20 = (decline20-rise20)/(decline20+rise20): positive means a longer decline, negative a longer rise. Symmetry is not required; matching each side's duration is required. Peaks/widths summarize observed shape, not mechanisms.",
+  "Tail burden is measured after the last observed 20%-of-peak crossing, on common available dates. tail_deficit_fraction = sum(observed-median in that tail)/sum(all observed). A deficit >10% flags a missed low-intensity tail. This flag does not exclude an otherwise accurate peak core and is stated in its panel-selection reason. Core agreement is not whole-season agreement. No universal inability of PES is inferred from these saved runs.",
+  "Interval coverage is reported separately and is not used to reward wide intervals.",
+  "Incomplete observation windows are excluded from automatic main-panel selection. Metrics use available scored dates; plotted simulations cover all complete weeks. Missing observations are never replaced by zero.",
   "Peak timing and separation use calendar weeks. Three-week smoothing is applied only to consecutive observations. The early-overshoot flag requires all first four calendar weeks.",
   "Observed peak detection uses a centered three-week mean, >=35% relative height, >=4-week separation and a valley >=20% below the smaller peak.",
   "Two-peak positions use the two tallest detected peaks, ordered chronologically. Between means >1 week from both peaks; otherwise the nearest peak is the target.",
   "A good targeted peak requires <=1-week timing difference and <=0.35 WAPE within +/-2 weeks of that smoothed observed peak. It does not imply a good full-season fit.",
   "Similar-height means smaller/larger smoothed peak >=0.8. The second_peak_tallest field also identifies second peaks taller by any amount, including similar-height pairs.",
   "Raw data are also screened with a 10% valley rule. morphology_review_needed flags disagreement with smoothed detection; shallow shoulders and reporting noise need visual judgment.",
-  "No selected fit targets the second significant peak under the current smoothed rule; those categories are supported but empty in this run.",
   "Early overshoot requires first-four-week fitted/observed total >=2 and average excess >=5% of observed peak. This is a seeding hypothesis, not causal evidence; initial exposed counts and input JSON sources are recorded.",
   "", "## County, population and mobility context", "",
   "Population and county counts come from the local county age-population inputs. Counties include county equivalents.",
   "Mobility is the population-weighted off-diagonal row sum of the Q4-2025 input matrix, in original county row order. It is a descriptive matrix summary, not measured travel volume or a causal effect.",
-  "Good-panel selection maximizes pairwise diversity in standardized log population, log county count and mobility among eligible states. Exactly four qualify in this run, limiting diversity (21-64 counties and 5.86-19.85 million people).",
-  "The bad panel prioritizes distinct available reasons, then larger WAPE. State selection can be overridden with --good-states and --bad-states (four comma-separated states each).",
+  paste0("Good panels are the four lowest nrmse_peak states among ",nrow(good_pool)," eligible single-peak cores; ties use absolute asymmetry error and state name. Population, counties and mobility are descriptive context, not selection criteria."),
+  "The limitation panel seeks multiple peaks, a prolonged observed rise, a prolonged observed decline, and a missed low-intensity tail, using distinct states and prioritizing larger nrmse_peak within each reason. If a mechanism is absent, remaining slots use other curve mismatches. These are descriptive examples, not causal diagnoses.",
+  "State selection can be overridden with --good-states and --bad-states (four comma-separated states each); categories and diagnostic reasons remain those calculated from the saved data.",
   "", "## Files", "",
   "- good_single_peak_2x2.png and bad_fit_reasons_2x2.png: manuscript drafts (PNG only).",
   "- good_states_five_scenarios_2x2.png and good_states_five_scenarios_data.csv: five-scenario companion for the good-fit states, using saved runs at each state's fitted Rm. A shared labeled legend sits below the panels. The upper-right block titled Sum Inc Hosp shows colored markers and cumulative counts: none (cyan), antiviral (gold), NPI (brown), vaccine (olive), all interventions (blue), observed (red point, last). Observed totals sum available weeks; model totals are medians of per-realization sums over those same weeks, rounded to whole counts in the figure.",
@@ -542,16 +623,17 @@ summary_lines <- c(
   "- selected_rm_weekly_data.csv: plotted observations and simulations for every jurisdiction.",
   paste0("- review_atlas_01 through ",sprintf("review_atlas_%02d",length(atlas_pages)),
     ": supplementary PNG figures for the ",nrow(atlas_catalog),
-    " jurisdictions absent from the two main figures, in separate single-peak and double-peak figure sets (with a multiple-peak set if needed). Each set has eight panels per page except its final partial page. Earlier peaks precede later peaks in page assignment; states are alphabetical within each page. Panel letters continue across a set's pages (A-Z, AA, AB, ...), restarting at A for the next set."),
-  "- supplement_panel_selection.csv: global supplement page, within-set page, continuous panel letter, state, fit category, observed shape and peak-date mapping.",
-  "", "## Supplement groups", "",
+    " jurisdictions absent from the two main figures, in one alphabetical series. Each page has eight panels in four rows by two columns, except the final partial page. Atlas pages are 12 inches wide with a fixed 3.5-inch row height and a shared y-axis title: complete pages are 14 inches tall; the final three-panel page is 7 inches tall. All plotting regions are the same physical size across all pages, with hidden date labels retaining their space. Compact 11-point population/county/mobility insets sit in reserved upper space clear of all trajectories and prediction ribbons. Panels use two-letter state postal abbreviations (including DC), with alphabetical state order across pages and no grouping by peak shape."),
+  "- supplement_panel_selection.csv: alphabetical state index with figure filename, page, postal abbreviation in the panel column, fit category, observed shape and peak-date mapping.",
+  "", "## Supplement shape counts (descriptive only)", "",
   "| Category | Jurisdictions |", "|---|---:|",
-  {groups <- count(atlas_catalog,shape_cluster); sprintf("| %s | %d |",groups$shape_cluster,groups$n)},
+  {groups <- count(atlas_catalog,epidemic_shape); sprintf("| %s | %d |",groups$epidemic_shape,groups$n)},
   "", "## All-state classifications", "",
-  "| State | Category | Epidemic shape | Weeks | Shape review? | WAPE |", "|---|---|---|---:|---|---:|",
-  sprintf("| %s | %s | %s | %d | %s | %.3f |",gsub("-"," ",catalog$geo_region),catalog$category,catalog$epidemic_shape,catalog$n_observed_weeks,
-    ifelse(catalog$morphology_review_needed,"Yes",""),catalog$wape))
+  "| State | Category | Epidemic shape | Weeks | Shape review? | Peak-normalized RMSE | Tail deficit |", "|---|---|---|---:|---|---:|---:|",
+  sprintf("| %s | %s | %s | %d | %s | %.3f | %.3f |",gsub("-"," ",catalog$geo_region),catalog$category,catalog$epidemic_shape,catalog$n_observed_weeks,
+    ifelse(catalog$morphology_review_needed,"Yes",""),catalog$nrmse_peak,catalog$tail_deficit_fraction))
 writeLines(summary_lines,file.path(out,"README.md"))
 writeLines(capture.output(sessionInfo()),file.path(out,"session_info.txt"))
-print(selection %>% select(figure,panel,geo_region,category,wape,county_count,population,weighted_offcounty_mobility))
+print(selection %>% select(figure,panel,geo_region,category,nrmse_peak,
+  rise20_error_weeks,decline20_error_weeks,tail_deficit_fraction,panel_reason))
 message("Wrote manuscript figures to ",figure_dir,"; supporting tables and notes to ",out)

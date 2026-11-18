@@ -264,7 +264,7 @@ network_compartment_spaghetti <- function(row) {
   parquet_files <- parquet_files_for(row$scenario_hash, "network")
   if (length(parquet_files) == 0) return(tibble())
 
-  column_names <- names(arrow::read_parquet(parquet_files[[1]], as_data_frame = FALSE))
+  column_names <- arrow::ParquetFileReader$create(parquet_files[[1]])$GetSchema()$names
   available_compartments <- intersect(COMPARTMENTS, column_names)
   if (length(available_compartments) == 0) return(tibble())
 
@@ -307,18 +307,43 @@ network_compartment_spaghetti <- function(row) {
     filter(!is.na(.data$compartment))
 }
 
-save_state_compartment_spaghetti_plots <- function(metadata) {
+save_one_state_compartment_spaghetti <- function(metadata) {
+  outputs <- character()
+  extraction_failed <- FALSE
+  save_spaghetti <- function(path, ...) {
+    started <- proc.time()[["elapsed"]]
+    message("  [spaghetti plot] rendering ", path)
+    temporary <- tempfile(".spaghetti-", tmpdir = dirname(path), fileext = ".png")
+    on.exit(unlink(temporary), add = TRUE)
+    ggsave(temporary, ...)
+    if (!file.rename(temporary, path)) stop("Could not replace plot: ", path)
+    outputs <<- c(outputs, path)
+    message(sprintf("  [spaghetti plot] saved in %.1f s", proc.time()[["elapsed"]] - started))
+  }
   spaghetti_data <- pmap_dfr(metadata, function(...) {
     row <- list(...)
+    started <- proc.time()[["elapsed"]]
     message("Compartment spaghetti: ", row$geo_region, " / ", scenario_label(row), " / ", substr(row$scenario_hash, 1, 8))
     tryCatch(
-      network_compartment_spaghetti(row),
+      {
+        data <- network_compartment_spaghetti(row)
+        if (nrow(data) == 0L) extraction_failed <<- TRUE
+        message(sprintf("  [spaghetti data] %s rows, %s in %.1f s", format(nrow(data), big.mark = ","),
+                        format(object.size(data), units = "auto"), proc.time()[["elapsed"]] - started))
+        data
+      },
       error = function(e) {
+        extraction_failed <<- TRUE
         warning(sprintf("Compartment spaghetti extraction failed for %s / %s: %s", row$geo_region, row$scenario_hash, e$message))
         tibble()
       }
     )
-  }) %>%
+  })
+  if (nrow(spaghetti_data) == 0L) {
+    warning("No network compartment trajectories available for spaghetti plots.")
+    return(invisible(character()))
+  }
+  spaghetti_data <- spaghetti_data %>%
     mutate(
       scenario_label = factor(.data$scenario_label, levels = SCENARIO_ORDER)
     ) %>%
@@ -326,9 +351,10 @@ save_state_compartment_spaghetti_plots <- function(metadata) {
 
   if (nrow(spaghetti_data) == 0) {
     warning("No network compartment trajectories available for spaghetti plots.")
-    return(invisible(tibble()))
+    return(invisible(character()))
   }
 
+  message("  [spaghetti] computing medians for ", nrow(spaghetti_data), " trajectory rows")
   median_data <- spaghetti_data %>%
     group_by(.data$geo_region, .data$scenario_label, .data$compartment, .data$date) %>%
     summarise(value = stats::median(.data$value, na.rm = TRUE), .groups = "drop")
@@ -394,7 +420,7 @@ save_state_compartment_spaghetti_plots <- function(metadata) {
         )
 
       state_file <- paste0(slugify(compartment_id), "_all_interventions_spaghetti.png")
-      ggsave(
+      save_spaghetti(
         file.path(all_interventions_dir, state_file),
         p,
         width = 16,
@@ -452,7 +478,7 @@ save_state_compartment_spaghetti_plots <- function(metadata) {
           )
 
         state_file <- paste0(scenario_file, "_", slugify(compartment_id), "_spaghetti.png")
-        ggsave(
+        save_spaghetti(
           file.path(state_dir, state_file),
           p,
           width = 16,
@@ -465,7 +491,53 @@ save_state_compartment_spaghetti_plots <- function(metadata) {
     }
   }
 
-  invisible(spaghetti_data)
+  invisible(if (extraction_failed) character() else outputs)
+}
+
+# Bound peak memory to one state and checkpoint only fully rendered states.
+# Source sizes/mtimes, plot code and metadata invalidate saved checkpoints.
+save_state_compartment_spaghetti_plots <- function(metadata) {
+  states <- sort(unique(metadata$geo_region))
+  plot_code <- list(body(save_one_state_compartment_spaghetti),
+                    body(network_compartment_spaghetti), body(compact_axis_label),
+                    COMPARTMENTS, SCENARIO_ORDER, SCENARIO_COLORS, SCENARIO_DISPLAY)
+  message("Spaghetti figures: ", length(states), " state(s); processing one state at a time")
+  for (i in seq_along(states)) {
+    state <- states[[i]]
+    state_metadata <- metadata %>% filter(.data$geo_region == state)
+    files <- sort(unique(as.character(unlist(lapply(state_metadata$scenario_hash, parquet_files_for, type = "network")))))
+    info <- file.info(files)
+    # Batch bookkeeping and Parquet byte counts do not affect these plots.
+    plot_metadata <- state_metadata %>% select(any_of(c(
+      "scenario_hash", "geo_region", "validation_json", "metadata_sim_day_0",
+      "disease_R0", "vaccine_used", "antiviral_used", "npi_used")))
+    signature <- list(metadata = plot_metadata, files = files, sizes = info$size,
+                      mtimes = as.numeric(info$mtime), code = plot_code)
+    state_dir <- file.path(STATE_COMPARTMENT_SPAGHETTI_DIR, slugify(state))
+    checkpoint <- file.path(state_dir, ".spaghetti_complete.rds")
+    saved <- tryCatch(readRDS(checkpoint), error = function(e) NULL)
+    if (!is.null(saved) && identical(saved$signature, signature) &&
+        length(saved$outputs) > 0L && all(file.exists(saved$outputs)) &&
+        identical(unname(file.info(saved$outputs)$size), saved$sizes)) {
+      message(sprintf("[spaghetti %d/%d] %s: reusing %d finished plots", i, length(states), state, length(saved$outputs)))
+      next
+    }
+    message(sprintf("[spaghetti %d/%d] %s: starting", i, length(states), state))
+    started <- proc.time()[["elapsed"]]
+    outputs <- save_one_state_compartment_spaghetti(state_metadata)
+    if (length(outputs) > 0L) {
+      temporary <- tempfile(".checkpoint-", tmpdir = state_dir)
+      tryCatch({
+        saveRDS(list(signature = signature, outputs = outputs,
+                     sizes = unname(file.info(outputs)$size)), temporary)
+        if (!file.rename(temporary, checkpoint)) stop("Could not save spaghetti checkpoint: ", checkpoint)
+      }, finally = unlink(temporary))
+    }
+    gc(verbose = FALSE)
+    message(sprintf("[spaghetti %d/%d] %s: finished in %.1f s", i, length(states), state,
+                    proc.time()[["elapsed"]] - started))
+  }
+  invisible(NULL)
 }
 
 h_age_expression <- function(con, column_names, age_index) {
@@ -496,7 +568,7 @@ generated_weekly_samples <- function(row) {
   con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  column_names <- names(arrow::read_parquet(parquet_files[[1]], as_data_frame = FALSE))
+  column_names <- arrow::ParquetFileReader$create(parquet_files[[1]])$GetSchema()$names
   h_all_expr <- "SUM(COALESCE(H, 0)) AS all_age"
   h_age_exprs <- map_chr(seq_along(AGE_GROUPS) - 1L, function(age_index) {
     paste0(
