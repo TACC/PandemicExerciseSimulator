@@ -9,7 +9,7 @@
 #' No local preview simulations run: selected_states is NULL.
 
 pipeline_inputs <- list(
-  # Shared LS6 experiment settings used by all three phase files.
+  # Shared LS6 experiment settings used by all four phase files.
   pipeline_phase = "fit",            # "fit", "scenarios", "results", or "deploy".
   execution_target = "ls6",          # LS6 phases prepare launchers instead of running sims.
   # LS6 commands automatically use $WORK/pes_pipeline_r442_py312.sif.
@@ -58,6 +58,7 @@ pipeline_inputs <- list(
   r0_fit_launch = "direct",         # Explicit phases derive this from execution_target.
   # 1_RUN_FIT.R prepares the fitting launcher; 2_RUN_SCENARIOS.R requires finished
   # fits and prepares the scenario launcher. 3_RUN_FIGURES.R processes results.
+  # 4_PREPARE_DEPLOYMENT.R packages the selected dashboard subset separately.
   # Set the allocation in fit_state_pylauncher.sh for fitting and
   # state_pylauncher.sh for scenarios before submission.
 
@@ -79,8 +80,9 @@ pipeline_inputs <- list(
   acs_year_range = "2020-2024",
   mobility_year = 2025L,
 
-  # Results-phase processing. Fit and scenarios stop before ingestion or figures.
-  run_web_preview = TRUE,           # Results builds the bundle; LS6 never runs local sims.
+  # Results-phase processing can take hours for the full US analysis.
+  # Fit and scenarios stop before ingestion or figures; deployment is phase 4.
+  run_web_preview = TRUE,           # Enables preview in the all workflow; LS6 never runs local sims.
   make_pre_sim_figs = TRUE,         # Section 9a: population, exposures and interventions.
   make_validation_figs = TRUE,      # Section 9b: validation scores; needs saved outputs.
   make_diagnostic_figs = TRUE,      # Section 9c: completion/runtime; needs saved outputs.

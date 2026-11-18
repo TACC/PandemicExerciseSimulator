@@ -27,23 +27,34 @@ In RStudio, set `PIPELINE_CONFIG_FILE` to your input file and source `0`.
 ### LS6 phases
 
 `RUN_FULL_PIPELINE_INPUTS.R` is the local full-pipeline example. For LS6, edit
-`LS6_PIPELINE_INPUTS.R`, `1_RUN_FIT.R`, `2_RUN_SCENARIOS.R`, and `3_RUN_FIGURES.R`
-in `data/INPUT_FILE_TEMPLATES/` directly, or copy all four files together into
+`LS6_PIPELINE_INPUTS.R` in `data/INPUT_FILE_TEMPLATES/`. The four phase files are
+`1_RUN_FIT.R`, `2_RUN_SCENARIOS.R`, `3_RUN_FIGURES.R`, and
+`4_PREPARE_DEPLOYMENT.R`. Keep all five files together when copying them into
 an experiment directory. Edit scientific settings once in
-`LS6_PIPELINE_INPUTS.R`; all three phase files inherit them from the shared file
+`LS6_PIPELINE_INPUTS.R`; all four phase files inherit them from the shared file
 in the same directory. The commands below use the templates in their original
 location. If you copy them, replace each `--config=data/INPUT_FILE_TEMPLATES/...`
 path with the corresponding copied phase file's path, relative to the repository
 root or absolute.
 The LS6 example uses all states, 100 realizations, 32 workers per fitting
-candidate, all four search criteria, peak-height selection, and reuse of the
-winning All Interventions batch. Publication is disabled.
+candidate, staged R_m/initial-exposure fitting with peak-height selection, and
+reuse of the winning All Interventions batch. Publication is disabled.
 
-Run all three phase commands from the repository root through the LS6 container
+The four phases are distinct from the numbered analysis scripts (`7a`, `8`,
+`9a`–`9c`). Phase 4 is optional when only scientific results are needed.
+
+| Phase | Input file | Work and generated files |
+| --- | --- | --- |
+| 1: fit | `1_RUN_FIT.R` | Prepares data, seeds and fitting jobs in `<output_dir>/Rm_search/<date>/`; submit `fit_state_pylauncher.sh`, which uses `fit_state_pylauncher.py` and `fit_state_commands.txt`. |
+| 2: scenarios | `2_RUN_SCENARIOS.R` | Checks fits, aggregates `Rm_search_*.csv`, and prepares intervention inputs and jobs in `<output_dir>/TACC_FILES/`; submit `state_pylauncher.sh`, which uses `state_pylauncher.py` and `state_commands.txt`. |
+| 3: results and figures | `3_RUN_FIGURES.R` | Checks completed simulations, runs `7a_process_output_to_db.R`, then enabled `9a_pre_sim_input_plots.R`, `9b_score_validation_hubverse_style.R`, and `9c_score_validation_run_diagnostics.R`. Writes metadata, Parquets, score tables and figures; skips deployment preparation and upload. |
+| 4: deployment | `4_PREPARE_DEPLOYMENT.R` | Runs `8_prepare_shinyapps_bundle.R` against existing Parquets, packages the selected states/scenarios in `deploy/shinyapps/PandemicSimExplorer/`, and enforces the deployment size budget. Upload is separately opt-in. |
+
+Run the phase commands from the repository root through the LS6 container
 wrapper:
 
 The wrapper loads `tacc-apptainer` when needed and defaults
-`APPTAINERENV_PES_R_LIBRARY` to `$WORK/pes-r-library` for all three phases.
+`APPTAINERENV_PES_R_LIBRARY` to `$WORK/pes-r-library` for all four phases.
 An explicitly set library path is preserved. Use these wrapper commands after
 each login; no repeated manual setup is needed. When invoking Apptainer directly,
 run the following again after each login (or add them to your shell startup):
@@ -107,6 +118,32 @@ This requires completed selected scenarios, then builds Parquet data and
 figures. Deployment bundle preparation and its size budget are handled separately
 by `4_PREPARE_DEPLOYMENT.R`, so deployment limits cannot block results figures.
 It never generates inputs or simulation commands.
+
+**Phase 3 can take hours when replicating the full US analysis.** Ingestion,
+county-level validation calculations, state-quarter input maps, and high-resolution
+trajectory plots all contribute. Runtime depends on states, dates, simulation
+replicates, compartments, storage throughput and available memory. Run it on an
+allocated compute node with enough wall time for the complete analysis; a short
+development allocation may expire before it finishes. Stage banners are not
+continuous heartbeats: older plotting code can go quiet for several minutes
+while extracting data, calculating summaries or rendering figures. New PNG files
+or changing modification times show that output is progressing; existing empty
+state directories alone do not confirm completion. Keep `metadata_master.csv`,
+`sim_data/`, and plot checkpoints when restarting. See
+[Validation Figures](#validation-figures) for the scope of figure checkpointing.
+
+After results finish, optionally prepare the deployment separately:
+
+```bash
+bash 'scripts/ls6_container_exec.sh' Rscript scripts/0_run_full_pipeline_US.R --config=data/INPUT_FILE_TEMPLATES/4_PREPARE_DEPLOYMENT.R
+```
+
+Edit the state/scenario subset in `4_PREPARE_DEPLOYMENT.R` before packaging.
+Its decimal 5 GB budget applies to the dashboard bundle, not the full scientific
+analysis. A national bundle can exceed it even when Phase 3 finishes successfully.
+With `deploy_shinyapps = FALSE`, publish the prepared folder separately using
+Posit Publisher / Connect Cloud; this command does not upload it.
+
 Use `--check-config` with any phase file to check merged settings without work.
 
 The explicit `pipeline_phase` values are `fit`, `scenarios`, `results`, and `deploy`.
@@ -126,12 +163,13 @@ Set `reuse_best_fit_simulations = TRUE` to use that winning candidate's saved
 simulations for downstream analyses and omit its TACC and local rerun commands.
 Keep the fitting scenario in `selected_scenarios` to include those results.
 Reuse requires matching fitting/downstream realization ranges and full-simulator
-fitting for all states (`r0_county_threshold = 255L`). Other scenarios still run
-normally. The selected batches are recorded in `reused_fit_outputs.csv`; ingestion
+fitting. The staged method fits all states with the full simulator; for the legacy
+county-threshold method, set `r0_county_threshold = 255L` to cover all states.
+Other scenarios still run normally. The selected batches are recorded in `reused_fit_outputs.csv`; ingestion
 and bundling read those batches without copying the whole sweep.
-The example preserves the previous defaults: 10 fitting realizations, auto
-workers and direct fitting. For LS6 preparation, set `r0_realization_range` to
-`c(0L, 99L)`, `workers` to `32L` and `r0_fit_launch` to `"pylauncher"` in your copy.
+The local example uses 100 fitting confirmation realizations, 25 screening
+realizations, auto workers and direct fitting. The LS6 shared file requests
+32 workers; the explicit fit phase prepares the pylauncher automatically.
 
 Existing command-line-only runs continue to work, for example:
 
@@ -186,11 +224,11 @@ files out of commits.
 | 6b | `6b_outpatient_antiviral_coverage_by_state.R` | Estimates state-specific insured high-risk counts for outpatient antiviral stockpile scenarios. Skips when both final antiviral CSVs exist and caches downloaded ACS PUMS extracts under `data/RISK_RATIOS/PUMS_CACHE/`. |
 | 6c | `6c_weekend_npi_schedule.R` | Expands a prototype Weekend Mobility Decrease NPI across the configured simulation window. |
 | 6d | `6d_create_intervention_inputs.R` | Layers intervention templates onto calibrated seed inputs and writes scenario JSONs per state/DC to dated folders under `<PIPELINE_OUTPUT_DIR>/TACC_FILES`. |
-| 6e | `6e_create_parallel_commands.R` | Creates `<PIPELINE_OUTPUT_DIR>/TACC_FILES/state_commands.txt` for all generated state/DC TACC JSONs and copies `data/INPUT_FILE_TEMPLATES/state_launcher.sh` to `<PIPELINE_OUTPUT_DIR>/TACC_FILES/state_launcher.sh` if missing. |
+| 6e | `6e_create_parallel_commands.R` | Creates `<PIPELINE_OUTPUT_DIR>/TACC_FILES/state_commands.txt` for selected state/DC scenarios, omitting reused winning-fit batches; copies `state_pylauncher.sh` and `state_pylauncher.py` from `data/INPUT_FILE_TEMPLATES/` when missing. |
 | 6f | `6f_run_selected_scenarios.R` | Runs a user-selected subset of states and scenarios locally, writing selected JSON copies and `web_state_commands.sh` to `<PIPELINE_OUTPUT_DIR>/WEB_INPUTS`, with generated outputs under `<PIPELINE_OUTPUT_DIR>/WEB_OUTPUTS`. |
 | 7a | `7a_process_output_to_db.R` | Processes generated simulator outputs under `<PIPELINE_OUTPUT_DIR>`, updates `metadata_master.csv`, writes Parquet files under `sim_data/`, and skips already complete `(scenario_hash, batch_num)` pairs. |
-| 8 | `8_prepare_shinyapps_bundle.R` | Refreshes the Shiny deployment bundle by copying the current `7b` dashboard as `app.R` and packaging the selected preview states and scenarios. |
-| 9a | `9a_pre_sim_input_plots.R` | Draws pre-simulation input figures, including mobility matrix flow maps, under `<PIPELINE_OUTPUT_DIR>/validation_scores/plots/`. |
+| 8 | `8_prepare_shinyapps_bundle.R` | Phase 4 (or local `all` workflow): copies the current `7b` dashboard as `app.R` and packages selected states/scenarios in `deploy/shinyapps/PandemicSimExplorer/`. Phase 3 skips this script. |
+| 9a | `9a_pre_sim_input_plots.R` | Draws pre-simulation input figures, including mobility matrix flow maps, under the repository’s `figures/` directory in named subfolders. |
 | 9b | `9b_score_validation_hubverse_style.R` | Scores validation outputs, writes WIS summaries, and writes validation figures under `<PIPELINE_OUTPUT_DIR>/validation_scores/plots/`. |
 | 9c | `9c_score_validation_run_diagnostics.R` | Calculates additional simulations needed for a 95% CI and runtime diagnostics by state/scenario, then writes a combined runtime plot and a compartment-level heatmap. |
 
@@ -232,7 +270,8 @@ are saved separately as `<state>_Rm_search_windows.png`.
    `Rm_search/<date>/fit_state_pylauncher.sh` from that directory.
 2. After fitting completes, run with `2_RUN_SCENARIOS.R`; submit the generated
    `TACC_FILES/state_pylauncher.sh` as before.
-3. After scenarios complete, run with `3_RUN_FIGURES.R`.
+3. After scenarios complete, run with `3_RUN_FIGURES.R`; allow hours for the full US analysis.
+4. To package the dashboard, run with `4_PREPARE_DEPLOYMENT.R` and a state/scenario subset that fits the deployment budget.
 
 On LS6 retain the existing `bash scripts/ls6_container_exec.sh Rscript ...`
 invocation shown in each phase template. Launcher preparation does not submit
@@ -502,8 +541,35 @@ in `metadata_master.csv` and that its Parquet files exist.
 
 ## Validation Figures
 
-When `0_run_full_pipeline_US.R` runs with `--run-web-preview=true` and
-`--make-validation-figs=true`, step `9b` writes Hubverse-style quantile score
+Phase 3 writes figures to two roots on the machine running the analysis:
+
+| Output | Location |
+| --- | --- |
+| Input maps and figures (`9a`) | `<repository>/figures/`: `mobility-matrix-flow-maps/`, `mobility-matrix-flow-maps-by-outflow/`, `mobility-matrix-flow-maps-by-inflow/`, `initial-exposed-by-county/`, `vaccine-coverage-by-state/`, `high-risk-county-maps/`, `comorbidity-heatmaps/`, `age-specific-contact-matrices/`, and `high_risk_heatmap.png`. |
+| WIS, peak-lag, feature comparisons and diagnostics (`9b`, `9c`) | `<PIPELINE_OUTPUT_DIR>/validation_scores/plots/` |
+| State validation trajectories (`9b`) | `<PIPELINE_OUTPUT_DIR>/validation_scores/plots/state_trajectory_plots/<state>_scenario_validation.png` |
+| Compartment spaghetti figures (`9b`) | `<PIPELINE_OUTPUT_DIR>/validation_scores/plots/state_compartment_spaghetti/<state_slug>/`; combined comparisons are in its `all_interventions/` subfolder. |
+| Score and diagnostic CSV tables | `<PIPELINE_OUTPUT_DIR>/validation_scores/` |
+| Timestamped pipeline log | `<PIPELINE_OUTPUT_DIR>/pipeline_0_run_full_pipeline_US_YYYYMMDD_HHMMSS.log` |
+
+Input figures are shared under the repository's `figures/`, outside the experiment
+output directory. State spaghetti folder names are lowercase with underscores
+(e.g. `west_virginia`). The separate manuscript scripts `10a`–`10c` are not
+invoked by Phase 3.
+
+Compartment spaghetti plots are extracted and rendered **one state at a time**
+to avoid retaining the national trajectory table in memory. Logs show the state
+index, extracted row count and memory size, and each PNG's rendering time. Each
+finished state receives a `.spaghetti_complete.rds` checkpoint in its plot
+folder. Restarts reuse these figures when the relevant metadata, network
+Parquet paths/sizes/modification times, plotting code, and output file sizes
+match. New batches or missing plots regenerate that state. States interrupted
+mid-render are redone; older runs without these checkpoints regenerate once.
+This checkpoint applies to spaghetti figures; other figure/scoring steps still
+run normally on restart.
+
+In the results phase, `--make-validation-figs=true` enables step `9b`; the local
+`all` workflow also uses `--run-web-preview=true` to enable ingestion. Step `9b` writes Hubverse-style quantile score
 outputs to `<PIPELINE_OUTPUT_DIR>/validation_scores/`, pooling all available
 Parquet batches for each scenario hash. With `--make-diagnostic-figs=true`, step `9c` writes
 `simulation_completion_runtime_summary.csv` with attempted simulations,
@@ -530,12 +596,9 @@ largest states at the top:
 <PIPELINE_OUTPUT_DIR>/validation_scores/plots/sims_needed_for_95ci_by_state_scenario_compartment_heatmap.png
 ```
 
-Step `9b` also reads `data/VACCINATION/all_US_weekly_vax_adult-ped.csv`, when
-available, and writes one vaccine coverage figure per validation state under:
-
-```text
-<PIPELINE_OUTPUT_DIR>/validation_scores/plots/vaccine_coverage_by_state/
-```
+Step `9a` reads `data/VACCINATION/all_US_weekly_vax_adult-ped.csv`, when
+available, and writes vaccine coverage figures under
+`<repository>/figures/vaccine-coverage-by-state/`.
 
 Pre-simulation input plots now live in the 9-series plotting workflow as step
 `9a`. The orchestrator calls them with the validation figures by default:
@@ -553,9 +616,10 @@ Because generating every selected state-quarter pre-simulation plot can be
 slow, pass `--make-pre-sim-figs=false` to skip only step `9a`. Use
 `--make-validation-figs=false` to skip only step `9b`, and
 `--make-diagnostic-figs=false` to skip only step `9c`.
-By default, steps `7a`, `9b`, and `9c` use only simulator metadata whose paths
-match `WEB_OUTPUTS`, which prevents R0 WIS search candidates from being scored
-as intervention scenarios. Pass `--validation-output-source-regex=<regex>` to
+The LS6 shared inputs set `validation_output_source_regex = "TACC_FILES"` for
+steps `7a`, `9b`, and `9c`; selected winning-fit batches are added automatically
+by the reuse helpers. Local preview defaults use `WEB_OUTPUTS`. This keeps
+unselected fitting candidates out of intervention scoring. Pass `--validation-output-source-regex=<regex>` to
 `0_run_full_pipeline_US.R`, or `--output-source-regex=<regex>` directly to
 `9b`/`9c`, to score a different output source.
 
@@ -699,8 +763,8 @@ opened for testing is a separate browser view and does not publish anything.
 
 ## Deploy Preview To shinyapps.io
 
-The pipeline prepares the deployment bundle by default, but deployment is
-opt-in. It assumes:
+Phase 4 (`deploy`) and the local `all` workflow prepare a deployment bundle;
+Phase 3 (`results`) does not. Upload to shinyapps.io is opt-in. It assumes:
 
 - you have a shinyapps.io account;
 - the R package `rsconnect` is installed;
@@ -843,17 +907,57 @@ those same weeks. Exact totals are saved in
 `good_states_five_scenarios_cumulative_totals.csv`.
 Saved scenario runs use each state's calibrated Rm; their summaries and source
 paths are written to `good_states_five_scenarios_data.csv`.
+Panel selection distinguishes **single-peak core agreement** from whole-season
+agreement. It ranks eligible states by peak-normalized RMSE of the saved median:
+`sqrt(mean((median - observed)^2)) / max(observed)`. Thus 0.10 means an RMSE
+of 10% of that state's observed peak. This is a descriptive curve discrepancy;
+`nrmse_mean_peak` separately measures the ensemble mean. WIS and demographic
+diversity do not choose the main panels. WAPE remains available as a secondary
+metric, and the saved R_m and E0 fits are not refitted by this script.
+
+Rise and decline are measured separately at the outermost 20% and 50% of each
+curve's own peak, with crossings interpolated in calendar time. These widths
+capture shoulders and prolonged rise/decline; asymmetry is
+`(decline20 - rise20) / (decline20 + rise20)`, where positive means a longer
+decline. An asymmetric curve can qualify if PES reproduces its shape.
+
+Provisional editorial eligibility requires a complete observation window, one
+raw and one smoothed peak, uncensored crossings, peak-normalized RMSE <=15%,
+peak timing within one week, peak-height error <=20%, median-curve total-burden
+error <=25%, and errors on each side <=2 weeks at 20% of peak and <=1.5 weeks
+at 50%. The four lowest normalized RMSEs are selected; the script stops if fewer
+than four qualify, rather than silently weakening these rules. Thresholds live
+in `FIT_SCREENING` in `10a`; they are not validated statistical cutoffs.
+
+A separate tail diagnostic compares cumulative observed and fitted median
+incidence after the observed curve's last 20%-of-peak crossing on common scored
+dates. A deficit exceeding 10% of the full observed total is flagged even for
+a good peak core. Main limitation panels seek distinct examples of multiple
+observed peaks, a longer observed rise, a longer observed decline, and a missed
+low-intensity tail. These diagnose the current saved fits; they do not establish
+universal limitations of the simulator or causal effects of R_m/E0. Exact
+metrics and selection reasons are saved in `state_fit_catalog.csv` and
+`manuscript_panel_selection.csv`.
+
 It writes an all-state category/metric catalog, peak-shape review flags, county,
 population and mobility context, a supplement atlas, and two draft 2x2
 figures directly under `figures/manuscript/`; supporting tables and screening
 notes remain under `figures/manuscript/state-fit/`. The supplement excludes states
-in the main figures and clusters the remainder by observed hospitalization
-shape: single peaks (earlier to later), then two peaks, then multiple peaks.
-Single- and double-peak states form separate figure sets, with eight panels
-per page except each set's final page and alphabetical order within each page.
-Panel letters continue across pages within a set (A-Z, then AA, AB, etc.)
-and restart at A for the next set.
-`supplement_panel_selection.csv` records page/panel membership. The generated README explains
+in the main figures and places all remaining states in **one alphabetical series**,
+regardless of peak shape or tail characteristics. `review_atlas_01.png`,
+`review_atlas_02.png`, etc. contain eight panels per page in four rows by two
+columns on 12 by 14 inch pages with a shared y-axis title. Each row is a fixed
+3.5 inches tall, so the three-panel final page is 12 by 7 inches. All plotting
+regions have equal physical width and height across every page; hidden date
+labels retain their space and state panels are aligned together. Population,
+county count and mobility remain compact 11-point insets. Reserved headroom
+above all trajectories and prediction ribbons keeps the text clear of data.
+Panels use two-letter
+state postal abbreviations (including DC), while
+states remain ordered alphabetically by full name across pages.
+`supplement_panel_selection.csv` is the alphabetical index linking every state
+to its page, postal abbreviation (the `panel` column) and figure
+filename; shape classifications remain descriptive columns. The generated README explains
 the provisional thresholds and selection. Early overshoot flags a seeding
 hypothesis; it does not establish that initialization caused the mismatch.
 
