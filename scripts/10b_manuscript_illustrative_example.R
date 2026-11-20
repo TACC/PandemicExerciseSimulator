@@ -25,8 +25,11 @@ low_seed <- integer_arg("--low-exposed", 1000, 1)
 high_seed <- integer_arg("--high-exposed", 10000, 1)
 if (low_seed >= high_seed) stop("--low-exposed must be below --high-exposed")
 prepare_only <- "--prepare-only" %in% args
-vaccine_panel_only <- "--vaccine-panel-only" %in% args
-plots_only <- "--plots-only" %in% args || vaccine_panel_only
+if ("--vaccine-panel-only" %in% args) {
+  stop("The standalone vaccine panel was removed. Use --plots-only for the manuscript composites.",
+    call. = FALSE)
+}
+plots_only <- "--plots-only" %in% args
 resume <- "--resume" %in% args
 if (prepare_only && plots_only) stop("Choose either --prepare-only or --plots-only")
 out <- arg("--output-dir", file.path(repo, "MANUSCRIPT_ILLUSTRATIVE_EXAMPLE_TEST"))
@@ -47,7 +50,7 @@ if ("--rerun-deterministic-baseline" %in% args) {
 if ("--baseline-only" %in% args) {
   settings <- read_json(file.path(out, "comparison_settings.json"), simplifyVector = TRUE)
   saved_states <- read.csv(file.path(out, "statewide_trajectories.csv"))
-  plot_10b_baseline(saved_states, settings, out, figure_dir)
+  write_10b_baseline_diagnostics(saved_states, settings, out)
   diagnose_10b_reproduction(settings, repo, out)
   quit(save = "no", status = 0)
 }
@@ -352,16 +355,12 @@ read_model <- function(i) {
   audit$model <- manifest$model[i]
   list(states = x, audit = audit)
 }
-if (vaccine_panel_only) {
-  states <- read.csv(file.path(out, "statewide_trajectories.csv"))
-} else {
-  results <- lapply(seq_len(nrow(manifest)), read_model)
-  states <- bind_rows(lapply(results, `[[`, "states"))
-  write.csv(bind_rows(lapply(results, `[[`, "audit")), file.path(out, "intervention_audit.csv"), row.names = FALSE)
-  write.csv(states, file.path(out, "statewide_trajectories.csv"), row.names = FALSE)
-  plot_10b_baseline(states, settings, out, figure_dir)
-  diagnose_10b_reproduction(settings, repo, out)
-}
+results <- lapply(seq_len(nrow(manifest)), read_model)
+states <- bind_rows(lapply(results, `[[`, "states"))
+write.csv(bind_rows(lapply(results, `[[`, "audit")), file.path(out, "intervention_audit.csv"), row.names = FALSE)
+write.csv(states, file.path(out, "statewide_trajectories.csv"), row.names = FALSE)
+write_10b_baseline_diagnostics(states, settings, out)
+diagnose_10b_reproduction(settings, repo, out)
 summary <- states %>% group_by(scenario, model, day) %>% summarise(
   mean = mean(I), median = median(I), lower = quantile(I, .025), upper = quantile(I, .975),
   mean_treated = mean(T), mean_total_infectious = mean(total_infectious), n = n(), .groups = "drop")
@@ -401,19 +400,15 @@ write.csv(data.frame(scenario = names(palette), color = unname(palette)),
   file.path(out, "figure_colors.csv"), row.names = FALSE)
 markers <- data.frame(panel = factor(c(panels[2], panels[2], panels[3], panels[3], panels[4]), levels = panels),
   day = c(range(settings$vaccine_release_days), 30, 50, 30))
-plot_example <- function(log_scale = TRUE, panel_selection = NULL) {
+plot_example <- function(log_scale = TRUE) {
   text_pt <- 13
   text_mm <- text_pt / ggplot2::.pt
-  selected_states <- if (is.null(panel_selection)) plot_states else filter(plot_states, panel == panel_selection)
-  selected_summary <- if (is.null(panel_selection)) plot_summary else filter(plot_summary, panel == panel_selection)
-  selected_markers <- if (is.null(panel_selection)) markers else filter(markers, panel == panel_selection)
-  panel_names <- if (is.null(panel_selection)) panels else panel_selection
   make_panel <- function(panel_name,index) {
-    panel_states <- filter(selected_states,panel==panel_name)
-    panel_summary <- filter(selected_summary,panel==panel_name)
-    panel_markers <- filter(selected_markers,panel==panel_name)
-    bottom_row <- length(panel_names)==1 || index>2
-    left_column <- length(panel_names)==1 || index %% 2 == 1
+    panel_states <- filter(plot_states,panel==panel_name)
+    panel_summary <- filter(plot_summary,panel==panel_name)
+    panel_markers <- filter(markers,panel==panel_name)
+    bottom_row <- index>2
+    left_column <- index %% 2 == 1
     p <- ggplot() +
     geom_vline(data = panel_markers, aes(xintercept = day), colour = "grey35", linetype = "dotted", linewidth = 1.1) +
     geom_ribbon(data = panel_summary, aes(day, ymin = lower, ymax = upper, fill = scenario,
@@ -455,17 +450,15 @@ plot_example <- function(log_scale = TRUE, panel_selection = NULL) {
       y=if(left_column) if(log_scale) "Infectious people (I; log1p)" else "Infectious people (I)" else NULL) +
       theme(legend.position="none")
   }
-  panel_plots <- lapply(seq_along(panel_names),function(i) make_panel(panel_names[i],i))
-  p <- cowplot::plot_grid(plotlist=panel_plots,ncol=if(length(panel_names)==1) 1 else 2,
-    align="v",axis="lr",labels=substring(panel_names,1,1),label_size=24,label_fontface="bold",
+  panel_plots <- lapply(seq_along(panels),function(i) make_panel(panels[i],i))
+  p <- cowplot::plot_grid(plotlist=panel_plots,ncol=2,
+    align="v",axis="lr",labels=substring(panels,1,1),label_size=24,label_fontface="bold",
     label_x=.01,label_y=.99,hjust=0,vjust=1)
   keys <- data.frame(scenario = scenarios, x = (seq_along(scenarios) - .5) / length(scenarios),
     label = c(paste0("Initial Exposed\n", format(settings$low_exposed, big.mark = ",")),
       paste0("Initial Exposed\n", format(settings$high_exposed, big.mark = ","), " / baseline"),
       paste0("Vaccine\n", format(vaccine_totals, big.mark=",", scientific=FALSE, trim=TRUE), " doses"), "School closure\nDays 30-50",
       paste0("Antiviral\n", format(antiviral_totals, big.mark=",", scientific=FALSE, trim=TRUE), " courses")))
-  keys <- keys[keys$scenario %in% unique(selected_states$scenario), ]
-  keys$x <- (seq_len(nrow(keys)) - .5) / nrow(keys)
   color_row <- ggplot(keys) +
     geom_segment(aes(x = x-.035, xend = x+.035, y = .88, yend = .88, color = scenario), linewidth = 1.4) +
     geom_text(aes(x, .74, label = label), size = text_mm, vjust = 1, lineheight = 1.1) +
@@ -494,7 +487,7 @@ vaccine_description <- paste0(vaccine_comparison, " are released over simulation
 shared_inputs <- paste0("All scenarios use Delaware county-specific age risk fractions matched to population data by county FIPS.",
   " Day 0 is the initial state. There is no waning immunity. After network E + I (+ T) falls to 0.99 or below,",
   " terminal states are held through day ", days, " for plotting.")
-if (!vaccine_panel_only) for (kind in c("log1p", "linear")) {
+for (kind in c("log1p", "linear")) {
   stem <- paste0("statewide_2x2_", kind)
   ggsave(file.path(figure_dir, paste0(stem, ".png")), plot_example(kind == "log1p"),
     width = 15, height = 11.5, dpi = 300, bg = "white")
@@ -517,12 +510,6 @@ if (!vaccine_panel_only) for (kind in c("log1p", "linear")) {
     "Shared inputs and time convention" = shared_inputs
   ))
 }
-ggsave(file.path(figure_dir, "vaccine_panel.png"), plot_example(FALSE, panels[2]),
-  width = 13, height = 8, dpi = 300, bg = "white")
-write_manuscript_legend(figure_dir, "vaccine_panel", "Delaware vaccination comparison", c(
-  run_description, "Reading the figure" = read_lines, "Dose release and protection" = vaccine_description,
-  "Shared inputs and time convention" = shared_inputs
-))
 input_plot_status <- system2("Rscript", c("--vanilla", shQuote(file.path(repo, "scripts/10c_manuscript_illustrative_inputs.R")),
   shQuote(paste0("--output-dir=", file.path(out, "input_figure"))),
   if (nzchar(shape_path)) shQuote(paste0("--county-shapefile=",shape_path)) else character(),

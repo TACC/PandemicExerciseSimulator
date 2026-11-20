@@ -954,7 +954,8 @@ county count and mobility remain compact 11-point insets. Reserved headroom
 above all trajectories and prediction ribbons keeps the text clear of data.
 Panels use two-letter
 state postal abbreviations (including DC), while
-states remain ordered alphabetically by full name across pages.
+states remain ordered alphabetically by full name across pages. The entire
+continued figure shares `review_atlas_legend.pdf`.
 `supplement_panel_selection.csv` is the alphabetical index linking every state
 to its page, postal abbreviation (the `panel` column) and figure
 filename; shape classifications remain descriptive columns. The generated README explains
@@ -1016,7 +1017,7 @@ defaults compare 1K/10K initial exposures, vaccination at 60% effectiveness with
 days 30-50, and 10K/100K antiviral courses released on day 30. Every scenario uses
 county-specific age risk fractions matched by FIPS. Source and input-data hashes,
 snapshots, and initial county-age risk allocations are checked for the new runs.
-The script writes intervention PNGs and companion `_legend.pdf` files directly
+The script writes the linear and log1p 2x2 intervention composites and their legend PDFs directly
 under `figures/manuscript/` and invokes `10c` to save the explanatory figure and legend.
 All composite panels use the same standalone bold cowplot letters as `10a`.
 The intervention composite retains its panel headings and color/model legends;

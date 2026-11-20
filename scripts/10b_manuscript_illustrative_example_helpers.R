@@ -11,7 +11,7 @@ manuscript_seir_parameters <- function() {
 }
 
 # Focused baseline diagnostic, using existing simulations only.
-plot_10b_baseline <- function(states, settings, out, figure_dir) {
+write_10b_baseline_diagnostics <- function(states, settings, out) {
   baseline <- states %>% filter(scenario == "high") %>% arrange(model, sim_id, day) %>%
     group_by(model, sim_id) %>% mutate(
       new_infections = pmax(0, lag(S, default = first(S)) - S),
@@ -28,43 +28,6 @@ plot_10b_baseline <- function(states, settings, out, figure_dir) {
     all(baseline$cumulative_new >= -1e-6))
   write.csv(runs, file.path(out, "baseline_10k_run_diagnostics.csv"), row.names = FALSE)
   write.csv(baseline, file.path(out, "baseline_10k_daily_diagnostics.csv"), row.names = FALSE)
-  extrema <- runs %>% group_by(model) %>% arrange(new_infections, sim_id) %>%
-    summarise(min_id = first(sim_id), max_id = last(sim_id), .groups = "drop")
-  plotted <- baseline %>% select(model, sim_id, day, I, new_infections, cumulative_new, final_new) %>%
-    pivot_longer(c(I, new_infections, cumulative_new), names_to = "metric", values_to = "people")
-  metrics <- c("I", "new_infections", "cumulative_new")
-  plotted$panel <- factor(paste(plotted$model, plotted$metric, sep = "_"),
-    levels = as.vector(t(outer(c("deterministic", "stochastic"), metrics, paste, sep = "_"))),
-    labels = c("Deterministic: infectious (I)", "Deterministic: new infections / day",
-      "Deterministic: cumulative new infections", "Stochastic: infectious (I)",
-      "Stochastic: new infections / day", "Stochastic: cumulative new infections"))
-  highlighted <- inner_join(plotted, extrema, by = "model") %>%
-    filter(sim_id == min_id | sim_id == max_id)
-  legend_text <- c(
-    paste0("All ", settings$realizations, " runs per model are shown. Color indicates final infections ",
-      "generated beyond the initial ", format(settings$high_exposed, big.mark = ","),
-      " exposures. Bold lines mark the runs with the smallest and largest final totals."),
-    "Both models use binomial travel. After early termination, the terminal infectious count is held and additional daily infections are zero."
-  )
-  p <- ggplot(plotted, aes(day, people, group = interaction(model, sim_id), color = final_new)) +
-    geom_line(linewidth = .35, alpha = .30) +
-    geom_line(data = highlighted, linewidth = .8, alpha = 1) +
-    facet_wrap(~panel, ncol = 3, scales = "free_y") +
-    scale_color_viridis_c(option = "C", name = "Final additional infections", labels = scales::label_comma()) +
-    scale_x_continuous(limits = c(0, settings$days), breaks = pretty(c(0, settings$days), n = 4)) +
-    scale_y_continuous(limits = c(0, NA), labels = compact_axis_label) +
-    labs(title = "Delaware baseline: every high-seed realization",
-      subtitle = paste0("R0 input = ", settings$r0 %||10b% 1.2, "; initial exposed = ",
-        format(settings$high_exposed, big.mark = ","), "; no interventions; no waning immunity"),
-      x = "Simulation day", y = "People") +
-    theme_bw(base_size = 11) + theme(legend.position = "bottom",
-      panel.grid.minor = element_blank(), strip.text = element_text(hjust = 0, face = "bold", size = 10)) +
-    guides(color = guide_colorbar(barwidth = grid::unit(8, "cm")))
-  dir.create(figure_dir, recursive=TRUE, showWarnings = FALSE)
-  ggsave(file.path(figure_dir, "baseline_10k_spaghetti.png"),
-    p, width = 16, height = 8.5, dpi = 200)
-  write_manuscript_legend(figure_dir, "baseline_10k_spaghetti",
-    "Delaware SEIR baseline realizations", legend_text)
   totals <- runs %>% group_by(model) %>% summarise(
     runs = n(), with_new_infections = sum(any_secondary_infections),
     peak_above_seed = sum(peak_I_exceeds_seed),
