@@ -38,6 +38,7 @@ repo_root <- normalizePath(".", mustWork = FALSE)
 if (basename(repo_root) == "scripts") {
   repo_root <- normalizePath("..", mustWork = TRUE)
 }
+source(file.path(repo_root, "scripts", "manuscript_figure_legends.R"))
 
 analysis_year = as.integer(get_arg_value("--year=", as.character(get0("analysis_year", ifnotfound = 2025))))
 pipeline_output_dir <- get_arg_value("--output-dir=", get0("PIPELINE_OUTPUT_DIR", ifnotfound = "STATE_H-INCREASE_ALL-ANTIVIAL_TEST"))
@@ -857,47 +858,36 @@ read_county_high_risk <- function() {
     )
 }
 
-plot_us_county_high_risk_map <- function(plot_data, fill_label, title, out_file) {
-  plot_geo <- county_geo_shifted %>%
-    left_join(plot_data, by = c("GEOID" = "fips"))
-
-  p <- ggplot(plot_geo) +
+plot_us_county_high_risk_map <- function(plot_geo, fill_label, limits = NULL, breaks = waiver()) {
+  ggplot(plot_geo) +
     geom_sf(aes(fill = .data$high_risk_percent), color = NA) +
     geom_sf(data = state_geo_shifted, fill = NA, color = "white", linewidth = 0.18) +
     scale_fill_gradientn(
       colors = high_risk_palette,
       labels = scales::label_number(accuracy = 1),
       name = fill_label,
+      limits = limits,
+      breaks = breaks,
       na.value = "grey92"
     ) +
     coord_sf(datum = NA) +
-    labs(title = title) +
     theme_void(base_size = 18) +
     theme(
       plot.title = element_text(face = "bold", hjust = 0.5),
       legend.position = "right"
     )
-
-  ggsave(out_file, p, width = 14, height = 9, bg = "white", units = "in", dpi = 300)
-  invisible(out_file)
 }
 
 save_county_high_risk_maps <- function() {
   county_risk <- read_county_high_risk()
   if (nrow(county_risk) == 0) return(invisible(county_risk))
 
-  for (age_group_i in levels(county_risk$age_group)) {
-    age_data <- county_risk %>%
-      dplyr::filter(.data$age_group == age_group_i) %>%
+  age_groups <- levels(county_risk$age_group)
+  age_data <- lapply(age_groups, function(age_group) {
+    county_risk %>%
+      dplyr::filter(.data$age_group == .env$age_group) %>%
       transmute(fips = .data$fips, high_risk_percent = .data$frac_high_risk_cnty * 100)
-
-    plot_us_county_high_risk_map(
-      age_data,
-      paste0("High risk (%)\nAge ", age_group_i),
-      paste0("US County Percent High Risk: Age ", age_group_i),
-      file.path(high_risk_county_figure_dir, paste0("US_county_high-risk_age-", str_replace_all(age_group_i, "\\+", "plus"), ".png"))
-    )
-  }
+  })
 
   all_age_data <- county_risk %>%
     group_by(.data$fips) %>%
@@ -906,12 +896,55 @@ save_county_high_risk_maps <- function() {
       .groups = "drop"
     )
 
-  plot_us_county_high_risk_map(
-    all_age_data,
-    "High risk (%)\nAll ages",
-    "US County Percent High Risk: All Ages",
-    file.path(high_risk_county_figure_dir, "US_county_high-risk_all-ages.png")
+  age_titles <- paste("Age", age_groups)
+  panel_titles <- c(age_titles, "All Ages")
+  legend_titles <- paste("High risk (%)", c(age_titles, "All ages"), sep = "\n")
+  file_suffixes <- c(paste0("age-", str_replace_all(age_groups, "\\+", "plus")), "all-ages")
+  map_data <- lapply(c(age_data, list(all_age_data)), function(panel_data) {
+    left_join(county_geo_shifted, panel_data, by = c("GEOID" = "fips"))
+  })
+
+  for (i in seq_along(panel_titles)) {
+    p <- plot_us_county_high_risk_map(map_data[[i]], legend_titles[i]) +
+      labs(title = paste("US County Percent High Risk:", panel_titles[i]))
+    out_file <- file.path(high_risk_county_figure_dir, paste0("US_county_high-risk_", file_suffixes[i], ".png"))
+    ggsave(out_file, p, width = 14, height = 9, bg = "white", units = "in", dpi = 300)
+  }
+
+  combined_data <- bind_rows(setNames(map_data, panel_titles), .id = "panel") %>%
+    mutate(panel = factor(.data$panel, levels = panel_titles))
+  combined <- plot_us_county_high_risk_map(
+    combined_data, "High risk (%)", limits = c(0, 100), breaks = seq(0, 100, by = 20)
+  ) +
+    facet_wrap(vars(panel), nrow = 3, ncol = 2) +
+    guides(fill = guide_colourbar(theme = theme(
+      legend.key.width = grid::unit(4, "in"),
+      legend.key.height = grid::unit(0.14, "in"),
+      legend.title.position = "top",
+      legend.title = element_text(hjust = 0.5)
+    ))) +
+    theme(
+      strip.text = element_text(size = 12, face = "bold", margin = margin(b = 3)),
+      panel.spacing = grid::unit(0.1, "in"),
+      legend.position = "bottom",
+      legend.title = element_text(size = 11),
+      legend.text = element_text(size = 10),
+      plot.margin = margin(8, 8, 8, 8)
+    )
+
+  manuscript_dir <- file.path(input_figure_root, "manuscript")
+  dir.create(manuscript_dir, showWarnings = FALSE, recursive = TRUE)
+  ggsave(
+    file.path(manuscript_dir, "US_county_high-risk_3x2.png"), combined,
+    width = 8, height = 8.4, bg = "white", units = "in", dpi = 600
   )
+  write_manuscript_legend(manuscript_dir, "US_county_high-risk_3x2",
+    "County-level prevalence of high-risk status", c(
+      paste("Panels show the estimated percentage of residents classified as high risk",
+        "for influenza in each county and age group. All six panels share a 0-100% color scale.",
+        "Gray indicates missing data."),
+      "The All Ages panel uses a population-weighted average of the five age-specific estimates within each county."
+    ))
 
   invisible(county_risk)
 }

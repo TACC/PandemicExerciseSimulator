@@ -23,6 +23,7 @@ arg <- function(key, default) {
   if (length(x)) substring(x[[1]], nchar(key) + 2) else default
 }
 repo <- normalizePath(if (basename(getwd()) == "scripts") ".." else ".")
+source(file.path(repo,"scripts/manuscript_figure_legends.R"))
 sweep <- normalizePath(arg("--sweep-dir", file.path(repo, "LS6_RmSweep_TEST/Rm_search/2025-10-04")), mustWork = TRUE)
 figure_dir <- arg("--figure-dir", file.path(repo, "figures/manuscript"))
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
@@ -510,6 +511,17 @@ if (length(old_pdfs)) unlink(old_pdfs)
 # Best eligible single-peak cores, selected from this run's actual diagnostics.
 # Eligibility does not imply agreement in the low-intensity tail.
 make_figure(good,"good_single_peak_2x2")
+fit_legend <- paste("Points show observed weekly incident hospital admissions.",
+  "The fitted line shows the median across saved realizations at the state-specific fitted Rm.",
+  "Ribbons from darkest to lightest show central 50%, 80%, and 95% prediction intervals.",
+  "Intervals describe variation across runs at fixed parameters.")
+context_legend <- paste("The inset reports county count, population, and mobility for each state.",
+  "Mobility is the population-weighted off-diagonal row sum of the Q4 2025 input matrix.")
+write_manuscript_legend(figure_dir,"good_single_peak_2x2","Single-peak state fits",c(
+  fit_legend, context_legend,
+  paste("Panels A-D show",paste(gsub("-"," ",good),collapse=", "),
+    "in order. Selection focuses on agreement near the observed peak.")
+))
 # Scenario-comparison companion: same A-D states and fitted Rm as good-fit
 # figure; median lines and nested central 50/80/95% prediction intervals for
 # NONE, ANTIVIRAL, NPI, VACCINE, ALL_INTERVENTIONS. Upper-right color-keyed
@@ -547,9 +559,24 @@ scenario_totals <- map_dfr(good,function(state) {
 })
 write_csv(scenario_totals,file.path(out,"good_states_five_scenarios_cumulative_totals.csv"))
 make_figure(good,"good_states_five_scenarios_2x2",height=9,scenario_data=scenario_projections)
+write_manuscript_legend(figure_dir,"good_states_five_scenarios_2x2",
+  "Hospital admissions under five intervention scenarios",c(
+    paste("Panels A-D show",paste(gsub("-"," ",good),collapse=", "),
+      "in order. The five scenarios use the same fitted Rm within each state."),
+    paste("Colored lines show scenario medians. Ribbons from darkest to lightest show central",
+      "50%, 80%, and 95% prediction intervals. Red points show observed admissions."),
+    paste("The inset lists cumulative incident admissions over the weeks with observations.",
+      "Observed counts are summed across weeks. Simulated counts are summed within each",
+      "realization and then summarized by their median.")
+  ))
 
 # Representative limitations selected from the current saved fits.
 make_figure(bad,"bad_fit_reasons_2x2")
+write_manuscript_legend(figure_dir,"bad_fit_reasons_2x2","Examples of state-fit limitations",c(
+  fit_legend, context_legend,
+  paste("Panels A-D show",paste(gsub("-"," ",bad),collapse=", "),
+    "in order. The panels illustrate discrepancies in epidemic shape, timing, or tail burden.")
+))
 # Supplement: one alphabetical series for all remaining jurisdictions.
 # Eight panels per page (four rows by two columns), labeled by postal abbreviation (including DC).
 atlas_postal <- setNames(c(state.abb,"DC"),
@@ -572,6 +599,12 @@ atlas_selection <- map_dfr(seq_along(atlas_pages),function(i) {
   page_rows <- ceiling(length(states)/2)
   make_figure(states,filename,height=3.5*page_rows,panel_labels=labels,shared_y=TRUE,
     panel_grobs=grobs,grid_rows=page_rows)
+  write_manuscript_legend(figure_dir,filename,
+    sprintf("State fit atlas (page %d of %d)",i,length(atlas_pages)),c(
+      fit_legend, context_legend,
+      paste("Panels follow alphabetical state order and use two-letter postal abbreviations.",
+        "States on this page:",paste(gsub("-"," ",states),collapse=", "))
+    ))
   tibble(figure=paste0(filename,".png"),page=i,panel=labels,geo_region=states)
 }) %>% left_join(atlas_catalog %>% select(geo_region,category,epidemic_shape,peak_1_date),
   by="geo_region")

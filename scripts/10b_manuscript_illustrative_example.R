@@ -39,6 +39,7 @@ figure_dir <- arg("--figure-dir",file.path(repo,"figures/manuscript"))
 dir.create(input_dir, showWarnings = FALSE)
 dir.create(figure_dir, recursive=TRUE, showWarnings = FALSE)
 source(file.path(repo, "scripts/10b_manuscript_illustrative_example_helpers.R"))
+source(file.path(repo, "scripts/manuscript_figure_legends.R"))
 if ("--rerun-deterministic-baseline" %in% args) {
   rerun_10b_deterministic_baseline(repo, out, python = arg("--python", ""), plots_only = plots_only, figure_dir=figure_dir)
   quit(save = "no", status = 0)
@@ -102,9 +103,7 @@ base <- list(output_dir_path = "GENERATE", realization_range = c("0", as.charact
     contact = data_file("contact_matrix_Delaware_Mistry2021_all.csv"),
     flow = data_file("Delaware_Q4-2019_mobility-matrix.csv"),
     high_risk_ratios = data_file("county_Delaware_high-risk-ratios-flu-only.csv")),
-  disease_model = list(identity = "seirs-deterministic", parameters = list(
-    compartments = c("S", "E", "I", "R"), R0 = "1.2", E_to_I_days = "1",
-    I_to_R_days = "7", R_to_S_days = "0")),
+  disease_model = list(identity = "seirs-deterministic", parameters = manuscript_seir_parameters()),
   travel_model = list(identity = "binomial", parameters = list(rho = "1",
     flow_reduction = rep("1.0", 5), traveling_compartments = list(I = "0.2"),
     transmitting_compartments = list(I = "1.0"))),
@@ -482,63 +481,48 @@ plot_example <- function(log_scale = TRUE, panel_selection = NULL) {
   cowplot::plot_grid(p,
     color_row, method_row, ncol = 1, rel_heights = c(1,.075,.055))
 }
+seir <- manuscript_seir_parameters()
+run_description <- paste0("R0 = ", seir$R0, ". The exposed and untreated infectious periods are ",
+  seir$E_to_I_days, " and ", seir$I_to_R_days, " days, respectively. Each model and scenario has ",
+  realizations, " realizations over ", days, " simulation days.")
+read_lines <- paste("Thin lines show individual runs, bold lines show medians, and ribbons show the central 95% of runs.",
+  "Solid lines denote deterministic SEI(T)R and dashed lines denote stochastic SEI(T)R.",
+  "Both models use binomial travel. The plotted count includes untreated infectious people (I).")
+vaccine_description <- paste0(vaccine_comparison, " are released over simulation days 30-50 inclusive at ",
+  100 * vaccine_effectiveness, "% effectiveness against infection. Dotted lines mark the first and last release days.",
+  " With the 14-day lag, protection begins over days 44-64. Only eligible susceptible people are vaccinated, so released supply can exceed the number vaccinated.")
+shared_inputs <- paste0("All scenarios use Delaware county-specific age risk fractions matched to population data by county FIPS.",
+  " Day 0 is the initial state. There is no waning immunity. After network E + I (+ T) falls to 0.99 or below,",
+  " terminal states are held through day ", days, " for plotting.")
 if (!vaccine_panel_only) for (kind in c("log1p", "linear")) {
-  p <- plot_example(kind == "log1p")
-  for (ext in c("png", "pdf")) ggsave(file.path(figure_dir, paste0("statewide_2x2_", kind, ".", ext)),
-    p, width = 15, height = 11.5, dpi = 300, bg = "white")
-}
-for (ext in c("png", "pdf")) ggsave(file.path(figure_dir, paste0("vaccine_panel.", ext)),
-  plot_example(FALSE, panels[2]), width = 13, height = 8, dpi = 300, bg = "white")
-# Keep interpretive text in a companion PDF, not in the manuscript figure body.
-write_example_notes <- function(path) {
-  grDevices::pdf(path, width=8.5, height=11, family="Helvetica")
-  on.exit(grDevices::dev.off())
-  grid::grid.newpage()
-  cursor <- 10.35
-  wrap_text <- function(text, size, face) {
-    words <- strsplit(text, " +")[[1]]; lines <- character(); line <- ""
-    for (word in words) {
-      candidate <- if (nzchar(line)) paste(line, word) else word
-      width <- grid::convertWidth(grid::grobWidth(grid::textGrob(candidate,
-        gp=grid::gpar(fontsize=size, fontface=face))), "inches", valueOnly=TRUE)
-      if (width > 7.2 && nzchar(line)) { lines <- c(lines,line); line <- word }
-      else line <- candidate
-    }
-    paste(c(lines,line), collapse="\n")
+  stem <- paste0("statewide_2x2_", kind)
+  ggsave(file.path(figure_dir, paste0(stem, ".png")), plot_example(kind == "log1p"),
+    width = 15, height = 11.5, dpi = 300, bg = "white")
+  scale_description <- if (kind == "log1p") {
+    "The vertical axis uses a log1p scale, with tick labels in people."
+  } else {
+    "The vertical axis shows people on a linear scale."
   }
-  paragraph <- function(text, size=11, face="plain", gap=.15) {
-    text <- wrap_text(text,size,face)
-    grob <- grid::textGrob(text, x=grid::unit(.65,"inches"),
-      y=grid::unit(cursor,"inches"), just=c("left","top"),
-      gp=grid::gpar(fontsize=size,fontface=face,lineheight=1.25,col="#222222"))
-    height <- grid::convertHeight(grid::grobHeight(grob),"inches",valueOnly=TRUE)
-    if (cursor-height < .65) {
-      grid::grid.newpage(); cursor <<- 10.35
-      grob$y <- grid::unit(cursor,"inches")
-    }
-    grid::grid.draw(grob)
-    cursor <<- cursor-height-gap
-  }
-  paragraph("Delaware: statewide infectious population",16,"bold",.12)
-  paragraph(paste0("R0 = 1.2; exposed for 1 day; untreated infectious for 7 days. ",
-    realizations," realizations per model and scenario, over ",days," simulation days."))
-  paragraph("Reading the figures",12,"bold",.08)
-  paragraph("Thin lines show individual runs, bold lines the median, and shading the central 95% of runs. Solid lines denote deterministic SEI(T)R and dashed lines stochastic SEI(T)R. Binomial travel is active in both models. The plotted compartment is I; treated infectious people (T) are not included in the plotted count. The linear and log1p figures show the same saved simulations.")
-  paragraph("A. Initial exposures",12,"bold",.08)
-  paragraph(paste0(format(settings$low_exposed,big.mark=",")," versus ",
-    format(settings$high_exposed,big.mark=",")," initially exposed people. Panels B-D share the ",
-    format(settings$high_exposed,big.mark=","),"-exposure baseline."))
-  paragraph("B. Vaccination",12,"bold",.08)
-  paragraph(paste0(vaccine_comparison," are released over simulation days 30-50, inclusive, at ",
-    100*vaccine_effectiveness,"% effectiveness. Dotted lines mark the first and last dose-release days (30 and 50), not the protection window. With the 14-day lag, protection begins over days 44-64. Only eligible susceptible people are vaccinated, so released supply can exceed the number vaccinated. Vaccine effectiveness reduces susceptibility to infection."))
-  paragraph("C. School closure",12,"bold",.08)
-  paragraph("Dotted lines mark closure days 30 and 50. Closure is active on days 30-50 inclusive; normal contacts resume on day 51. Contacts are reduced by 90% for ages 5-17 and by 50% for adults (18+); ages 0-4 are unchanged.")
-  paragraph("D. Antivirals",12,"bold",.08)
-  paragraph(paste0(antiviral_comparison," courses are released on day 30, indicated by the dotted line. Stockpile allocation transfers eligible infectious people from I to T. Treated infection has 50% lower infectiousness and a mean 5-day recovery time after treatment; untreated infection has a mean 7-day recovery time."))
-  paragraph("Shared inputs and time convention",12,"bold",.08)
-  paragraph(paste0("All scenarios use Delaware county-specific age risk fractions, matched to population data by county FIPS. Day 0 is the initial state; day labels are elapsed simulation days. There is no waning immunity. After network E + I (+ T) falls to 0.99 or below, terminal states are held through day ",days," for plotting."))
+  write_manuscript_legend(figure_dir, stem, "Delaware statewide infectious population", c(
+    run_description,
+    "Reading the figure" = paste(read_lines, scale_description),
+    "A. Initial exposures" = paste0(format(settings$low_exposed, big.mark = ","), " versus ",
+      format(settings$high_exposed, big.mark = ","), " initially exposed people. Panels B-D use the higher seed."),
+    "B. Vaccination" = vaccine_description,
+    "C. School closure" = paste("Dotted lines mark the closure window on days 30-50 inclusive. Normal contacts resume on day 51.",
+      "Contacts are reduced by 90% for ages 5-17 and 50% for adults. Ages 0-4 retain their normal contacts."),
+    "D. Antivirals" = paste0(antiviral_comparison, " courses are released on day 30, indicated by the dotted line.",
+      " Stockpile allocation transfers eligible infectious people from I to T.",
+      " Treated infection has half the infectiousness of untreated infection and a mean 5-day recovery time."),
+    "Shared inputs and time convention" = shared_inputs
+  ))
 }
-write_example_notes(file.path(figure_dir,"statewide_2x2_notes.pdf"))
+ggsave(file.path(figure_dir, "vaccine_panel.png"), plot_example(FALSE, panels[2]),
+  width = 13, height = 8, dpi = 300, bg = "white")
+write_manuscript_legend(figure_dir, "vaccine_panel", "Delaware vaccination comparison", c(
+  run_description, "Reading the figure" = read_lines, "Dose release and protection" = vaccine_description,
+  "Shared inputs and time convention" = shared_inputs
+))
 input_plot_status <- system2("Rscript", c("--vanilla", shQuote(file.path(repo, "scripts/10c_manuscript_illustrative_inputs.R")),
   shQuote(paste0("--output-dir=", file.path(out, "input_figure"))),
   if (nzchar(shape_path)) shQuote(paste0("--county-shapefile=",shape_path)) else character(),

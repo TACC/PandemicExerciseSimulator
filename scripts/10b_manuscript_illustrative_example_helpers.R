@@ -5,6 +5,11 @@ compact_axis_label <- function(x) {
   sub("\\.0+([KMB]?)$", "\\1", labels)
 }
 
+manuscript_seir_parameters <- function() {
+  list(compartments = c("S", "E", "I", "R"), R0 = "1.2",
+    E_to_I_days = "1", I_to_R_days = "7", R_to_S_days = "0")
+}
+
 # Focused baseline diagnostic, using existing simulations only.
 plot_10b_baseline <- function(states, settings, out, figure_dir) {
   baseline <- states %>% filter(scenario == "high") %>% arrange(model, sim_id, day) %>%
@@ -35,9 +40,12 @@ plot_10b_baseline <- function(states, settings, out, figure_dir) {
       "Stochastic: new infections / day", "Stochastic: cumulative new infections"))
   highlighted <- inner_join(plotted, extrema, by = "model") %>%
     filter(sim_id == min_id | sim_id == max_id)
-  caption <- paste0("All ", settings$realizations, " runs per model; color = final infections generated beyond the initial ",
-    format(settings$high_exposed, big.mark = ","), " exposures. Bold lines: smallest/largest final totals.\n",
-    "Binomial travel in both models. Terminal I values below the simulator stopping threshold are held after early termination; new infections are zero afterward.")
+  legend_text <- c(
+    paste0("All ", settings$realizations, " runs per model are shown. Color indicates final infections ",
+      "generated beyond the initial ", format(settings$high_exposed, big.mark = ","),
+      " exposures. Bold lines mark the runs with the smallest and largest final totals."),
+    "Both models use binomial travel. After early termination, the terminal infectious count is held and additional daily infections are zero."
+  )
   p <- ggplot(plotted, aes(day, people, group = interaction(model, sim_id), color = final_new)) +
     geom_line(linewidth = .35, alpha = .30) +
     geom_line(data = highlighted, linewidth = .8, alpha = 1) +
@@ -48,14 +56,15 @@ plot_10b_baseline <- function(states, settings, out, figure_dir) {
     labs(title = "Delaware baseline: every high-seed realization",
       subtitle = paste0("R0 input = ", settings$r0 %||10b% 1.2, "; initial exposed = ",
         format(settings$high_exposed, big.mark = ","), "; no interventions; no waning immunity"),
-      x = "Simulation day", y = "People", caption = caption) +
+      x = "Simulation day", y = "People") +
     theme_bw(base_size = 11) + theme(legend.position = "bottom",
-      panel.grid.minor = element_blank(), strip.text = element_text(hjust = 0, face = "bold", size = 10),
-      plot.caption = element_text(hjust = 0, size = 9)) +
+      panel.grid.minor = element_blank(), strip.text = element_text(hjust = 0, face = "bold", size = 10)) +
     guides(color = guide_colorbar(barwidth = grid::unit(8, "cm")))
   dir.create(figure_dir, recursive=TRUE, showWarnings = FALSE)
-  for (ext in c("png", "pdf")) ggsave(file.path(figure_dir, paste0("baseline_10k_spaghetti.", ext)),
+  ggsave(file.path(figure_dir, "baseline_10k_spaghetti.png"),
     p, width = 16, height = 8.5, dpi = 200)
+  write_manuscript_legend(figure_dir, "baseline_10k_spaghetti",
+    "Delaware SEIR baseline realizations", legend_text)
   totals <- runs %>% group_by(model) %>% summarise(
     runs = n(), with_new_infections = sum(any_secondary_infections),
     peak_above_seed = sum(peak_I_exceeds_seed),
@@ -187,15 +196,19 @@ rerun_10b_deterministic_baseline <- function(repo, original_out, python = "", pl
     scale_x_continuous(limits = c(0, settings$days)) + scale_y_continuous(limits = c(0, NA), labels = compact_axis_label) +
     labs(title = "Delaware deterministic SEIR: transmission denominator comparison",
       subtitle = paste0("R0 = 1.2; 10,000 initial exposed in New Castle; ", settings$realizations, " realizations per version"),
-      x = "Simulation day", y = "People (panel B: ln[1 + I])", color = NULL,
-      caption = paste0("Thin lines: individual runs; bold: median. ", travel_description,
-        "\nBinomial travel remains stochastic; random draws differ between batches. New-infection counts exclude the initial seed.",
-        "\nPanel B uses transformed values. Terminal states are held after early stops.")) +
+      x = "Simulation day", y = "People (panel B: ln[1 + I])", color = NULL) +
     theme_bw(base_size = 11) + theme(legend.position = "bottom", panel.grid.minor = element_blank(),
-      strip.text = element_text(hjust = 0, face = "bold"), plot.caption = element_text(hjust = 0))
+      strip.text = element_text(hjust = 0, face = "bold"))
   dir.create(figure_dir, recursive=TRUE, showWarnings = FALSE)
-  for (ext in c("png", "pdf")) ggsave(file.path(figure_dir, paste0("baseline_10k_denominator_comparison.", ext)),
+  ggsave(file.path(figure_dir, "baseline_10k_denominator_comparison.png"),
     p, width = 13, height = 9.5, dpi = 200)
+  write_manuscript_legend(figure_dir, "baseline_10k_denominator_comparison",
+    "Delaware SEIR transmission denominator comparison", c(
+      paste("Thin lines show individual runs and bold lines show medians.", travel_description),
+      paste("Binomial travel remains stochastic. Random draws differ between batches.",
+        "New-infection counts exclude the initial seed. Panel B uses ln(1 + I).",
+        "Terminal states are held after early stops.")
+    ))
   diagnose_10b_reproduction(settings, repo, run_out)
   print(metrics %>% group_by(denominator) %>% summarise(
     simulations = n(), peak_I_median = median(peak_I), peak_day_median = median(peak_I_day),
@@ -231,7 +244,7 @@ write_10b_example_readme <- function(out) {
     "",
     "simulations/ contains all 14 local batches; inputs/ contains their configurations. data_snapshot/ contains the actual scientific CSVs. County boundaries are generated plot caches under input_figure/ (and may also be retained in data_snapshot/); they do not need to be tracked in Git. source_snapshot/src/ is a passive record of the Python implementation used for validation, not another execution location. The saved manifest uses experiment-relative output paths.",
     "",
-    "All manuscript PNG/PDF figures are written directly to the repository figures/manuscript/ directory. statewide_2x2_linear.png and .pdf are the main composite; statewide_2x2_log1p provides the alternate scale; statewide_2x2_notes.pdf contains the notes. The main script also invokes 10c_manuscript_illustrative_inputs.R to regenerate Delaware_inputs_5panel.png/.pdf and its caption there. Ancillary explanatory input tables and boundaries remain under this experiment's input_figure/.",
+    "Manuscript figures are saved as PNGs with matching _legend.pdf companions in figures/manuscript/. statewide_2x2_linear.png is the main composite and statewide_2x2_log1p.png provides the alternate scale. The main script invokes 10c_manuscript_illustrative_inputs.R to regenerate Delaware_inputs_5panel.png and its legend. Ancillary input tables and boundaries remain under this experiment's input_figure/.",
     "",
     "Checks validate initial county-age risk allocations, population conservation, complete time series or valid epidemic extinction, vaccine administration bounds, and treatment timing. Original simulation metadata preserves creation-time paths and random seeds; fresh simulations use independent seeds."
   ),file.path(out,"README.md"))

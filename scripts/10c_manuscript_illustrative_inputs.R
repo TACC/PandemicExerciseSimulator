@@ -6,6 +6,7 @@ arg <- function(key, default) { x <- args[startsWith(args, key)]; if(length(x)) 
 script_flags <- commandArgs()[startsWith(commandArgs(),"--file=")]
 root <- if (length(script_flags)) dirname(dirname(normalizePath(sub("^--file=","",script_flags[1])))) else
   normalizePath(if(basename(getwd()) == "scripts") ".." else ".")
+source(file.path(root,"scripts/manuscript_figure_legends.R"))
 out <- arg("--output-dir=", file.path(root,"MANUSCRIPT_ILLUSTRATIVE_EXAMPLE_TEST/input_figure"))
 dir.create(out, recursive=TRUE, showWarnings=FALSE)
 figure_dir <- arg("--figure-dir=",file.path(root,"figures/manuscript"))
@@ -136,7 +137,6 @@ top_row <- plot_grid(model_panel,population_panel,network_panel,ncol=3,
 bottom_row <- plot_grid(contact_panel,risk_panel,ncol=2,
   labels=c("D","E"),label_size=24,label_fontface="bold",
   label_x=.01,label_y=.99,hjust=0,vjust=1)
-# A single continuous paragraph spans the full figure width at 11 pt.
 legend_text <- paste(
   "A) S: susceptible; E: exposed; I: infectious; T: treated; R: recovered. R0 = 1.2 with no waning immunity; arrow labels give mean durations.",
   "Solid arrows show disease progression; the dashed I-to-T arrow denotes stockpile-dependent antiviral allocation (10K or 100K courses released on day 30).",
@@ -148,34 +148,11 @@ legend_text <- paste(
   "D) Mistry et al. contacts, all settings; rows are contactors (youngest at bottom, oldest at top) and columns contactees. E) County-specific influenza high-risk fractions are matched by FIPS; cell labels show percentages to one decimal place.",
   "County labels: 1 = Kent (10001), 2 = New Castle (10003), 3 = Sussex (10005)."
 )
-# Wrap by rendered width, so the paragraph uses the full bottom rather than
-# relying on character counts or separate columns. Use the same PDF font.
-wrap_legend <- function(text,width_inches,font_pt) {
-  grDevices::pdf(NULL,width=figure_width,height=figure_height,family="Helvetica")
-  on.exit(grDevices::dev.off())
-  words <- strsplit(text," +")[[1]]
-  lines <- character(); line <- ""
-  for(word in words) {
-    candidate <- if(nzchar(line)) paste(line,word) else word
-    width <- grid::convertWidth(grid::grobWidth(grid::textGrob(candidate,
-      gp=grid::gpar(fontsize=font_pt,fontfamily="Helvetica"))),"inches",valueOnly=TRUE)
-    if(width > width_inches && nzchar(line)) {lines <- c(lines,line); line <- word}
-    else line <- candidate
-  }
-  paste(c(lines,line),collapse="\n")
-}
-legend_wrapped <- wrap_legend(legend_text,figure_width*.95,11)
-# Size the body for clear spacing; the full caption is exported separately.
 fig <- ggdraw()+draw_plot(top_row,y=.51,height=.49)+
   draw_plot(bottom_row,y=.015,height=.485)
-caption_lines <- length(strsplit(legend_wrapped,"\n",fixed=TRUE)[[1]])
-caption_height <- .65 + caption_lines * 11 * 1.5 / 72
-caption_fig <- ggdraw()+draw_label(legend_wrapped,x=.025,y=1-.20/caption_height,
-  hjust=0,vjust=1,size=11,lineheight=1.2,fontfamily="Helvetica")
 ggsave(file.path(figure_dir,"Delaware_inputs_5panel.png"),fig,width=figure_width,height=figure_height,dpi=figure_dpi,bg="white")
-ggsave(file.path(figure_dir,"Delaware_inputs_5panel.pdf"),fig,width=figure_width,height=figure_height,device="pdf",bg="white")
-ggsave(file.path(figure_dir,"Delaware_inputs_caption.png"),caption_fig,width=figure_width,height=caption_height,dpi=figure_dpi,bg="white")
-ggsave(file.path(figure_dir,"Delaware_inputs_caption.pdf"),caption_fig,width=figure_width,height=caption_height,device="pdf",bg="white")
+write_manuscript_legend(figure_dir, "Delaware_inputs_5panel", "Delaware model and input data",
+  strsplit(legend_text, " (?=[B-E]\\))", perl = TRUE)[[1]])
 writeLines(legend_text,file.path(out,"figure_text_legend.txt"))
 write.csv(pop,file.path(out,"county_key_population.csv"),row.names=FALSE)
 write.csv(risk,file.path(out,"county_high_risk_fractions.csv"),row.names=FALSE)

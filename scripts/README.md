@@ -941,7 +941,7 @@ metrics and selection reasons are saved in `state_fit_catalog.csv` and
 
 It writes an all-state category/metric catalog, peak-shape review flags, county,
 population and mobility context, a supplement atlas, and two draft 2x2
-figures directly under `figures/manuscript/`; supporting tables and screening
+figures and their companion `_legend.pdf` files under `figures/manuscript/`. Supporting tables and screening
 notes remain under `figures/manuscript/state-fit/`. The supplement excludes states
 in the main figures and places all remaining states in **one alphabetical series**,
 regardless of peak shape or tail characteristics. `review_atlas_01.png`,
@@ -978,26 +978,23 @@ scripts `0` through `6`. Python dependencies are managed through Poetry.
 SEI(T)R diagram, county population, and directed travel network in the top row;
 age-specific contacts and county-specific high-risk fractions in the bottom row.
 The I-to-T arrow is dashed because allocation depends on the antiviral stockpile.
-The figure body is exported at 12.5 x 8.5 inches, with a 600 dpi PNG (7500 x 5100
-pixels) and a PDF. Color legends sit to the right of each panel; the contact
+The figure body is exported at 12.5 x 8.5 inches as a 600 dpi PNG (7500 x 5100
+pixels). Color legends sit to the right of each panel; the contact
 heatmap has square cells, youngest contactor ages at the bottom and oldest at
 the top, and a `Contacts/person/day` scale. Long legend titles wrap across two
 lines and are centered. Descriptions,
 parameter values (including R0), former subtitles,
-and travel-route explanations appear in a separate caption figure as one full-width
-paragraph at 11 pt, also exported as PNG/PDF. Panel titles are 17 pt to match
+and travel-route explanations appear in a separate text legend PDF. Panel titles are 17 pt to match
 10a; other main figure text is 13 pt, with
 standalone bold cowplot panel letters at 24 pt to match 10a;
 the model arrows retain mean-duration labels (1, 7, and 5 days). The 5-day label
 is centered on its arrow with a solid white background. High-risk cell labels
 show percentages to one decimal place. The caption
 defines every symbol in the full travel equations. County risks
-are matched by FIPS. PNG/PDF figures and their caption figure are saved directly
+are matched by FIPS. The figure PNG and companion legend PDF are saved directly
 under `figures/manuscript/`. County boundaries, full caption text, and plotted
 county/travel tables remain under `MANUSCRIPT_ILLUSTRATIVE_EXAMPLE_TEST/input_figure/`.
-The composite filenames are `Delaware_inputs_5panel.png` and
-`Delaware_inputs_5panel.pdf`; the caption figures are
-`Delaware_inputs_caption.png` and `Delaware_inputs_caption.pdf`.
+The filenames are `Delaware_inputs_5panel.png` and `Delaware_inputs_5panel_legend.pdf`.
 
 ```bash
 Rscript --vanilla scripts/10c_manuscript_illustrative_inputs.R
@@ -1019,15 +1016,15 @@ defaults compare 1K/10K initial exposures, vaccination at 60% effectiveness with
 days 30-50, and 10K/100K antiviral courses released on day 30. Every scenario uses
 county-specific age risk fractions matched by FIPS. Source and input-data hashes,
 snapshots, and initial county-age risk allocations are checked for the new runs.
-The script writes PNG/PDF intervention plots directly under `figures/manuscript/`
-and invokes `10c` to save the explanatory figure and separate caption there too.
+The script writes intervention PNGs and companion `_legend.pdf` files directly
+under `figures/manuscript/` and invokes `10c` to save the explanatory figure and legend.
 All composite panels use the same standalone bold cowplot letters as `10a`.
 The intervention composite retains its panel headings and color/model legends;
 panel titles and model legend labels are 17 pt, axis titles are 16 pt, other plot
 text is 13 pt, and standalone cowplot panel letters are 24 pt, with compact
 spacing between color keys and labels.
-The overall title, subtitle, and explanatory footnotes are exported separately
-to `figures/manuscript/statewide_2x2_notes.pdf`. Vaccination and closure markers are at days
+The overall title, subtitle, and explanatory footnotes are in each composite's
+legend PDF. Vaccination and closure markers are at days
 30 and 50; the antiviral marker is at day 30. The notes explain the 14-day vaccine
 protection lag and that normal school contacts resume on day 51.
 
@@ -1052,3 +1049,14 @@ reviewer runner or executable copy of the scripts inside the output directory.
 `source_snapshot/src/` is retained only as a passive record of the Python code
 used for the saved simulations. Run the main script with `--plots-only` to
 regenerate saved figures without running simulations.
+
+### Compartmental model and parameter figures
+
+Run `Rscript scripts/10d_manuscript_model_figures.R` to generate the stochastic
+SEIHRD compartment diagram and the SEIHRD/SEIR parameter table. The table combines
+the H3N2 baseline and intervention templates with the Delaware illustration's
+saved input JSONs. Run `10b_manuscript_illustrative_example.R --prepare-only`
+to generate the Delaware inputs if they are missing. Use
+`--seir-input-dir=PATH` to read the JSONs from another experiment directory.
+The script writes `SEIHRD_compartmental_model.png` and `SEIHRD_SEIR_parameters.png`
+with matching `_legend.pdf` files. Use `--figure-dir=PATH` to change the destination.
