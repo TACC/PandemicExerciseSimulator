@@ -1060,3 +1060,31 @@ to generate the Delaware inputs if they are missing. Use
 `--seir-input-dir=PATH` to read the JSONs from another experiment directory.
 The script writes `SEIHRD_compartmental_model.png` and `SEIHRD_SEIR_parameters.png`
 with matching `_legend.pdf` files. Use `--figure-dir=PATH` to change the destination.
+
+### LS6 runtime and storage table
+
+`10e_manuscript_ls6_runtime_storage.R` writes `LS6_runtime_storage_part_1.png`,
+`LS6_runtime_storage_part_2.png`, and the separate `LS6_runtime_storage_legend.pdf`
+in `figures/manuscript/`. Both PNGs are cropped to the table edges. The table
+keeps county-count order and repeats its headers in part 2. It reads
+single-simulation runtimes and Parquet sizes from
+`LS6_RmSweep_TEST/metadata_master.csv` and joins the original CSV sizes by
+`scenario_hash` and `batch_num`.
+
+**Collect CSV sizes separately on LS6** from the repository root, where the
+original simulation CSVs are available under `TACC_FILES` and `Rm_search`:
+
+```bash
+bash scripts/collect_ls6_csv_sizes.sh LS6_RmSweep_TEST \
+  > LS6_RmSweep_TEST/ls6_csv_sizes.csv
+```
+
+Copy `ls6_csv_sizes.csv` back alongside `metadata_master.csv`, then render from
+the local repository root:
+
+```bash
+Rscript --vanilla scripts/10e_manuscript_ls6_runtime_storage.R
+```
+
+Use `--data-dir=PATH` for a directory containing the two CSV inputs and
+`--figure-dir=PATH` for a different figure destination.
